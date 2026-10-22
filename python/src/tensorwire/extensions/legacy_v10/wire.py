@@ -583,6 +583,12 @@ def encode_response(
     if request is not None:
         headers += [(k, v) for k, v in request.raw if k.startswith(_DENDRITE)]
         headers += [(_INPUT_OBJ + f, v) for f, v in request.input_obj]
+    header_size = sum(len(k) + len(v) for k, v in headers)
+    headers += [
+        ("header_size", str(header_size)),
+        ("total_size", str(header_size + len(body))),
+    ]
+    if request is not None:
         headers.append(("computed_body_hash", request.computed_body_hash))
     headers.append(("Content-Type", "application/json"))
     return body, headers

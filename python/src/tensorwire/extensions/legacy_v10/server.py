@@ -310,7 +310,7 @@ class LegacyServer:
         self,
         request_headers: Headers,
         *,
-        request: LegacyRequest | None,
+        request: LegacyRequest | None = None,
         status: int,
         synapse: BaseModel | None,
         error: TWError | None,
