@@ -98,6 +98,8 @@ class MinerResult:
     """Which wire format answered (spec 8.11.3)."""
     response_verified: bool = False
     """True only for a valid ``twresp/1`` signature; always False for v10."""
+    status_message: str | None = None
+    """The v10 Axon's status message (v10 answers only)."""
 
 
 class LegacyResultLike(Protocol):
@@ -289,6 +291,7 @@ class ValidatorClient:
         idempotent: bool = True,
         response_model: type[BaseModel] | None = None,
         legacy_synapse: BaseModel | None = None,
+        timeout_s: float | None = None,
     ) -> dict[int, MinerResult]:
         """Query every neuron (bounded concurrency); one result per UID."""
         results = await asyncio.gather(
@@ -301,6 +304,7 @@ class ValidatorClient:
                     idempotent=idempotent,
                     response_model=response_model,
                     legacy_synapse=legacy_synapse,
+                    timeout_s=timeout_s,
                 )
                 for n in neurons
             )
@@ -317,12 +321,17 @@ class ValidatorClient:
         idempotent: bool = True,
         response_model: type[BaseModel] | None = None,
         legacy_synapse: BaseModel | None = None,
+        timeout_s: float | None = None,
     ) -> MinerResult:
         """Query one miner. Never raises for the miner's failure.
 
         ``legacy_synapse`` is the same request as a v10 Synapse; without it
         a v10 miner cannot be reached and its answer counts as a failure.
+        ``timeout_s`` overrides the per-attempt deadline for this call.
         """
+        timeout = self.timeout_s if timeout_s is None else float(timeout_s)
+        if timeout <= 0:
+            raise ValueError("timeout_s must be > 0")
         async with self._semaphore:
             try:
                 result = await self._query(
@@ -333,6 +342,7 @@ class ValidatorClient:
                     idempotent=idempotent,
                     response_model=response_model,
                     legacy_synapse=legacy_synapse,
+                    deadline_s=timeout,
                 )
             except Exception:  # noqa: BLE001 - one miner must never break the round
                 _log.exception("query_failed", uid=neuron.uid)
@@ -350,6 +360,7 @@ class ValidatorClient:
         idempotent: bool,
         response_model: type[BaseModel] | None,
         legacy_synapse: BaseModel | None,
+        deadline_s: float,
     ) -> MinerResult:
         if neuron.axon is None:
             return _failed(neuron, "tw.no_axon", attempts=0)
@@ -359,13 +370,15 @@ class ValidatorClient:
             and legacy_synapse is not None
             and selector.choose(neuron) == "v10"
         ):
-            return await self._query_v10(neuron, legacy_synapse, response_model, 0)
+            return await self._query_v10(
+                neuron, legacy_synapse, response_model, 0, deadline_s
+            )
         url = self._url(neuron, route)
         attempts = 1
-        last = await self._attempt(neuron, method, url, body)
+        last = await self._attempt(neuron, method, url, body, deadline_s)
         while attempts < self.max_attempts and self._should_retry(last, idempotent):
             attempts += 1
-            last = await self._attempt(neuron, method, url, body)
+            last = await self._attempt(neuron, method, url, body, deadline_s)
         result = self._to_result(neuron, last, attempts, response_model)
         if selector is None or legacy_synapse is None:
             return result
@@ -379,7 +392,9 @@ class ValidatorClient:
         if not switch:
             return result
         _log.info("miner_speaks_v10", uid=neuron.uid)
-        return await self._query_v10(neuron, legacy_synapse, response_model, attempts)
+        return await self._query_v10(
+            neuron, legacy_synapse, response_model, attempts, deadline_s
+        )
 
     def _url(self, neuron: NeuronView, route: str) -> httpx.URL:
         if neuron.axon is None:
@@ -401,7 +416,12 @@ class ValidatorClient:
         return answer is not None and answer.status in RETRY_STATUSES
 
     async def _attempt(
-        self, neuron: NeuronView, method: str, url: httpx.URL, body: bytes
+        self,
+        neuron: NeuronView,
+        method: str,
+        url: httpx.URL,
+        body: bytes,
+        deadline_s: float,
     ) -> _Attempt:
         target = url.raw_path.decode("ascii")
         headers = self.signer.sign(
@@ -414,8 +434,8 @@ class ValidatorClient:
         code: str | None = None
         answer: _Answer | None = None
         try:
-            with anyio.fail_after(self.timeout_s):
-                answer = await self._send(method, url, headers, body)
+            with anyio.fail_after(deadline_s):
+                answer = await self._send(method, url, headers, body, deadline_s)
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
             code = "tw.connect_error"
         except (TimeoutError, httpx.TimeoutException):
@@ -428,9 +448,20 @@ class ValidatorClient:
         return _Attempt(answer=answer, error_code=code, nonce=nonce, latency_ms=latency)
 
     async def _send(
-        self, method: str, url: httpx.URL, headers: dict[str, str], body: bytes
+        self,
+        method: str,
+        url: httpx.URL,
+        headers: dict[str, str],
+        body: bytes,
+        deadline_s: float,
     ) -> _Answer:
-        request = self._http.build_request(method, url, headers=headers, content=body)
+        request = self._http.build_request(
+            method,
+            url,
+            headers=headers,
+            content=body,
+            timeout=httpx.Timeout(deadline_s, connect=min(3.0, deadline_s)),
+        )
         response = await self._http.send(request, stream=True)
         try:
             declared = response.headers.get("content-length", "")
@@ -518,6 +549,7 @@ class ValidatorClient:
         synapse: BaseModel,
         response_model: type[BaseModel] | None,
         attempts: int,
+        deadline_s: float,
     ) -> MinerResult:
         if self._legacy is None:
             raise RuntimeError("the legacy v10 client is off")
@@ -525,7 +557,7 @@ class ValidatorClient:
             self._http,
             neuron,
             synapse,
-            timeout_s=self.timeout_s,
+            timeout_s=deadline_s,
             max_response_bytes=self.max_response_bytes,
         )
         data: Any = legacy.synapse
@@ -555,6 +587,7 @@ class ValidatorClient:
             attempts=attempts + 1,
             protocol="v10",
             response_verified=False,
+            status_message=legacy.status_message,
         )
 
     def _count(self, result: MinerResult) -> None:
