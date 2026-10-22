@@ -16,8 +16,8 @@ Startup, in order:
 6. Check the clock against NTP.
 7. Publish the axon if the on-chain one differs from
    ``TW_EXTERNAL_IP:TW_EXTERNAL_PORT`` (only when ``TW_AUTO_SERVE_AXON=1`` and
-   ``TW_AXON_PUBLISHER=1``). ``rate_limited`` is retried after the serving
-   rate limit.
+   ``TW_AXON_PUBLISHER=1``). ``rate_limited`` is retried after the subnet's
+   ``serving_rate_limit`` blocks, read from the chain.
 8. Start background tasks: clock check (10 min), axon drift check (30 min),
    metagraph gauges.
 9. Mark ready.
@@ -66,7 +66,6 @@ from tensorwire.policy.caller import CallerGate
 __all__ = [
     "AXON_DRIFT_INTERVAL_S",
     "DEGRADED_WARN_INTERVAL_S",
-    "SERVING_RATE_LIMIT_BLOCKS",
     "Lifecycle",
     "MinerParts",
     "Readiness",
@@ -75,8 +74,6 @@ __all__ = [
 
 #: Axon drift check period (spec 8.7.3 step 8).
 AXON_DRIFT_INTERVAL_S = 1800.0
-#: Blocks to wait after a ``rate_limited`` ServeAxon (mainnet ``serving_rate_limit``).
-SERVING_RATE_LIMIT_BLOCKS = 50
 #: Seconds between two "metagraph degraded" warnings (spec 8.5.1).
 DEGRADED_WARN_INTERVAL_S = 300.0
 _GAUGE_INTERVAL_S = 5.0
@@ -423,11 +420,7 @@ class Lifecycle:
             return True
         rt.axon_in_sync = False
         if outcome.code == "rate_limited":
-            _log.warning(
-                "serve_axon_rate_limited",
-                remediation=outcome.remediation,
-                retry_after_blocks=SERVING_RATE_LIMIT_BLOCKS,
-            )
+            _log.warning("serve_axon_rate_limited", remediation=outcome.remediation)
             rt.tasks.append(self._spawn(self._retry_axon_later(), "axon_retry"))
         else:
             _log.error(
@@ -440,7 +433,9 @@ class Lifecycle:
     async def _retry_axon_later(self) -> None:
         rt = self.runtime
         try:
-            target = await rt.gateway.block() + SERVING_RATE_LIMIT_BLOCKS
+            window = await rt.gateway.serving_rate_limit(self.settings.netuid)
+            target = await rt.gateway.block() + window
+            _log.info("serve_axon_retry_scheduled", after_blocks=window)
             # Polls a remote value (the block height); there is no event to wait on.
             while await rt.gateway.block() < target:  # noqa: ASYNC110
                 await anyio.sleep(self.parts.axon_retry_poll_s)
