@@ -15,7 +15,8 @@ turn exceptions into 500 responses (Starlette's ``ServerErrorMiddleware``)
 cannot overwrite it.
 
 Error bodies use the kit format; the request ID is taken from
-``scope["state"]["request_id"]`` when an outer middleware has set it.
+``scope["state"]["request_id"]`` when an outer middleware has set it, and the
+error code is recorded in ``scope["state"]["tw_code"]`` for it.
 """
 
 from __future__ import annotations
@@ -56,10 +57,26 @@ def _request_id(scope: Scope) -> str | None:
     return None
 
 
+def _record(scope: Scope | None, error: TWError) -> None:
+    if scope is None:
+        return
+    state = scope.setdefault("state", {})
+    if isinstance(state, MutableMapping):
+        state["tw_code"] = error.code
+
+
 async def send_error(
-    send: Send, error: TWError, *, request_id: str | None = None
+    send: Send,
+    error: TWError,
+    *,
+    request_id: str | None = None,
+    scope: Scope | None = None,
 ) -> None:
-    """Send ``error`` as a complete kit-format JSON response."""
+    """Send ``error`` as a complete kit-format JSON response.
+
+    With ``scope``, the code is also recorded in ``scope["state"]["tw_code"]``.
+    """
+    _record(scope, error)
     body = error.response_body(request_id)
     headers = [
         (b"content-type", b"application/json"),
@@ -93,7 +110,9 @@ class BodySizeLimit:
         request_id = _request_id(scope)
         declared = _content_length(scope.get("headers", []))
         if declared is not None and declared > self.max_bytes:
-            await send_error(send, PayloadTooLarge(), request_id=request_id)
+            await send_error(
+                send, PayloadTooLarge(), request_id=request_id, scope=scope
+            )
             return
 
         received = 0
@@ -108,7 +127,9 @@ class BodySizeLimit:
                 if received > self.max_bytes:
                     if not response_started and not rejected:
                         rejected = True
-                        await send_error(send, PayloadTooLarge(), request_id=request_id)
+                        await send_error(
+                            send, PayloadTooLarge(), request_id=request_id, scope=scope
+                        )
                     raise PayloadTooLarge()
             return message
 

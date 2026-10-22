@@ -38,6 +38,7 @@ __all__ = [
     "PayloadTooLarge",
     "RateLimited",
     "ReplayStoreUnavailable",
+    "StartupError",
     "TWError",
     "client_http_code",
 ]
@@ -325,6 +326,25 @@ class ConfigError(TWError):
     def __init__(self, detail: str) -> None:
         super().__init__()
         self.detail = detail
+
+    def __str__(self) -> str:
+        return self.detail
+
+
+class StartupError(TWError):
+    """A process cannot start (spec 8.7.3). Raised at startup; never sent to peers.
+
+    ``exit_code`` is the process exit status the CLI uses: 3 = the hotkey is
+    not registered on the subnet, 1 = anything else. ``str(err)`` is the
+    operator-facing detail.
+    """
+
+    code = "tw.internal"
+
+    def __init__(self, detail: str, *, exit_code: int = 1) -> None:
+        super().__init__()
+        self.detail = detail
+        self.exit_code = exit_code
 
     def __str__(self) -> str:
         return self.detail
