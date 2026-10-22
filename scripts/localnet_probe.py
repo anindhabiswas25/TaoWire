@@ -6,12 +6,18 @@
 2. Spec 8.11.3: is the on-chain axon ``protocol`` field readable through the
    v11 metagraph, and which values can ``ServeAxon`` store?
 
+It also reports the chain's drand feed (``drand``: last stored pulse vs the
+wall clock, and HTTP 429 / deadline errors in the chain log; see
+``drand_feed.py``). Without a working feed, timelocked weight commits are never
+revealed (spec 14.2). ``--drand-only`` reports just that, read-only.
+
 LOCALNET ONLY: it starts the root subnet with Alice (sudo on localnet), adds
 root stake to the validator hotkey and publishes axons for the four miners.
 Writes a JSON report to ``--out``.
 
 Usage:
     python scripts/localnet_probe.py --out REPORT.json [--state-dir DIR]
+    python scripts/localnet_probe.py --drand-only [--out REPORT.json]
 """
 
 from __future__ import annotations
@@ -24,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 import bittensor as bt
+from drand_feed import drand_feed
 
 ROOT_STAKE_TAO = 100.0
 U64_SCALE = 2**64
@@ -196,7 +203,14 @@ async def probe(endpoint: str, state_dir: Path) -> dict[str, Any]:
             "stake_units": await stake_units(client, wallets, netuid),
             "serve_axon_ip_acceptance": await ip_acceptance(client, wallets, netuid),
             "axon_protocol": await axon_protocol(client, wallets, netuid),
+            "drand": (await drand_feed(client)).as_dict(),
         }
+
+
+async def probe_drand(endpoint: str) -> dict[str, Any]:
+    """Read-only: just the drand feed."""
+    async with bt.Subtensor(endpoint, fallback_endpoints=[]) as client:
+        return {"endpoint": endpoint, "drand": (await drand_feed(client)).as_dict()}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -205,14 +219,25 @@ def main(argv: list[str] | None = None) -> int:
         "--state-dir", type=Path, default=Path("~/.tensorwire/localnet")
     )
     parser.add_argument("--endpoint", default="ws://127.0.0.1:9944")
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--out", type=Path)
+    parser.add_argument(
+        "--drand-only",
+        action="store_true",
+        help="read-only: report the chain's drand feed; exit 1 when it is failing",
+    )
     args = parser.parse_args(argv)
     if not args.endpoint.startswith(("ws://127.0.0.1:", "ws://localhost:")):
         parser.error("refusing to run against a non-local endpoint")
-    report = asyncio.run(probe(args.endpoint, args.state_dir.expanduser()))
-    args.out.write_text(json.dumps(report, indent=2, default=str) + "\n")
+    if args.drand_only:
+        report = asyncio.run(probe_drand(args.endpoint))
+    elif args.out is None:
+        parser.error("--out is required (it writes to the chain; see the docstring)")
+    else:
+        report = asyncio.run(probe(args.endpoint, args.state_dir.expanduser()))
+    if args.out is not None:
+        args.out.write_text(json.dumps(report, indent=2, default=str) + "\n")
     print(json.dumps(report, indent=2, default=str))
-    return 0
+    return 0 if report["drand"]["healthy"] else 1
 
 
 if __name__ == "__main__":

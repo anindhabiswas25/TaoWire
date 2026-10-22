@@ -9,6 +9,10 @@ finally the revealed weight row (``client.weights.weights``).
 
 Permits move on a tempo-10 localnet (spec 14.2), so the validator runs with
 ``TW_QUERY_VALIDATORS=1``: the miner is queried whether or not it holds a permit.
+
+Reveals need the chain's drand feed: the test checks it before committing and
+while waiting, and fails fast with ``environment: drand feed failing (...)``
+when the feed is down (``drand_guard``, G3-8).
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ from typing import Any
 import bittensor as bt
 import httpx
 import pytest
+from drand_guard import DrandWatch, require_drand_feed
 from localnet_env import ENDPOINT, Localnet
 
 from tensorwire.chain.axon import Endpoint
@@ -152,7 +157,13 @@ def _validator(localnet: Localnet, tmp_path: Path, evidence_dir: Path) -> Proces
     return _start("text_ops.validator", env, evidence_dir / "validator.log")
 
 
-async def _until(what: str, check: Any, timeout_s: float, process: Process) -> Any:
+async def _until(
+    what: str,
+    check: Any,
+    timeout_s: float,
+    process: Process,
+    watch: DrandWatch | None = None,
+) -> Any:
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout_s
     while loop.time() < deadline:
@@ -160,6 +171,8 @@ async def _until(what: str, check: Any, timeout_s: float, process: Process) -> A
             raise AssertionError(
                 f"process exited while waiting for {what}:\n{process.tail()}"
             )
+        if watch is not None:
+            await watch.check()
         value = await check()
         if value:
             return value
@@ -187,6 +200,7 @@ async def _marker_row(
             return since is not None and since >= limit
 
         await _until("the weights rate limit", window_open, 300.0, process)
+        await require_drand_feed(client)
         outcome = await gw.set_weights(
             localnet.netuid, {marker_uid: 1.0}, mechid=0, version_key=0
         )
@@ -197,7 +211,11 @@ async def _marker_row(
             return row if row == {marker_uid: 1.0} else None
 
         row: dict[int, float] = await _until(
-            "the marker row", marker_revealed, WEIGHTS_TIMEOUT_S, process
+            "the marker row",
+            marker_revealed,
+            WEIGHTS_TIMEOUT_S,
+            process,
+            DrandWatch(client),
         )
         return row
     finally:
@@ -276,7 +294,11 @@ async def test_validator_scores_miner_and_weights_reveal(
                 return row if row.get(miner_uid, 0.0) > 0 else None
 
             row = await _until(
-                "weights revealed on chain", revealed, WEIGHTS_TIMEOUT_S, validator
+                "weights revealed on chain",
+                revealed,
+                WEIGHTS_TIMEOUT_S,
+                validator,
+                DrandWatch(client),
             )
             results["revealed_row"] = {str(k): v for k, v in row.items()}
             results["revealed_at_block"] = await gw.block()
