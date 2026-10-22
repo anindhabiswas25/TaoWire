@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import typer
 
+from tensorwire.cli.migrate_cmd import migrate_app
 from tensorwire.cli.sign_request import sign_request
 from tensorwire.version import __version__
 
@@ -33,3 +34,4 @@ def main(
 
 
 app.command("sign-request")(sign_request)
+app.add_typer(migrate_app, name="migrate")
