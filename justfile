@@ -56,8 +56,11 @@ migration-test:
 mixed-fleet:
     ./scripts/legacy_venv.sh && cd python && uv run pytest -m "localnet and mixed_fleet" tests/localnet
 
+# spec 13.7 targets; 4 workers need Redis (TENSORWIRE_BENCH_REDIS_URL, default local DB 14)
+bench_redis := env_var_or_default("TENSORWIRE_BENCH_REDIS_URL", "redis://127.0.0.1:6379/14")
+
 bench:
-    cd python && uv run tensorwire bench --duration 60
+    cd python && uv run tensorwire bench --duration 60 --redis-url {{bench_redis}}
 
 audit: setup
     cd python && uv run pip-audit
