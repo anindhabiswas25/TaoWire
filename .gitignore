@@ -1,0 +1,45 @@
+# Secrets and keys: never commit (definition of done, item 9)
+wallets/
+.bittensor/
+*.key
+*.pem
+.env
+.env.*
+!.env.example
+sidecar.token
+
+# State
+*.db
+*.db-wal
+*.db-shm
+.tensorwire/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.import_linter_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# TypeScript
+node_modules/
+*.tsbuildinfo
+
+# Rust
+target/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
