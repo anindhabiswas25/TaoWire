@@ -1,0 +1,2856 @@
+{
+  "schema_version": 1,
+  "description": "Wire captures from a real bittensor==10.5.0 Dendrite and Axon (spec 10b.6). Python only. Each vector holds the exact request and response bytes and the values derived from them.",
+  "captured_with": {
+    "bittensor": "10.5.0",
+    "bittensor_wallet": "4.1.1",
+    "python": "3.12.3",
+    "captured_at": "2026-10-22T12:41:34+00:00"
+  },
+  "keys": {
+    "dendrite": {
+      "uri": "//Alice",
+      "ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+    },
+    "axon": {
+      "uri": "//Bob",
+      "ss58": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+    },
+    "foreign_axon": {
+      "uri": "//Charlie",
+      "ss58": "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+    },
+    "dendrite_external_ip_reported": "198.51.100.20"
+  },
+  "synapses": {
+    "Dummy": {
+      "fields": [
+        "dummy_input",
+        "dummy_output"
+      ],
+      "required_hash_fields_declared": [
+        "dummy_input"
+      ],
+      "required_hash_fields_style": "classvar"
+    },
+    "TextOps": {
+      "fields": [
+        "text",
+        "op",
+        "count",
+        "ratio",
+        "tags",
+        "weights",
+        "flag",
+        "maybe",
+        "result"
+      ],
+      "required_hash_fields_declared": [
+        "op",
+        "text",
+        "count",
+        "ratio",
+        "tags",
+        "weights",
+        "flag",
+        "maybe"
+      ],
+      "required_hash_fields_style": "classvar"
+    },
+    "NoHash": {
+      "fields": [
+        "payload",
+        "answer"
+      ],
+      "required_hash_fields_declared": [],
+      "required_hash_fields_style": "classvar"
+    },
+    "LegacyFieldHash": {
+      "fields": [
+        "a_field",
+        "b_field",
+        "out"
+      ],
+      "required_hash_fields_declared": [
+        "b_field",
+        "a_field"
+      ],
+      "required_hash_fields_style": "pydantic_field"
+    }
+  },
+  "blacklist_observations": [
+    {
+      "dendrite_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "dummy_input": 0
+    },
+    {
+      "dendrite_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "dummy_input": 0
+    },
+    {
+      "dendrite_hotkey": "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y",
+      "dummy_input": 0
+    },
+    {
+      "dendrite_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "dummy_input": 0
+    },
+    {
+      "dendrite_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "dummy_input": 0
+    },
+    {
+      "dendrite_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "dummy_input": 0
+    },
+    {
+      "dendrite_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+      "dummy_input": 0
+    }
+  ],
+  "vectors": [
+    {
+      "id": "V1",
+      "description": "template Dummy, accepted",
+      "synapse": "Dummy",
+      "accepted_by_v10_axon": true,
+      "accepted_matches_status": true,
+      "notes": [],
+      "request": {
+        "start_line": "POST /Dummy HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672891413060785"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x0e9bb5ec55135e69379ab04e93dccdb961a31dfb30e42a9fe1b29fc47d6eb21dca4902c883ee8ee4b7650c6e7bee23eda8c3c869ce9652070f35727d57777a86"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2803"
+          ],
+          [
+            "computed_body_hash",
+            "2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb"
+          ],
+          [
+            "Accept",
+            "*/*"
+          ],
+          [
+            "Accept-Encoding",
+            "gzip, deflate"
+          ],
+          [
+            "User-Agent",
+            "Python/3.12 aiohttp/3.14.5"
+          ],
+          [
+            "Content-Length",
+            "802"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ]
+        ],
+        "method": "POST",
+        "target": "/Dummy",
+        "body_utf8": "{\"name\": \"Dummy\", \"timeout\": 12.0, \"total_size\": 2803, \"header_size\": 0, \"dendrite\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"198.51.100.20\", \"port\": null, \"version\": 10005000, \"nonce\": 1792672891413060785, \"uuid\": \"e85a70d0-ce15-11f1-a10f-847b57c7b217\", \"hotkey\": \"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", \"signature\": \"0x0e9bb5ec55135e69379ab04e93dccdb961a31dfb30e42a9fe1b29fc47d6eb21dca4902c883ee8ee4b7650c6e7bee23eda8c3c869ce9652070f35727d57777a86\"}, \"axon\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"127.0.0.1\", \"port\": 39333, \"version\": null, \"nonce\": null, \"uuid\": null, \"hotkey\": \"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\", \"signature\": null}, \"computed_body_hash\": \"\", \"dummy_input\": 7, \"dummy_output\": null}",
+        "body_base64": "eyJuYW1lIjogIkR1bW15IiwgInRpbWVvdXQiOiAxMi4wLCAidG90YWxfc2l6ZSI6IDI4MDMsICJoZWFkZXJfc2l6ZSI6IDAsICJkZW5kcml0ZSI6IHsic3RhdHVzX2NvZGUiOiBudWxsLCAic3RhdHVzX21lc3NhZ2UiOiBudWxsLCAicHJvY2Vzc190aW1lIjogbnVsbCwgImlwIjogIjE5OC41MS4xMDAuMjAiLCAicG9ydCI6IG51bGwsICJ2ZXJzaW9uIjogMTAwMDUwMDAsICJub25jZSI6IDE3OTI2NzI4OTE0MTMwNjA3ODUsICJ1dWlkIjogImU4NWE3MGQwLWNlMTUtMTFmMS1hMTBmLTg0N2I1N2M3YjIxNyIsICJob3RrZXkiOiAiNUdyd3ZhRUY1elhiMjZGejlyY1FwRFdTNTdDdEVSSHBOZWhYQ1BjTm9IR0t1dFFZIiwgInNpZ25hdHVyZSI6ICIweDBlOWJiNWVjNTUxMzVlNjkzNzlhYjA0ZTkzZGNjZGI5NjFhMzFkZmIzMGU0MmE5ZmUxYjI5ZmM0N2Q2ZWIyMWRjYTQ5MDJjODgzZWU4ZWU0Yjc2NTBjNmU3YmVlMjNlZGE4YzNjODY5Y2U5NjUyMDcwZjM1NzI3ZDU3Nzc3YTg2In0sICJheG9uIjogeyJzdGF0dXNfY29kZSI6IG51bGwsICJzdGF0dXNfbWVzc2FnZSI6IG51bGwsICJwcm9jZXNzX3RpbWUiOiBudWxsLCAiaXAiOiAiMTI3LjAuMC4xIiwgInBvcnQiOiAzOTMzMywgInZlcnNpb24iOiBudWxsLCAibm9uY2UiOiBudWxsLCAidXVpZCI6IG51bGwsICJob3RrZXkiOiAiNUZIbmVXNDZ4R1hnczVtVWl2ZVU0c2JUeUdCem1zdFVzcFpDOTJVaGpKTTY5NHR5IiwgInNpZ25hdHVyZSI6IG51bGx9LCAiY29tcHV0ZWRfYm9keV9oYXNoIjogIiIsICJkdW1teV9pbnB1dCI6IDcsICJkdW1teV9vdXRwdXQiOiBudWxsfQ==",
+        "body_sha256": "d9dfd5759751a72645893648b5a5c4640c383abe8c6c38c1a51b14e4029db362"
+      },
+      "request_expected": {
+        "hash_fields": [
+          "dummy_input"
+        ],
+        "hash_inputs": [
+          {
+            "field": "dummy_input",
+            "str_value": "7",
+            "sha3_256": "8f9b51ce624f01b0a40c9f68ba8bb0a2c06aa7f95d1ed27d6b1b5e1e99ee5e4d"
+          }
+        ],
+        "computed_body_hash": "2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb",
+        "computed_body_hash_matches_header": true,
+        "signed_message": "1792672891413060785.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb",
+        "signature_verifies": true,
+        "signed_message_with_header_axon_hotkey": "1792672891413060785.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb",
+        "signature_verifies_with_header_axon_hotkey": true
+      },
+      "response": {
+        "start_line": "HTTP/1.1 200 OK",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:31 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "content-length",
+            "767"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "200"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Success"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "3.4809112548828125e-05"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672891413060785"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x0e9bb5ec55135e69379ab04e93dccdb961a31dfb30e42a9fe1b29fc47d6eb21dca4902c883ee8ee4b7650c6e7bee23eda8c3c869ce9652070f35727d57777a86"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2931"
+          ],
+          [
+            "computed_body_hash",
+            "2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb"
+          ]
+        ],
+        "status": 200,
+        "body_utf8": "{\"name\":\"Dummy\",\"timeout\":12.0,\"total_size\":2803,\"header_size\":0,\"dendrite\":{\"status_code\":null,\"status_message\":null,\"process_time\":null,\"ip\":\"198.51.100.20\",\"port\":null,\"version\":10005000,\"nonce\":1792672891413060785,\"uuid\":\"e85a70d0-ce15-11f1-a10f-847b57c7b217\",\"hotkey\":\"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\",\"signature\":\"0x0e9bb5ec55135e69379ab04e93dccdb961a31dfb30e42a9fe1b29fc47d6eb21dca4902c883ee8ee4b7650c6e7bee23eda8c3c869ce9652070f35727d57777a86\"},\"axon\":{\"status_code\":200,\"status_message\":\"Success\",\"process_time\":3.4809112548828125e-05,\"ip\":\"127.0.0.1\",\"port\":39333,\"version\":null,\"nonce\":null,\"uuid\":null,\"hotkey\":\"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\",\"signature\":null},\"computed_body_hash\":\"\",\"dummy_input\":7,\"dummy_output\":14}",
+        "body_base64": "eyJuYW1lIjoiRHVtbXkiLCJ0aW1lb3V0IjoxMi4wLCJ0b3RhbF9zaXplIjoyODAzLCJoZWFkZXJfc2l6ZSI6MCwiZGVuZHJpdGUiOnsic3RhdHVzX2NvZGUiOm51bGwsInN0YXR1c19tZXNzYWdlIjpudWxsLCJwcm9jZXNzX3RpbWUiOm51bGwsImlwIjoiMTk4LjUxLjEwMC4yMCIsInBvcnQiOm51bGwsInZlcnNpb24iOjEwMDA1MDAwLCJub25jZSI6MTc5MjY3Mjg5MTQxMzA2MDc4NSwidXVpZCI6ImU4NWE3MGQwLWNlMTUtMTFmMS1hMTBmLTg0N2I1N2M3YjIxNyIsImhvdGtleSI6IjVHcnd2YUVGNXpYYjI2Rno5cmNRcERXUzU3Q3RFUkhwTmVoWENQY05vSEdLdXRRWSIsInNpZ25hdHVyZSI6IjB4MGU5YmI1ZWM1NTEzNWU2OTM3OWFiMDRlOTNkY2NkYjk2MWEzMWRmYjMwZTQyYTlmZTFiMjlmYzQ3ZDZlYjIxZGNhNDkwMmM4ODNlZThlZTRiNzY1MGM2ZTdiZWUyM2VkYThjM2M4NjljZTk2NTIwNzBmMzU3MjdkNTc3NzdhODYifSwiYXhvbiI6eyJzdGF0dXNfY29kZSI6MjAwLCJzdGF0dXNfbWVzc2FnZSI6IlN1Y2Nlc3MiLCJwcm9jZXNzX3RpbWUiOjMuNDgwOTExMjU0ODgyODEyNWUtMDUsImlwIjoiMTI3LjAuMC4xIiwicG9ydCI6MzkzMzMsInZlcnNpb24iOm51bGwsIm5vbmNlIjpudWxsLCJ1dWlkIjpudWxsLCJob3RrZXkiOiI1RkhuZVc0NnhHWGdzNW1VaXZlVTRzYlR5R0J6bXN0VXNwWkM5MlVoakpNNjk0dHkiLCJzaWduYXR1cmUiOm51bGx9LCJjb21wdXRlZF9ib2R5X2hhc2giOiIiLCJkdW1teV9pbnB1dCI6NywiZHVtbXlfb3V0cHV0IjoxNH0=",
+        "body_sha256": "1e7ea8bf69bb80c0d6ba802bc8651b4c1db035fa0970568eb5a0a131c99bcba2"
+      },
+      "response_expected": {
+        "status": 200,
+        "axon_status_code_header": "200",
+        "axon_signed_message": null,
+        "axon_signature_verifies": null
+      }
+    },
+    {
+      "id": "V2",
+      "description": "several field types, unicode text, hash fields in non-model order",
+      "synapse": "TextOps",
+      "accepted_by_v10_axon": true,
+      "accepted_matches_status": true,
+      "notes": [],
+      "request": {
+        "start_line": "POST /TextOps HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "name",
+            "TextOps"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672891643369499"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0xe460875802882bfb6d145f535830a24ea0a0351ab3be8a91c1e03e04a36b253c3a01408bb0fe4089052a4f15665d7845c1324652312dda4c6d25f66785e5ab85"
+          ],
+          [
+            "bt_header_input_obj_text",
+            "IiI="
+          ],
+          [
+            "bt_header_input_obj_op",
+            "IiI="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "3985"
+          ],
+          [
+            "computed_body_hash",
+            "da88caf949f4ed59d4f47611cb566a1524911f6ff78e5f69fe25b0878eeec6f0"
+          ],
+          [
+            "Accept",
+            "*/*"
+          ],
+          [
+            "Accept-Encoding",
+            "gzip, deflate"
+          ],
+          [
+            "User-Agent",
+            "Python/3.12 aiohttp/3.14.5"
+          ],
+          [
+            "Content-Length",
+            "968"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ]
+        ],
+        "method": "POST",
+        "target": "/TextOps",
+        "body_utf8": "{\"name\": \"TextOps\", \"timeout\": 12.0, \"total_size\": 3985, \"header_size\": 0, \"dendrite\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"198.51.100.20\", \"port\": null, \"version\": 10005000, \"nonce\": 1792672891643369499, \"uuid\": \"e85a70d0-ce15-11f1-a10f-847b57c7b217\", \"hotkey\": \"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", \"signature\": \"0xe460875802882bfb6d145f535830a24ea0a0351ab3be8a91c1e03e04a36b253c3a01408bb0fe4089052a4f15665d7845c1324652312dda4c6d25f66785e5ab85\"}, \"axon\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"127.0.0.1\", \"port\": 39333, \"version\": null, \"nonce\": null, \"uuid\": null, \"hotkey\": \"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\", \"signature\": null}, \"computed_body_hash\": \"\", \"text\": \"h\\u00e9llo \\u2603 \\u4f60\\u597d \\\"quoted\\\" \\\\ back\", \"op\": \"upper\", \"count\": 3, \"ratio\": 0.1, \"tags\": [\"a\", \"b c\"], \"weights\": {\"x\": 1.0, \"y\": 1e-07}, \"flag\": true, \"maybe\": null, \"result\": null}",
+        "body_base64": "eyJuYW1lIjogIlRleHRPcHMiLCAidGltZW91dCI6IDEyLjAsICJ0b3RhbF9zaXplIjogMzk4NSwgImhlYWRlcl9zaXplIjogMCwgImRlbmRyaXRlIjogeyJzdGF0dXNfY29kZSI6IG51bGwsICJzdGF0dXNfbWVzc2FnZSI6IG51bGwsICJwcm9jZXNzX3RpbWUiOiBudWxsLCAiaXAiOiAiMTk4LjUxLjEwMC4yMCIsICJwb3J0IjogbnVsbCwgInZlcnNpb24iOiAxMDAwNTAwMCwgIm5vbmNlIjogMTc5MjY3Mjg5MTY0MzM2OTQ5OSwgInV1aWQiOiAiZTg1YTcwZDAtY2UxNS0xMWYxLWExMGYtODQ3YjU3YzdiMjE3IiwgImhvdGtleSI6ICI1R3J3dmFFRjV6WGIyNkZ6OXJjUXBEV1M1N0N0RVJIcE5laFhDUGNOb0hHS3V0UVkiLCAic2lnbmF0dXJlIjogIjB4ZTQ2MDg3NTgwMjg4MmJmYjZkMTQ1ZjUzNTgzMGEyNGVhMGEwMzUxYWIzYmU4YTkxYzFlMDNlMDRhMzZiMjUzYzNhMDE0MDhiYjBmZTQwODkwNTJhNGYxNTY2NWQ3ODQ1YzEzMjQ2NTIzMTJkZGE0YzZkMjVmNjY3ODVlNWFiODUifSwgImF4b24iOiB7InN0YXR1c19jb2RlIjogbnVsbCwgInN0YXR1c19tZXNzYWdlIjogbnVsbCwgInByb2Nlc3NfdGltZSI6IG51bGwsICJpcCI6ICIxMjcuMC4wLjEiLCAicG9ydCI6IDM5MzMzLCAidmVyc2lvbiI6IG51bGwsICJub25jZSI6IG51bGwsICJ1dWlkIjogbnVsbCwgImhvdGtleSI6ICI1RkhuZVc0NnhHWGdzNW1VaXZlVTRzYlR5R0J6bXN0VXNwWkM5MlVoakpNNjk0dHkiLCAic2lnbmF0dXJlIjogbnVsbH0sICJjb21wdXRlZF9ib2R5X2hhc2giOiAiIiwgInRleHQiOiAiaFx1MDBlOWxsbyBcdTI2MDMgXHU0ZjYwXHU1OTdkIFwicXVvdGVkXCIgXFwgYmFjayIsICJvcCI6ICJ1cHBlciIsICJjb3VudCI6IDMsICJyYXRpbyI6IDAuMSwgInRhZ3MiOiBbImEiLCAiYiBjIl0sICJ3ZWlnaHRzIjogeyJ4IjogMS4wLCAieSI6IDFlLTA3fSwgImZsYWciOiB0cnVlLCAibWF5YmUiOiBudWxsLCAicmVzdWx0IjogbnVsbH0=",
+        "body_sha256": "b9e9662c20f4909e81931f3d0c15a59f8e965c73fd214df865e0629e47e51669"
+      },
+      "request_expected": {
+        "hash_fields": [
+          "op",
+          "text",
+          "count",
+          "ratio",
+          "tags",
+          "weights",
+          "flag",
+          "maybe"
+        ],
+        "hash_inputs": [
+          {
+            "field": "op",
+            "str_value": "upper",
+            "sha3_256": "e37b714986a263ace527ee3cdd45f436c545dcc3f4f3807680732def5c3b017b"
+          },
+          {
+            "field": "text",
+            "str_value": "héllo ☃ 你好 \"quoted\" \\ back",
+            "sha3_256": "02969407022f4106d29f883e0d6f99822b927f7a5c0624df2d05bed289136b32"
+          },
+          {
+            "field": "count",
+            "str_value": "3",
+            "sha3_256": "1bf0b26eb2090599dd68cbb42c86a674cb07ab7adc103ad3ccdf521bb79056b9"
+          },
+          {
+            "field": "ratio",
+            "str_value": "0.1",
+            "sha3_256": "75bd59c8426679f3ef7b3a37184ee08e2e5ecee840e330acf6782d77cf2a2d1b"
+          },
+          {
+            "field": "tags",
+            "str_value": "['a', 'b c']",
+            "sha3_256": "5ee1c7ade401539714c6faf4182a6beb8a59ca8a574ed3ce95305b7cc7427a0a"
+          },
+          {
+            "field": "weights",
+            "str_value": "{'x': 1.0, 'y': 1e-07}",
+            "sha3_256": "95fd20c390b35a21ef9c2aabf86e9cf41e229977de1cb13f0fc13e479db43cb4"
+          },
+          {
+            "field": "flag",
+            "str_value": "True",
+            "sha3_256": "62b5b5e01d892e831aa186068a8d83b662e8b2928b10aa5ce2aedb3edc8e7673"
+          },
+          {
+            "field": "maybe",
+            "str_value": "None",
+            "sha3_256": "61ae1749811579a5799852da2541dd16a7ffb1744c6248718a123570fffd0a63"
+          }
+        ],
+        "computed_body_hash": "da88caf949f4ed59d4f47611cb566a1524911f6ff78e5f69fe25b0878eeec6f0",
+        "computed_body_hash_matches_header": true,
+        "signed_message": "1792672891643369499.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.da88caf949f4ed59d4f47611cb566a1524911f6ff78e5f69fe25b0878eeec6f0",
+        "signature_verifies": true,
+        "signed_message_with_header_axon_hotkey": "1792672891643369499.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.da88caf949f4ed59d4f47611cb566a1524911f6ff78e5f69fe25b0878eeec6f0",
+        "signature_verifies_with_header_axon_hotkey": true
+      },
+      "response": {
+        "start_line": "HTTP/1.1 200 OK",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:31 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "content-length",
+            "937"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "name",
+            "TextOps"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "200"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Success"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "0.0001277923583984375"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672891643369499"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0xe460875802882bfb6d145f535830a24ea0a0351ab3be8a91c1e03e04a36b253c3a01408bb0fe4089052a4f15665d7845c1324652312dda4c6d25f66785e5ab85"
+          ],
+          [
+            "bt_header_input_obj_text",
+            "IiI="
+          ],
+          [
+            "bt_header_input_obj_op",
+            "IiI="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "4195"
+          ],
+          [
+            "computed_body_hash",
+            "da88caf949f4ed59d4f47611cb566a1524911f6ff78e5f69fe25b0878eeec6f0"
+          ]
+        ],
+        "status": 200,
+        "body_utf8": "{\"name\":\"TextOps\",\"timeout\":12.0,\"total_size\":3985,\"header_size\":0,\"dendrite\":{\"status_code\":null,\"status_message\":null,\"process_time\":null,\"ip\":\"198.51.100.20\",\"port\":null,\"version\":10005000,\"nonce\":1792672891643369499,\"uuid\":\"e85a70d0-ce15-11f1-a10f-847b57c7b217\",\"hotkey\":\"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\",\"signature\":\"0xe460875802882bfb6d145f535830a24ea0a0351ab3be8a91c1e03e04a36b253c3a01408bb0fe4089052a4f15665d7845c1324652312dda4c6d25f66785e5ab85\"},\"axon\":{\"status_code\":200,\"status_message\":\"Success\",\"process_time\":0.0001277923583984375,\"ip\":\"127.0.0.1\",\"port\":39333,\"version\":null,\"nonce\":null,\"uuid\":null,\"hotkey\":\"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\",\"signature\":null},\"computed_body_hash\":\"\",\"text\":\"héllo ☃ 你好 \\\"quoted\\\" \\\\ back\",\"op\":\"upper\",\"count\":3,\"ratio\":0.1,\"tags\":[\"a\",\"b c\"],\"weights\":{\"x\":1.0,\"y\":1e-07},\"flag\":true,\"maybe\":null,\"result\":\"HÉLLO ☃ 你好 \\\"QUOTED\\\" \\\\ BACK\"}",
+        "body_base64": "eyJuYW1lIjoiVGV4dE9wcyIsInRpbWVvdXQiOjEyLjAsInRvdGFsX3NpemUiOjM5ODUsImhlYWRlcl9zaXplIjowLCJkZW5kcml0ZSI6eyJzdGF0dXNfY29kZSI6bnVsbCwic3RhdHVzX21lc3NhZ2UiOm51bGwsInByb2Nlc3NfdGltZSI6bnVsbCwiaXAiOiIxOTguNTEuMTAwLjIwIiwicG9ydCI6bnVsbCwidmVyc2lvbiI6MTAwMDUwMDAsIm5vbmNlIjoxNzkyNjcyODkxNjQzMzY5NDk5LCJ1dWlkIjoiZTg1YTcwZDAtY2UxNS0xMWYxLWExMGYtODQ3YjU3YzdiMjE3IiwiaG90a2V5IjoiNUdyd3ZhRUY1elhiMjZGejlyY1FwRFdTNTdDdEVSSHBOZWhYQ1BjTm9IR0t1dFFZIiwic2lnbmF0dXJlIjoiMHhlNDYwODc1ODAyODgyYmZiNmQxNDVmNTM1ODMwYTI0ZWEwYTAzNTFhYjNiZThhOTFjMWUwM2UwNGEzNmIyNTNjM2EwMTQwOGJiMGZlNDA4OTA1MmE0ZjE1NjY1ZDc4NDVjMTMyNDY1MjMxMmRkYTRjNmQyNWY2Njc4NWU1YWI4NSJ9LCJheG9uIjp7InN0YXR1c19jb2RlIjoyMDAsInN0YXR1c19tZXNzYWdlIjoiU3VjY2VzcyIsInByb2Nlc3NfdGltZSI6MC4wMDAxMjc3OTIzNTgzOTg0Mzc1LCJpcCI6IjEyNy4wLjAuMSIsInBvcnQiOjM5MzMzLCJ2ZXJzaW9uIjpudWxsLCJub25jZSI6bnVsbCwidXVpZCI6bnVsbCwiaG90a2V5IjoiNUZIbmVXNDZ4R1hnczVtVWl2ZVU0c2JUeUdCem1zdFVzcFpDOTJVaGpKTTY5NHR5Iiwic2lnbmF0dXJlIjpudWxsfSwiY29tcHV0ZWRfYm9keV9oYXNoIjoiIiwidGV4dCI6ImjDqWxsbyDimIMg5L2g5aW9IFwicXVvdGVkXCIgXFwgYmFjayIsIm9wIjoidXBwZXIiLCJjb3VudCI6MywicmF0aW8iOjAuMSwidGFncyI6WyJhIiwiYiBjIl0sIndlaWdodHMiOnsieCI6MS4wLCJ5IjoxZS0wN30sImZsYWciOnRydWUsIm1heWJlIjpudWxsLCJyZXN1bHQiOiJIw4lMTE8g4piDIOS9oOWlvSBcIlFVT1RFRFwiIFxcIEJBQ0sifQ==",
+        "body_sha256": "f8ba03673dfc83e240a5863deb6e5c11988698ae0d6eab31e31a78a35566e016"
+      },
+      "response_expected": {
+        "status": 200,
+        "axon_status_code_header": "200",
+        "axon_signed_message": null,
+        "axon_signature_verifies": null
+      }
+    },
+    {
+      "id": "V3",
+      "description": "empty required_hash_fields: body hash is sha3_256 of the empty string",
+      "synapse": "NoHash",
+      "accepted_by_v10_axon": true,
+      "accepted_matches_status": true,
+      "notes": [
+        "Fields outside required_hash_fields can be changed on the wire."
+      ],
+      "request": {
+        "start_line": "POST /NoHash HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "name",
+            "NoHash"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672891861419699"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x7ad30374e6fcaa05a0f02a2a407561605b7b370ebe3e9493e1675bee1a298d65f8f10d8bce0745a127f3c21018d9ad413c2e1dd24507dae3527b02cca70b5a82"
+          ],
+          [
+            "bt_header_input_obj_payload",
+            "IiI="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2815"
+          ],
+          [
+            "computed_body_hash",
+            "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+          ],
+          [
+            "Accept",
+            "*/*"
+          ],
+          [
+            "Accept-Encoding",
+            "gzip, deflate"
+          ],
+          [
+            "User-Agent",
+            "Python/3.12 aiohttp/3.14.5"
+          ],
+          [
+            "Content-Length",
+            "802"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ]
+        ],
+        "method": "POST",
+        "target": "/NoHash",
+        "body_utf8": "{\"name\": \"NoHash\", \"timeout\": 12.0, \"total_size\": 2815, \"header_size\": 0, \"dendrite\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"198.51.100.20\", \"port\": null, \"version\": 10005000, \"nonce\": 1792672891861419699, \"uuid\": \"e85a70d0-ce15-11f1-a10f-847b57c7b217\", \"hotkey\": \"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", \"signature\": \"0x7ad30374e6fcaa05a0f02a2a407561605b7b370ebe3e9493e1675bee1a298d65f8f10d8bce0745a127f3c21018d9ad413c2e1dd24507dae3527b02cca70b5a82\"}, \"axon\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"127.0.0.1\", \"port\": 39333, \"version\": null, \"nonce\": null, \"uuid\": null, \"hotkey\": \"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\", \"signature\": null}, \"computed_body_hash\": \"\", \"payload\": \"anything\", \"answer\": null}",
+        "body_base64": "eyJuYW1lIjogIk5vSGFzaCIsICJ0aW1lb3V0IjogMTIuMCwgInRvdGFsX3NpemUiOiAyODE1LCAiaGVhZGVyX3NpemUiOiAwLCAiZGVuZHJpdGUiOiB7InN0YXR1c19jb2RlIjogbnVsbCwgInN0YXR1c19tZXNzYWdlIjogbnVsbCwgInByb2Nlc3NfdGltZSI6IG51bGwsICJpcCI6ICIxOTguNTEuMTAwLjIwIiwgInBvcnQiOiBudWxsLCAidmVyc2lvbiI6IDEwMDA1MDAwLCAibm9uY2UiOiAxNzkyNjcyODkxODYxNDE5Njk5LCAidXVpZCI6ICJlODVhNzBkMC1jZTE1LTExZjEtYTEwZi04NDdiNTdjN2IyMTciLCAiaG90a2V5IjogIjVHcnd2YUVGNXpYYjI2Rno5cmNRcERXUzU3Q3RFUkhwTmVoWENQY05vSEdLdXRRWSIsICJzaWduYXR1cmUiOiAiMHg3YWQzMDM3NGU2ZmNhYTA1YTBmMDJhMmE0MDc1NjE2MDViN2IzNzBlYmUzZTk0OTNlMTY3NWJlZTFhMjk4ZDY1ZjhmMTBkOGJjZTA3NDVhMTI3ZjNjMjEwMThkOWFkNDEzYzJlMWRkMjQ1MDdkYWUzNTI3YjAyY2NhNzBiNWE4MiJ9LCAiYXhvbiI6IHsic3RhdHVzX2NvZGUiOiBudWxsLCAic3RhdHVzX21lc3NhZ2UiOiBudWxsLCAicHJvY2Vzc190aW1lIjogbnVsbCwgImlwIjogIjEyNy4wLjAuMSIsICJwb3J0IjogMzkzMzMsICJ2ZXJzaW9uIjogbnVsbCwgIm5vbmNlIjogbnVsbCwgInV1aWQiOiBudWxsLCAiaG90a2V5IjogIjVGSG5lVzQ2eEdYZ3M1bVVpdmVVNHNiVHlHQnptc3RVc3BaQzkyVWhqSk02OTR0eSIsICJzaWduYXR1cmUiOiBudWxsfSwgImNvbXB1dGVkX2JvZHlfaGFzaCI6ICIiLCAicGF5bG9hZCI6ICJhbnl0aGluZyIsICJhbnN3ZXIiOiBudWxsfQ==",
+        "body_sha256": "871d12ad1fbbba2d47db7cd6c6eb91b1681bd6195e708d941d8afacc54351459"
+      },
+      "request_expected": {
+        "hash_fields": [],
+        "hash_inputs": [],
+        "computed_body_hash": "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a",
+        "computed_body_hash_matches_header": true,
+        "signed_message": "1792672891861419699.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a",
+        "signature_verifies": true,
+        "signed_message_with_header_axon_hotkey": "1792672891861419699.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a",
+        "signature_verifies_with_header_axon_hotkey": true
+      },
+      "response": {
+        "start_line": "HTTP/1.1 200 OK",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:31 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "content-length",
+            "779"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "name",
+            "NoHash"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "200"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Success"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "6.413459777832031e-05"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672891861419699"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x7ad30374e6fcaa05a0f02a2a407561605b7b370ebe3e9493e1675bee1a298d65f8f10d8bce0745a127f3c21018d9ad413c2e1dd24507dae3527b02cca70b5a82"
+          ],
+          [
+            "bt_header_input_obj_payload",
+            "IiI="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2969"
+          ],
+          [
+            "computed_body_hash",
+            "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+          ]
+        ],
+        "status": 200,
+        "body_utf8": "{\"name\":\"NoHash\",\"timeout\":12.0,\"total_size\":2815,\"header_size\":0,\"dendrite\":{\"status_code\":null,\"status_message\":null,\"process_time\":null,\"ip\":\"198.51.100.20\",\"port\":null,\"version\":10005000,\"nonce\":1792672891861419699,\"uuid\":\"e85a70d0-ce15-11f1-a10f-847b57c7b217\",\"hotkey\":\"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\",\"signature\":\"0x7ad30374e6fcaa05a0f02a2a407561605b7b370ebe3e9493e1675bee1a298d65f8f10d8bce0745a127f3c21018d9ad413c2e1dd24507dae3527b02cca70b5a82\"},\"axon\":{\"status_code\":200,\"status_message\":\"Success\",\"process_time\":6.413459777832031e-05,\"ip\":\"127.0.0.1\",\"port\":39333,\"version\":null,\"nonce\":null,\"uuid\":null,\"hotkey\":\"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\",\"signature\":null},\"computed_body_hash\":\"\",\"payload\":\"anything\",\"answer\":\"echo:anything\"}",
+        "body_base64": "eyJuYW1lIjoiTm9IYXNoIiwidGltZW91dCI6MTIuMCwidG90YWxfc2l6ZSI6MjgxNSwiaGVhZGVyX3NpemUiOjAsImRlbmRyaXRlIjp7InN0YXR1c19jb2RlIjpudWxsLCJzdGF0dXNfbWVzc2FnZSI6bnVsbCwicHJvY2Vzc190aW1lIjpudWxsLCJpcCI6IjE5OC41MS4xMDAuMjAiLCJwb3J0IjpudWxsLCJ2ZXJzaW9uIjoxMDAwNTAwMCwibm9uY2UiOjE3OTI2NzI4OTE4NjE0MTk2OTksInV1aWQiOiJlODVhNzBkMC1jZTE1LTExZjEtYTEwZi04NDdiNTdjN2IyMTciLCJob3RrZXkiOiI1R3J3dmFFRjV6WGIyNkZ6OXJjUXBEV1M1N0N0RVJIcE5laFhDUGNOb0hHS3V0UVkiLCJzaWduYXR1cmUiOiIweDdhZDMwMzc0ZTZmY2FhMDVhMGYwMmEyYTQwNzU2MTYwNWI3YjM3MGViZTNlOTQ5M2UxNjc1YmVlMWEyOThkNjVmOGYxMGQ4YmNlMDc0NWExMjdmM2MyMTAxOGQ5YWQ0MTNjMmUxZGQyNDUwN2RhZTM1MjdiMDJjY2E3MGI1YTgyIn0sImF4b24iOnsic3RhdHVzX2NvZGUiOjIwMCwic3RhdHVzX21lc3NhZ2UiOiJTdWNjZXNzIiwicHJvY2Vzc190aW1lIjo2LjQxMzQ1OTc3NzgzMjAzMWUtMDUsImlwIjoiMTI3LjAuMC4xIiwicG9ydCI6MzkzMzMsInZlcnNpb24iOm51bGwsIm5vbmNlIjpudWxsLCJ1dWlkIjpudWxsLCJob3RrZXkiOiI1RkhuZVc0NnhHWGdzNW1VaXZlVTRzYlR5R0J6bXN0VXNwWkM5MlVoakpNNjk0dHkiLCJzaWduYXR1cmUiOm51bGx9LCJjb21wdXRlZF9ib2R5X2hhc2giOiIiLCJwYXlsb2FkIjoiYW55dGhpbmciLCJhbnN3ZXIiOiJlY2hvOmFueXRoaW5nIn0=",
+        "body_sha256": "378ca5e9ffa8a70f3ee65f47843c0563d93860333455c621dd215fb97a08ed11"
+      },
+      "response_expected": {
+        "status": 200,
+        "axon_status_code_header": "200",
+        "axon_signed_message": null,
+        "axon_signature_verifies": null
+      }
+    },
+    {
+      "id": "V4",
+      "description": "deprecated pydantic-field required_hash_fields: model order wins",
+      "synapse": "LegacyFieldHash",
+      "accepted_by_v10_axon": true,
+      "accepted_matches_status": true,
+      "notes": [],
+      "request": {
+        "start_line": "POST /LegacyFieldHash HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "name",
+            "LegacyFieldHash"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672892078358449"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x9c9f4ff651c8f80344527eef5358685ce85e458907914217e1d4915147707e676d66feacbac1fba13d743cd2c75a146ae4a1f03c8a358d853beaa38bf7c25684"
+          ],
+          [
+            "bt_header_input_obj_a_field",
+            "MA=="
+          ],
+          [
+            "bt_header_input_obj_b_field",
+            "IiI="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "3233"
+          ],
+          [
+            "computed_body_hash",
+            "ad7884cb5d568630b00f392c566cc2a340f407bd090ca7f3eb7511f66d44b13d"
+          ],
+          [
+            "Accept",
+            "*/*"
+          ],
+          [
+            "Accept-Encoding",
+            "gzip, deflate"
+          ],
+          [
+            "User-Agent",
+            "Python/3.12 aiohttp/3.14.5"
+          ],
+          [
+            "Content-Length",
+            "865"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ]
+        ],
+        "method": "POST",
+        "target": "/LegacyFieldHash",
+        "body_utf8": "{\"name\": \"LegacyFieldHash\", \"timeout\": 12.0, \"total_size\": 3233, \"header_size\": 0, \"dendrite\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"198.51.100.20\", \"port\": null, \"version\": 10005000, \"nonce\": 1792672892078358449, \"uuid\": \"e85a70d0-ce15-11f1-a10f-847b57c7b217\", \"hotkey\": \"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", \"signature\": \"0x9c9f4ff651c8f80344527eef5358685ce85e458907914217e1d4915147707e676d66feacbac1fba13d743cd2c75a146ae4a1f03c8a358d853beaa38bf7c25684\"}, \"axon\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"127.0.0.1\", \"port\": 39333, \"version\": null, \"nonce\": null, \"uuid\": null, \"hotkey\": \"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\", \"signature\": null}, \"computed_body_hash\": \"\", \"required_hash_fields\": [\"b_field\", \"a_field\"], \"a_field\": 5, \"b_field\": \"bee\", \"out\": null}",
+        "body_base64": "eyJuYW1lIjogIkxlZ2FjeUZpZWxkSGFzaCIsICJ0aW1lb3V0IjogMTIuMCwgInRvdGFsX3NpemUiOiAzMjMzLCAiaGVhZGVyX3NpemUiOiAwLCAiZGVuZHJpdGUiOiB7InN0YXR1c19jb2RlIjogbnVsbCwgInN0YXR1c19tZXNzYWdlIjogbnVsbCwgInByb2Nlc3NfdGltZSI6IG51bGwsICJpcCI6ICIxOTguNTEuMTAwLjIwIiwgInBvcnQiOiBudWxsLCAidmVyc2lvbiI6IDEwMDA1MDAwLCAibm9uY2UiOiAxNzkyNjcyODkyMDc4MzU4NDQ5LCAidXVpZCI6ICJlODVhNzBkMC1jZTE1LTExZjEtYTEwZi04NDdiNTdjN2IyMTciLCAiaG90a2V5IjogIjVHcnd2YUVGNXpYYjI2Rno5cmNRcERXUzU3Q3RFUkhwTmVoWENQY05vSEdLdXRRWSIsICJzaWduYXR1cmUiOiAiMHg5YzlmNGZmNjUxYzhmODAzNDQ1MjdlZWY1MzU4Njg1Y2U4NWU0NTg5MDc5MTQyMTdlMWQ0OTE1MTQ3NzA3ZTY3NmQ2NmZlYWNiYWMxZmJhMTNkNzQzY2QyYzc1YTE0NmFlNGExZjAzYzhhMzU4ZDg1M2JlYWEzOGJmN2MyNTY4NCJ9LCAiYXhvbiI6IHsic3RhdHVzX2NvZGUiOiBudWxsLCAic3RhdHVzX21lc3NhZ2UiOiBudWxsLCAicHJvY2Vzc190aW1lIjogbnVsbCwgImlwIjogIjEyNy4wLjAuMSIsICJwb3J0IjogMzkzMzMsICJ2ZXJzaW9uIjogbnVsbCwgIm5vbmNlIjogbnVsbCwgInV1aWQiOiBudWxsLCAiaG90a2V5IjogIjVGSG5lVzQ2eEdYZ3M1bVVpdmVVNHNiVHlHQnptc3RVc3BaQzkyVWhqSk02OTR0eSIsICJzaWduYXR1cmUiOiBudWxsfSwgImNvbXB1dGVkX2JvZHlfaGFzaCI6ICIiLCAicmVxdWlyZWRfaGFzaF9maWVsZHMiOiBbImJfZmllbGQiLCAiYV9maWVsZCJdLCAiYV9maWVsZCI6IDUsICJiX2ZpZWxkIjogImJlZSIsICJvdXQiOiBudWxsfQ==",
+        "body_sha256": "b4be5d5168d38eec13ea0d218909827e72f6d6766f53904917356652ba51a34d"
+      },
+      "request_expected": {
+        "hash_fields": [
+          "a_field",
+          "b_field"
+        ],
+        "hash_inputs": [
+          {
+            "field": "a_field",
+            "str_value": "5",
+            "sha3_256": "86bc56fc56af4c3cde021282f6b727ee9f90dd636e0b0c712a85d416c75e652d"
+          },
+          {
+            "field": "b_field",
+            "str_value": "bee",
+            "sha3_256": "de56f911d94f0a8ee55f9a0122bbf4876e18365064dafedf4cfa3a93e9591ede"
+          }
+        ],
+        "computed_body_hash": "ad7884cb5d568630b00f392c566cc2a340f407bd090ca7f3eb7511f66d44b13d",
+        "computed_body_hash_matches_header": true,
+        "signed_message": "1792672892078358449.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.ad7884cb5d568630b00f392c566cc2a340f407bd090ca7f3eb7511f66d44b13d",
+        "signature_verifies": true,
+        "signed_message_with_header_axon_hotkey": "1792672892078358449.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.ad7884cb5d568630b00f392c566cc2a340f407bd090ca7f3eb7511f66d44b13d",
+        "signature_verifies_with_header_axon_hotkey": true
+      },
+      "response": {
+        "start_line": "HTTP/1.1 200 OK",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:31 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "content-length",
+            "829"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "name",
+            "LegacyFieldHash"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "200"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Success"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "2.8371810913085938e-05"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672892078358449"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x9c9f4ff651c8f80344527eef5358685ce85e458907914217e1d4915147707e676d66feacbac1fba13d743cd2c75a146ae4a1f03c8a358d853beaa38bf7c25684"
+          ],
+          [
+            "bt_header_input_obj_a_field",
+            "MA=="
+          ],
+          [
+            "bt_header_input_obj_b_field",
+            "IiI="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "3458"
+          ],
+          [
+            "computed_body_hash",
+            "ad7884cb5d568630b00f392c566cc2a340f407bd090ca7f3eb7511f66d44b13d"
+          ]
+        ],
+        "status": 200,
+        "body_utf8": "{\"name\":\"LegacyFieldHash\",\"timeout\":12.0,\"total_size\":3233,\"header_size\":0,\"dendrite\":{\"status_code\":null,\"status_message\":null,\"process_time\":null,\"ip\":\"198.51.100.20\",\"port\":null,\"version\":10005000,\"nonce\":1792672892078358449,\"uuid\":\"e85a70d0-ce15-11f1-a10f-847b57c7b217\",\"hotkey\":\"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\",\"signature\":\"0x9c9f4ff651c8f80344527eef5358685ce85e458907914217e1d4915147707e676d66feacbac1fba13d743cd2c75a146ae4a1f03c8a358d853beaa38bf7c25684\"},\"axon\":{\"status_code\":200,\"status_message\":\"Success\",\"process_time\":2.8371810913085938e-05,\"ip\":\"127.0.0.1\",\"port\":39333,\"version\":null,\"nonce\":null,\"uuid\":null,\"hotkey\":\"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\",\"signature\":null},\"computed_body_hash\":\"\",\"required_hash_fields\":[\"b_field\",\"a_field\"],\"a_field\":5,\"b_field\":\"bee\",\"out\":\"bee5\"}",
+        "body_base64": "eyJuYW1lIjoiTGVnYWN5RmllbGRIYXNoIiwidGltZW91dCI6MTIuMCwidG90YWxfc2l6ZSI6MzIzMywiaGVhZGVyX3NpemUiOjAsImRlbmRyaXRlIjp7InN0YXR1c19jb2RlIjpudWxsLCJzdGF0dXNfbWVzc2FnZSI6bnVsbCwicHJvY2Vzc190aW1lIjpudWxsLCJpcCI6IjE5OC41MS4xMDAuMjAiLCJwb3J0IjpudWxsLCJ2ZXJzaW9uIjoxMDAwNTAwMCwibm9uY2UiOjE3OTI2NzI4OTIwNzgzNTg0NDksInV1aWQiOiJlODVhNzBkMC1jZTE1LTExZjEtYTEwZi04NDdiNTdjN2IyMTciLCJob3RrZXkiOiI1R3J3dmFFRjV6WGIyNkZ6OXJjUXBEV1M1N0N0RVJIcE5laFhDUGNOb0hHS3V0UVkiLCJzaWduYXR1cmUiOiIweDljOWY0ZmY2NTFjOGY4MDM0NDUyN2VlZjUzNTg2ODVjZTg1ZTQ1ODkwNzkxNDIxN2UxZDQ5MTUxNDc3MDdlNjc2ZDY2ZmVhY2JhYzFmYmExM2Q3NDNjZDJjNzVhMTQ2YWU0YTFmMDNjOGEzNThkODUzYmVhYTM4YmY3YzI1Njg0In0sImF4b24iOnsic3RhdHVzX2NvZGUiOjIwMCwic3RhdHVzX21lc3NhZ2UiOiJTdWNjZXNzIiwicHJvY2Vzc190aW1lIjoyLjgzNzE4MTA5MTMwODU5MzhlLTA1LCJpcCI6IjEyNy4wLjAuMSIsInBvcnQiOjM5MzMzLCJ2ZXJzaW9uIjpudWxsLCJub25jZSI6bnVsbCwidXVpZCI6bnVsbCwiaG90a2V5IjoiNUZIbmVXNDZ4R1hnczVtVWl2ZVU0c2JUeUdCem1zdFVzcFpDOTJVaGpKTTY5NHR5Iiwic2lnbmF0dXJlIjpudWxsfSwiY29tcHV0ZWRfYm9keV9oYXNoIjoiIiwicmVxdWlyZWRfaGFzaF9maWVsZHMiOlsiYl9maWVsZCIsImFfZmllbGQiXSwiYV9maWVsZCI6NSwiYl9maWVsZCI6ImJlZSIsIm91dCI6ImJlZTUifQ==",
+        "body_sha256": "8cd8a9f2e5a164a873c06fba4c0ecc4a9d72fab46c9a51a12a6b7af3e94a7a75"
+      },
+      "response_expected": {
+        "status": 200,
+        "axon_status_code_header": "200",
+        "axon_signed_message": null,
+        "axon_signature_verifies": null
+      }
+    },
+    {
+      "id": "V5",
+      "description": "Dummy with dummy_input=0 (falsy value still hashed)",
+      "synapse": "Dummy",
+      "accepted_by_v10_axon": true,
+      "accepted_matches_status": true,
+      "notes": [],
+      "request": {
+        "start_line": "POST /Dummy HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672892289907978"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0xd01f1e80e855f27a4e0f6dfc4a47898db3682cd770a374a93ec636b76f5d42740c6511dc6c9f2ac08e458de9f75b45dca913455d92f695e9766c3dbd0f5e1186"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2775"
+          ],
+          [
+            "computed_body_hash",
+            "a68efd02bf8190c171a54f9de439df1e213eecc103415619956235432088c17a"
+          ],
+          [
+            "Accept",
+            "*/*"
+          ],
+          [
+            "Accept-Encoding",
+            "gzip, deflate"
+          ],
+          [
+            "User-Agent",
+            "Python/3.12 aiohttp/3.14.5"
+          ],
+          [
+            "Content-Length",
+            "802"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ]
+        ],
+        "method": "POST",
+        "target": "/Dummy",
+        "body_utf8": "{\"name\": \"Dummy\", \"timeout\": 12.0, \"total_size\": 2775, \"header_size\": 0, \"dendrite\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"198.51.100.20\", \"port\": null, \"version\": 10005000, \"nonce\": 1792672892289907978, \"uuid\": \"e85a70d0-ce15-11f1-a10f-847b57c7b217\", \"hotkey\": \"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", \"signature\": \"0xd01f1e80e855f27a4e0f6dfc4a47898db3682cd770a374a93ec636b76f5d42740c6511dc6c9f2ac08e458de9f75b45dca913455d92f695e9766c3dbd0f5e1186\"}, \"axon\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"127.0.0.1\", \"port\": 39333, \"version\": null, \"nonce\": null, \"uuid\": null, \"hotkey\": \"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\", \"signature\": null}, \"computed_body_hash\": \"\", \"dummy_input\": 0, \"dummy_output\": null}",
+        "body_base64": "eyJuYW1lIjogIkR1bW15IiwgInRpbWVvdXQiOiAxMi4wLCAidG90YWxfc2l6ZSI6IDI3NzUsICJoZWFkZXJfc2l6ZSI6IDAsICJkZW5kcml0ZSI6IHsic3RhdHVzX2NvZGUiOiBudWxsLCAic3RhdHVzX21lc3NhZ2UiOiBudWxsLCAicHJvY2Vzc190aW1lIjogbnVsbCwgImlwIjogIjE5OC41MS4xMDAuMjAiLCAicG9ydCI6IG51bGwsICJ2ZXJzaW9uIjogMTAwMDUwMDAsICJub25jZSI6IDE3OTI2NzI4OTIyODk5MDc5NzgsICJ1dWlkIjogImU4NWE3MGQwLWNlMTUtMTFmMS1hMTBmLTg0N2I1N2M3YjIxNyIsICJob3RrZXkiOiAiNUdyd3ZhRUY1elhiMjZGejlyY1FwRFdTNTdDdEVSSHBOZWhYQ1BjTm9IR0t1dFFZIiwgInNpZ25hdHVyZSI6ICIweGQwMWYxZTgwZTg1NWYyN2E0ZTBmNmRmYzRhNDc4OThkYjM2ODJjZDc3MGEzNzRhOTNlYzYzNmI3NmY1ZDQyNzQwYzY1MTFkYzZjOWYyYWMwOGU0NThkZTlmNzViNDVkY2E5MTM0NTVkOTJmNjk1ZTk3NjZjM2RiZDBmNWUxMTg2In0sICJheG9uIjogeyJzdGF0dXNfY29kZSI6IG51bGwsICJzdGF0dXNfbWVzc2FnZSI6IG51bGwsICJwcm9jZXNzX3RpbWUiOiBudWxsLCAiaXAiOiAiMTI3LjAuMC4xIiwgInBvcnQiOiAzOTMzMywgInZlcnNpb24iOiBudWxsLCAibm9uY2UiOiBudWxsLCAidXVpZCI6IG51bGwsICJob3RrZXkiOiAiNUZIbmVXNDZ4R1hnczVtVWl2ZVU0c2JUeUdCem1zdFVzcFpDOTJVaGpKTTY5NHR5IiwgInNpZ25hdHVyZSI6IG51bGx9LCAiY29tcHV0ZWRfYm9keV9oYXNoIjogIiIsICJkdW1teV9pbnB1dCI6IDAsICJkdW1teV9vdXRwdXQiOiBudWxsfQ==",
+        "body_sha256": "e5393425f75fe441dbd2575888702a218697eb8f5bedc7d0e0f82a518f81a0e2"
+      },
+      "request_expected": {
+        "hash_fields": [
+          "dummy_input"
+        ],
+        "hash_inputs": [
+          {
+            "field": "dummy_input",
+            "str_value": "0",
+            "sha3_256": "f9e2eaaa42d9fe9e558a9b8ef1bf366f190aacaa83bad2641ee106e9041096e4"
+          }
+        ],
+        "computed_body_hash": "a68efd02bf8190c171a54f9de439df1e213eecc103415619956235432088c17a",
+        "computed_body_hash_matches_header": true,
+        "signed_message": "1792672892289907978.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.a68efd02bf8190c171a54f9de439df1e213eecc103415619956235432088c17a",
+        "signature_verifies": true,
+        "signed_message_with_header_axon_hotkey": "1792672892289907978.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.a68efd02bf8190c171a54f9de439df1e213eecc103415619956235432088c17a",
+        "signature_verifies_with_header_axon_hotkey": true
+      },
+      "response": {
+        "start_line": "HTTP/1.1 200 OK",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:31 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "content-length",
+            "761"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "200"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Success"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "1.52587890625e-05"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672892289907978"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0xd01f1e80e855f27a4e0f6dfc4a47898db3682cd770a374a93ec636b76f5d42740c6511dc6c9f2ac08e458de9f75b45dca913455d92f695e9766c3dbd0f5e1186"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2875"
+          ],
+          [
+            "computed_body_hash",
+            "a68efd02bf8190c171a54f9de439df1e213eecc103415619956235432088c17a"
+          ]
+        ],
+        "status": 200,
+        "body_utf8": "{\"name\":\"Dummy\",\"timeout\":12.0,\"total_size\":2775,\"header_size\":0,\"dendrite\":{\"status_code\":null,\"status_message\":null,\"process_time\":null,\"ip\":\"198.51.100.20\",\"port\":null,\"version\":10005000,\"nonce\":1792672892289907978,\"uuid\":\"e85a70d0-ce15-11f1-a10f-847b57c7b217\",\"hotkey\":\"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\",\"signature\":\"0xd01f1e80e855f27a4e0f6dfc4a47898db3682cd770a374a93ec636b76f5d42740c6511dc6c9f2ac08e458de9f75b45dca913455d92f695e9766c3dbd0f5e1186\"},\"axon\":{\"status_code\":200,\"status_message\":\"Success\",\"process_time\":1.52587890625e-05,\"ip\":\"127.0.0.1\",\"port\":39333,\"version\":null,\"nonce\":null,\"uuid\":null,\"hotkey\":\"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\",\"signature\":null},\"computed_body_hash\":\"\",\"dummy_input\":0,\"dummy_output\":0}",
+        "body_base64": "eyJuYW1lIjoiRHVtbXkiLCJ0aW1lb3V0IjoxMi4wLCJ0b3RhbF9zaXplIjoyNzc1LCJoZWFkZXJfc2l6ZSI6MCwiZGVuZHJpdGUiOnsic3RhdHVzX2NvZGUiOm51bGwsInN0YXR1c19tZXNzYWdlIjpudWxsLCJwcm9jZXNzX3RpbWUiOm51bGwsImlwIjoiMTk4LjUxLjEwMC4yMCIsInBvcnQiOm51bGwsInZlcnNpb24iOjEwMDA1MDAwLCJub25jZSI6MTc5MjY3Mjg5MjI4OTkwNzk3OCwidXVpZCI6ImU4NWE3MGQwLWNlMTUtMTFmMS1hMTBmLTg0N2I1N2M3YjIxNyIsImhvdGtleSI6IjVHcnd2YUVGNXpYYjI2Rno5cmNRcERXUzU3Q3RFUkhwTmVoWENQY05vSEdLdXRRWSIsInNpZ25hdHVyZSI6IjB4ZDAxZjFlODBlODU1ZjI3YTRlMGY2ZGZjNGE0Nzg5OGRiMzY4MmNkNzcwYTM3NGE5M2VjNjM2Yjc2ZjVkNDI3NDBjNjUxMWRjNmM5ZjJhYzA4ZTQ1OGRlOWY3NWI0NWRjYTkxMzQ1NWQ5MmY2OTVlOTc2NmMzZGJkMGY1ZTExODYifSwiYXhvbiI6eyJzdGF0dXNfY29kZSI6MjAwLCJzdGF0dXNfbWVzc2FnZSI6IlN1Y2Nlc3MiLCJwcm9jZXNzX3RpbWUiOjEuNTI1ODc4OTA2MjVlLTA1LCJpcCI6IjEyNy4wLjAuMSIsInBvcnQiOjM5MzMzLCJ2ZXJzaW9uIjpudWxsLCJub25jZSI6bnVsbCwidXVpZCI6bnVsbCwiaG90a2V5IjoiNUZIbmVXNDZ4R1hnczVtVWl2ZVU0c2JUeUdCem1zdFVzcFpDOTJVaGpKTTY5NHR5Iiwic2lnbmF0dXJlIjpudWxsfSwiY29tcHV0ZWRfYm9keV9oYXNoIjoiIiwiZHVtbXlfaW5wdXQiOjAsImR1bW15X291dHB1dCI6MH0=",
+        "body_sha256": "5f4c54c00168eaa101bc9706651e3af331c4d067e0fcecbfa6e91bf9f0d20c21"
+      },
+      "response_expected": {
+        "status": 200,
+        "axon_status_code_header": "200",
+        "axon_signed_message": null,
+        "axon_signature_verifies": null
+      }
+    },
+    {
+      "id": "N1",
+      "description": "caller //Charlie is blacklisted by hotkey: 403",
+      "synapse": "Dummy",
+      "accepted_by_v10_axon": false,
+      "accepted_matches_status": true,
+      "notes": [
+        "blacklist_fn runs on a Synapse built from headers only: body fields hold placeholder values (see blacklist_observations)."
+      ],
+      "request": {
+        "start_line": "POST /Dummy HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672892501751854"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e910ad5b-ce15-11f1-a63a-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x909175cecf3f09ff51f0010d679398d290264685cf5ad648c455c3c109f5d86b358783e03be3b8168f94682aeea650f40bd8cb86fbcd118bb3698c88da291a88"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2803"
+          ],
+          [
+            "computed_body_hash",
+            "2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb"
+          ],
+          [
+            "Accept",
+            "*/*"
+          ],
+          [
+            "Accept-Encoding",
+            "gzip, deflate"
+          ],
+          [
+            "User-Agent",
+            "Python/3.12 aiohttp/3.14.5"
+          ],
+          [
+            "Content-Length",
+            "802"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ]
+        ],
+        "method": "POST",
+        "target": "/Dummy",
+        "body_utf8": "{\"name\": \"Dummy\", \"timeout\": 12.0, \"total_size\": 2803, \"header_size\": 0, \"dendrite\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"198.51.100.20\", \"port\": null, \"version\": 10005000, \"nonce\": 1792672892501751854, \"uuid\": \"e910ad5b-ce15-11f1-a63a-847b57c7b217\", \"hotkey\": \"5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y\", \"signature\": \"0x909175cecf3f09ff51f0010d679398d290264685cf5ad648c455c3c109f5d86b358783e03be3b8168f94682aeea650f40bd8cb86fbcd118bb3698c88da291a88\"}, \"axon\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"127.0.0.1\", \"port\": 39333, \"version\": null, \"nonce\": null, \"uuid\": null, \"hotkey\": \"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\", \"signature\": null}, \"computed_body_hash\": \"\", \"dummy_input\": 7, \"dummy_output\": null}",
+        "body_base64": "eyJuYW1lIjogIkR1bW15IiwgInRpbWVvdXQiOiAxMi4wLCAidG90YWxfc2l6ZSI6IDI4MDMsICJoZWFkZXJfc2l6ZSI6IDAsICJkZW5kcml0ZSI6IHsic3RhdHVzX2NvZGUiOiBudWxsLCAic3RhdHVzX21lc3NhZ2UiOiBudWxsLCAicHJvY2Vzc190aW1lIjogbnVsbCwgImlwIjogIjE5OC41MS4xMDAuMjAiLCAicG9ydCI6IG51bGwsICJ2ZXJzaW9uIjogMTAwMDUwMDAsICJub25jZSI6IDE3OTI2NzI4OTI1MDE3NTE4NTQsICJ1dWlkIjogImU5MTBhZDViLWNlMTUtMTFmMS1hNjNhLTg0N2I1N2M3YjIxNyIsICJob3RrZXkiOiAiNUZMU2lnQzlIR1JLVmhCOUZpRW80WTNrb1BzTm1CbUxKYnBYZzJtcDFoWGNTNTlZIiwgInNpZ25hdHVyZSI6ICIweDkwOTE3NWNlY2YzZjA5ZmY1MWYwMDEwZDY3OTM5OGQyOTAyNjQ2ODVjZjVhZDY0OGM0NTVjM2MxMDlmNWQ4NmIzNTg3ODNlMDNiZTNiODE2OGY5NDY4MmFlZWE2NTBmNDBiZDhjYjg2ZmJjZDExOGJiMzY5OGM4OGRhMjkxYTg4In0sICJheG9uIjogeyJzdGF0dXNfY29kZSI6IG51bGwsICJzdGF0dXNfbWVzc2FnZSI6IG51bGwsICJwcm9jZXNzX3RpbWUiOiBudWxsLCAiaXAiOiAiMTI3LjAuMC4xIiwgInBvcnQiOiAzOTMzMywgInZlcnNpb24iOiBudWxsLCAibm9uY2UiOiBudWxsLCAidXVpZCI6IG51bGwsICJob3RrZXkiOiAiNUZIbmVXNDZ4R1hnczVtVWl2ZVU0c2JUeUdCem1zdFVzcFpDOTJVaGpKTTY5NHR5IiwgInNpZ25hdHVyZSI6IG51bGx9LCAiY29tcHV0ZWRfYm9keV9oYXNoIjogIiIsICJkdW1teV9pbnB1dCI6IDcsICJkdW1teV9vdXRwdXQiOiBudWxsfQ==",
+        "body_sha256": "a0b7565da81788f5e59cfbb6fc82b278332e2db2f79a3bda4835aa0f860f4a26"
+      },
+      "request_expected": {
+        "hash_fields": [
+          "dummy_input"
+        ],
+        "hash_inputs": [
+          {
+            "field": "dummy_input",
+            "str_value": "7",
+            "sha3_256": "8f9b51ce624f01b0a40c9f68ba8bb0a2c06aa7f95d1ed27d6b1b5e1e99ee5e4d"
+          }
+        ],
+        "computed_body_hash": "2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb",
+        "computed_body_hash_matches_header": true,
+        "signed_message": "1792672892501751854.5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e910ad5b-ce15-11f1-a63a-847b57c7b217.2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb",
+        "signature_verifies": true,
+        "signed_message_with_header_axon_hotkey": "1792672892501751854.5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e910ad5b-ce15-11f1-a63a-847b57c7b217.2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb",
+        "signature_verifies_with_header_axon_hotkey": true
+      },
+      "response": {
+        "start_line": "HTTP/1.1 403 Forbidden",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:32 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "403"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Forbidden. Key is blacklisted: blacklisted hotkey."
+          ],
+          [
+            "bt_header_axon_process_time",
+            "0.000274658203125"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_version",
+            "10005000"
+          ],
+          [
+            "bt_header_axon_nonce",
+            "1792672892506857241"
+          ],
+          [
+            "bt_header_axon_uuid",
+            "e8575fc1-ce15-11f1-b80d-847b57c7b217"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_axon_signature",
+            "0x8414f2e88ad63e2629533c99083a0d476c7c0c2e9023137c240919065492965f281f9ccc00ff601a85860bb5c4028c97612a8b44085f397229c975ba59c43583"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_dendrite_port",
+            "47396"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672892501751854"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e910ad5b-ce15-11f1-a63a-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x909175cecf3f09ff51f0010d679398d290264685cf5ad648c455c3c109f5d86b358783e03be3b8168f94682aeea650f40bd8cb86fbcd118bb3698c88da291a88"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "3346"
+          ],
+          [
+            "computed_body_hash",
+            "a68efd02bf8190c171a54f9de439df1e213eecc103415619956235432088c17a"
+          ],
+          [
+            "content-length",
+            "64"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "status": 403,
+        "body_utf8": "{\"message\":\"Forbidden. Key is blacklisted: blacklisted hotkey.\"}",
+        "body_base64": "eyJtZXNzYWdlIjoiRm9yYmlkZGVuLiBLZXkgaXMgYmxhY2tsaXN0ZWQ6IGJsYWNrbGlzdGVkIGhvdGtleS4ifQ==",
+        "body_sha256": "6f0baeca646c871c1e925e7480f72f8f2d6007bf666d6b401f8e0e3e58d264cf"
+      },
+      "response_expected": {
+        "status": 403,
+        "axon_status_code_header": "403",
+        "axon_signed_message": "1792672892506857241.5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e8575fc1-ce15-11f1-b80d-847b57c7b217",
+        "axon_signature_verifies": true
+      }
+    },
+    {
+      "id": "N2",
+      "description": "signed for axon //Charlie: the axon verifies with its own hotkey",
+      "synapse": "Dummy",
+      "accepted_by_v10_axon": false,
+      "accepted_matches_status": true,
+      "notes": [],
+      "request": {
+        "start_line": "POST /Dummy HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672892721455360"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x14d2def6ba37750fc01505cfc36a2c75d9e6360bdeab47859c32c0b4fec0f2719edb866712e87e671ff05d29ab46169c9f5e6a8d823b1da4351bfb6e0748558c"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2803"
+          ],
+          [
+            "computed_body_hash",
+            "38d76c654ecdd2e33d277886a041081a9d62729f4a3961d73afeeb1c0f03baf4"
+          ],
+          [
+            "Accept",
+            "*/*"
+          ],
+          [
+            "Accept-Encoding",
+            "gzip, deflate"
+          ],
+          [
+            "User-Agent",
+            "Python/3.12 aiohttp/3.14.5"
+          ],
+          [
+            "Content-Length",
+            "802"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ]
+        ],
+        "method": "POST",
+        "target": "/Dummy",
+        "body_utf8": "{\"name\": \"Dummy\", \"timeout\": 12.0, \"total_size\": 2803, \"header_size\": 0, \"dendrite\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"198.51.100.20\", \"port\": null, \"version\": 10005000, \"nonce\": 1792672892721455360, \"uuid\": \"e85a70d0-ce15-11f1-a10f-847b57c7b217\", \"hotkey\": \"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", \"signature\": \"0x14d2def6ba37750fc01505cfc36a2c75d9e6360bdeab47859c32c0b4fec0f2719edb866712e87e671ff05d29ab46169c9f5e6a8d823b1da4351bfb6e0748558c\"}, \"axon\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"127.0.0.1\", \"port\": 39333, \"version\": null, \"nonce\": null, \"uuid\": null, \"hotkey\": \"5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y\", \"signature\": null}, \"computed_body_hash\": \"\", \"dummy_input\": 8, \"dummy_output\": null}",
+        "body_base64": "eyJuYW1lIjogIkR1bW15IiwgInRpbWVvdXQiOiAxMi4wLCAidG90YWxfc2l6ZSI6IDI4MDMsICJoZWFkZXJfc2l6ZSI6IDAsICJkZW5kcml0ZSI6IHsic3RhdHVzX2NvZGUiOiBudWxsLCAic3RhdHVzX21lc3NhZ2UiOiBudWxsLCAicHJvY2Vzc190aW1lIjogbnVsbCwgImlwIjogIjE5OC41MS4xMDAuMjAiLCAicG9ydCI6IG51bGwsICJ2ZXJzaW9uIjogMTAwMDUwMDAsICJub25jZSI6IDE3OTI2NzI4OTI3MjE0NTUzNjAsICJ1dWlkIjogImU4NWE3MGQwLWNlMTUtMTFmMS1hMTBmLTg0N2I1N2M3YjIxNyIsICJob3RrZXkiOiAiNUdyd3ZhRUY1elhiMjZGejlyY1FwRFdTNTdDdEVSSHBOZWhYQ1BjTm9IR0t1dFFZIiwgInNpZ25hdHVyZSI6ICIweDE0ZDJkZWY2YmEzNzc1MGZjMDE1MDVjZmMzNmEyYzc1ZDllNjM2MGJkZWFiNDc4NTljMzJjMGI0ZmVjMGYyNzE5ZWRiODY2NzEyZTg3ZTY3MWZmMDVkMjlhYjQ2MTY5YzlmNWU2YThkODIzYjFkYTQzNTFiZmI2ZTA3NDg1NThjIn0sICJheG9uIjogeyJzdGF0dXNfY29kZSI6IG51bGwsICJzdGF0dXNfbWVzc2FnZSI6IG51bGwsICJwcm9jZXNzX3RpbWUiOiBudWxsLCAiaXAiOiAiMTI3LjAuMC4xIiwgInBvcnQiOiAzOTMzMywgInZlcnNpb24iOiBudWxsLCAibm9uY2UiOiBudWxsLCAidXVpZCI6IG51bGwsICJob3RrZXkiOiAiNUZMU2lnQzlIR1JLVmhCOUZpRW80WTNrb1BzTm1CbUxKYnBYZzJtcDFoWGNTNTlZIiwgInNpZ25hdHVyZSI6IG51bGx9LCAiY29tcHV0ZWRfYm9keV9oYXNoIjogIiIsICJkdW1teV9pbnB1dCI6IDgsICJkdW1teV9vdXRwdXQiOiBudWxsfQ==",
+        "body_sha256": "5fb23d16a5b4e94507e6b6779b2399951ae9019b45438f11d838740555203768"
+      },
+      "request_expected": {
+        "hash_fields": [
+          "dummy_input"
+        ],
+        "hash_inputs": [
+          {
+            "field": "dummy_input",
+            "str_value": "8",
+            "sha3_256": "d14a329a1924592faf2d4ba6dc727d59af6afae983a0c208bf980237b63a5a6a"
+          }
+        ],
+        "computed_body_hash": "38d76c654ecdd2e33d277886a041081a9d62729f4a3961d73afeeb1c0f03baf4",
+        "computed_body_hash_matches_header": true,
+        "signed_message": "1792672892721455360.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.38d76c654ecdd2e33d277886a041081a9d62729f4a3961d73afeeb1c0f03baf4",
+        "signature_verifies": false,
+        "signed_message_with_header_axon_hotkey": "1792672892721455360.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y.e85a70d0-ce15-11f1-a10f-847b57c7b217.38d76c654ecdd2e33d277886a041081a9d62729f4a3961d73afeeb1c0f03baf4",
+        "signature_verifies_with_header_axon_hotkey": true
+      },
+      "response": {
+        "start_line": "HTTP/1.1 401 Unauthorized",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:32 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "401"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Not Verified with error: Signature mismatch with 1792672892721455360.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.38d76c654ecdd2e33d277886a041081a9d62729f4a3961d73afeeb1c0f03baf4 and 0x14d2def6ba37750fc01505cfc36a2c75d9e6360bdeab47859c32c0b4fec0f2719edb866712e87e671ff05d29ab46169c9f5e6a8d823b1da4351bfb6e0748558c"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "0.00031495094299316406"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_version",
+            "10005000"
+          ],
+          [
+            "bt_header_axon_nonce",
+            "1792672892725760373"
+          ],
+          [
+            "bt_header_axon_uuid",
+            "e8575fc1-ce15-11f1-b80d-847b57c7b217"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y"
+          ],
+          [
+            "bt_header_axon_signature",
+            "0xbcf814fae1d37bb230fa4d5c44953d49bd4c496b23dd1bf9fdd51ff3eca0a15343da394507c37ea0fd15707e0033dc30657d8d131bb8443b759704cacd4c6e88"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_dendrite_port",
+            "47392"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672892721455360"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x14d2def6ba37750fc01505cfc36a2c75d9e6360bdeab47859c32c0b4fec0f2719edb866712e87e671ff05d29ab46169c9f5e6a8d823b1da4351bfb6e0748558c"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "3699"
+          ],
+          [
+            "computed_body_hash",
+            "a68efd02bf8190c171a54f9de439df1e213eecc103415619956235432088c17a"
+          ],
+          [
+            "content-length",
+            "417"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "status": 401,
+        "body_utf8": "{\"message\":\"Not Verified with error: Signature mismatch with 1792672892721455360.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.38d76c654ecdd2e33d277886a041081a9d62729f4a3961d73afeeb1c0f03baf4 and 0x14d2def6ba37750fc01505cfc36a2c75d9e6360bdeab47859c32c0b4fec0f2719edb866712e87e671ff05d29ab46169c9f5e6a8d823b1da4351bfb6e0748558c\"}",
+        "body_base64": "eyJtZXNzYWdlIjoiTm90IFZlcmlmaWVkIHdpdGggZXJyb3I6IFNpZ25hdHVyZSBtaXNtYXRjaCB3aXRoIDE3OTI2NzI4OTI3MjE0NTUzNjAuNUdyd3ZhRUY1elhiMjZGejlyY1FwRFdTNTdDdEVSSHBOZWhYQ1BjTm9IR0t1dFFZLjVGSG5lVzQ2eEdYZ3M1bVVpdmVVNHNiVHlHQnptc3RVc3BaQzkyVWhqSk02OTR0eS5lODVhNzBkMC1jZTE1LTExZjEtYTEwZi04NDdiNTdjN2IyMTcuMzhkNzZjNjU0ZWNkZDJlMzNkMjc3ODg2YTA0MTA4MWE5ZDYyNzI5ZjRhMzk2MWQ3M2FmZWViMWMwZjAzYmFmNCBhbmQgMHgxNGQyZGVmNmJhMzc3NTBmYzAxNTA1Y2ZjMzZhMmM3NWQ5ZTYzNjBiZGVhYjQ3ODU5YzMyYzBiNGZlYzBmMjcxOWVkYjg2NjcxMmU4N2U2NzFmZjA1ZDI5YWI0NjE2OWM5ZjVlNmE4ZDgyM2IxZGE0MzUxYmZiNmUwNzQ4NTU4YyJ9",
+        "body_sha256": "10c970e3b55d60cc50e1a48f20f006f5a391ec58d58d35a436a093301db25668"
+      },
+      "response_expected": {
+        "status": 401,
+        "axon_status_code_header": "401",
+        "axon_signed_message": "1792672892725760373.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FLSigC9HGRKVhB9FiEo4Y3koPsNmBmLJbpXg2mp1hXcS59Y.e8575fc1-ce15-11f1-b80d-847b57c7b217",
+        "axon_signature_verifies": true
+      }
+    },
+    {
+      "id": "N3",
+      "description": "exact replay of V1's request bytes: nonce not newer than the last",
+      "synapse": "Dummy",
+      "accepted_by_v10_axon": false,
+      "accepted_matches_status": true,
+      "notes": [],
+      "request": {
+        "start_line": "POST /Dummy HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672891413060785"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x0e9bb5ec55135e69379ab04e93dccdb961a31dfb30e42a9fe1b29fc47d6eb21dca4902c883ee8ee4b7650c6e7bee23eda8c3c869ce9652070f35727d57777a86"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2803"
+          ],
+          [
+            "computed_body_hash",
+            "2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb"
+          ],
+          [
+            "Accept",
+            "*/*"
+          ],
+          [
+            "Accept-Encoding",
+            "gzip, deflate"
+          ],
+          [
+            "User-Agent",
+            "Python/3.12 aiohttp/3.14.5"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ],
+          [
+            "Content-Length",
+            "802"
+          ]
+        ],
+        "method": "POST",
+        "target": "/Dummy",
+        "body_utf8": "{\"name\": \"Dummy\", \"timeout\": 12.0, \"total_size\": 2803, \"header_size\": 0, \"dendrite\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"198.51.100.20\", \"port\": null, \"version\": 10005000, \"nonce\": 1792672891413060785, \"uuid\": \"e85a70d0-ce15-11f1-a10f-847b57c7b217\", \"hotkey\": \"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", \"signature\": \"0x0e9bb5ec55135e69379ab04e93dccdb961a31dfb30e42a9fe1b29fc47d6eb21dca4902c883ee8ee4b7650c6e7bee23eda8c3c869ce9652070f35727d57777a86\"}, \"axon\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"127.0.0.1\", \"port\": 39333, \"version\": null, \"nonce\": null, \"uuid\": null, \"hotkey\": \"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\", \"signature\": null}, \"computed_body_hash\": \"\", \"dummy_input\": 7, \"dummy_output\": null}",
+        "body_base64": "eyJuYW1lIjogIkR1bW15IiwgInRpbWVvdXQiOiAxMi4wLCAidG90YWxfc2l6ZSI6IDI4MDMsICJoZWFkZXJfc2l6ZSI6IDAsICJkZW5kcml0ZSI6IHsic3RhdHVzX2NvZGUiOiBudWxsLCAic3RhdHVzX21lc3NhZ2UiOiBudWxsLCAicHJvY2Vzc190aW1lIjogbnVsbCwgImlwIjogIjE5OC41MS4xMDAuMjAiLCAicG9ydCI6IG51bGwsICJ2ZXJzaW9uIjogMTAwMDUwMDAsICJub25jZSI6IDE3OTI2NzI4OTE0MTMwNjA3ODUsICJ1dWlkIjogImU4NWE3MGQwLWNlMTUtMTFmMS1hMTBmLTg0N2I1N2M3YjIxNyIsICJob3RrZXkiOiAiNUdyd3ZhRUY1elhiMjZGejlyY1FwRFdTNTdDdEVSSHBOZWhYQ1BjTm9IR0t1dFFZIiwgInNpZ25hdHVyZSI6ICIweDBlOWJiNWVjNTUxMzVlNjkzNzlhYjA0ZTkzZGNjZGI5NjFhMzFkZmIzMGU0MmE5ZmUxYjI5ZmM0N2Q2ZWIyMWRjYTQ5MDJjODgzZWU4ZWU0Yjc2NTBjNmU3YmVlMjNlZGE4YzNjODY5Y2U5NjUyMDcwZjM1NzI3ZDU3Nzc3YTg2In0sICJheG9uIjogeyJzdGF0dXNfY29kZSI6IG51bGwsICJzdGF0dXNfbWVzc2FnZSI6IG51bGwsICJwcm9jZXNzX3RpbWUiOiBudWxsLCAiaXAiOiAiMTI3LjAuMC4xIiwgInBvcnQiOiAzOTMzMywgInZlcnNpb24iOiBudWxsLCAibm9uY2UiOiBudWxsLCAidXVpZCI6IG51bGwsICJob3RrZXkiOiAiNUZIbmVXNDZ4R1hnczVtVWl2ZVU0c2JUeUdCem1zdFVzcFpDOTJVaGpKTTY5NHR5IiwgInNpZ25hdHVyZSI6IG51bGx9LCAiY29tcHV0ZWRfYm9keV9oYXNoIjogIiIsICJkdW1teV9pbnB1dCI6IDcsICJkdW1teV9vdXRwdXQiOiBudWxsfQ==",
+        "body_sha256": "d9dfd5759751a72645893648b5a5c4640c383abe8c6c38c1a51b14e4029db362"
+      },
+      "request_expected": {
+        "hash_fields": [
+          "dummy_input"
+        ],
+        "hash_inputs": [
+          {
+            "field": "dummy_input",
+            "str_value": "7",
+            "sha3_256": "8f9b51ce624f01b0a40c9f68ba8bb0a2c06aa7f95d1ed27d6b1b5e1e99ee5e4d"
+          }
+        ],
+        "computed_body_hash": "2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb",
+        "computed_body_hash_matches_header": true,
+        "signed_message": "1792672891413060785.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb",
+        "signature_verifies": true,
+        "signed_message_with_header_axon_hotkey": "1792672891413060785.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb",
+        "signature_verifies_with_header_axon_hotkey": true
+      },
+      "response": {
+        "start_line": "HTTP/1.1 401 Unauthorized",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:32 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "401"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Not Verified with error: Nonce is too old, a newer one was last processed"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "0.0007548332214355469"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_version",
+            "10005000"
+          ],
+          [
+            "bt_header_axon_nonce",
+            "1792672892939805932"
+          ],
+          [
+            "bt_header_axon_uuid",
+            "e8575fc1-ce15-11f1-b80d-847b57c7b217"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_axon_signature",
+            "0x7c7916adb09babf163661fa2dea860eba7b53a25c67c4185e1050528015c9802a83b42705bda659339051c20caf49db5394d6f7a3caa73aee460c8212e128c81"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_dendrite_port",
+            "47410"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672891413060785"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x0e9bb5ec55135e69379ab04e93dccdb961a31dfb30e42a9fe1b29fc47d6eb21dca4902c883ee8ee4b7650c6e7bee23eda8c3c869ce9652070f35727d57777a86"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "3369"
+          ],
+          [
+            "computed_body_hash",
+            "a68efd02bf8190c171a54f9de439df1e213eecc103415619956235432088c17a"
+          ],
+          [
+            "content-length",
+            "87"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "status": 401,
+        "body_utf8": "{\"message\":\"Not Verified with error: Nonce is too old, a newer one was last processed\"}",
+        "body_base64": "eyJtZXNzYWdlIjoiTm90IFZlcmlmaWVkIHdpdGggZXJyb3I6IE5vbmNlIGlzIHRvbyBvbGQsIGEgbmV3ZXIgb25lIHdhcyBsYXN0IHByb2Nlc3NlZCJ9",
+        "body_sha256": "e24683b1d74cf577829559be7b31d5605b1c0cb4606b1ae3a767f76cc88cee82"
+      },
+      "response_expected": {
+        "status": 401,
+        "axon_status_code_header": "401",
+        "axon_signed_message": "1792672892939805932.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e8575fc1-ce15-11f1-b80d-847b57c7b217",
+        "axon_signature_verifies": true
+      }
+    },
+    {
+      "id": "N4",
+      "description": "fresh valid signature, hashed body field changed after signing",
+      "synapse": "Dummy",
+      "accepted_by_v10_axon": false,
+      "accepted_matches_status": true,
+      "notes": [],
+      "request": {
+        "start_line": "POST /Dummy HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672893150500306"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0xcae4cac2bf8b0e3751a3c41b7c4b7aecee9827373f6c459fb842987fd5bd116c69381a67400d3d23f7a1148c06d0d03075b6f173ccb32f76748c750c87cd0387"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2775"
+          ],
+          [
+            "computed_body_hash",
+            "2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ],
+          [
+            "Content-Length",
+            "18"
+          ]
+        ],
+        "method": "POST",
+        "target": "/Dummy",
+        "body_utf8": "{\"dummy_input\": 8}",
+        "body_base64": "eyJkdW1teV9pbnB1dCI6IDh9",
+        "body_sha256": "998b5bf5574961075846ca9a63a339ea198218379e551a28dac562f6f1fc1a20"
+      },
+      "request_expected": {
+        "hash_fields": [
+          "dummy_input"
+        ],
+        "hash_inputs": [
+          {
+            "field": "dummy_input",
+            "str_value": "8",
+            "sha3_256": "d14a329a1924592faf2d4ba6dc727d59af6afae983a0c208bf980237b63a5a6a"
+          }
+        ],
+        "computed_body_hash": "38d76c654ecdd2e33d277886a041081a9d62729f4a3961d73afeeb1c0f03baf4",
+        "computed_body_hash_matches_header": false,
+        "signed_message": "1792672893150500306.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb",
+        "signature_verifies": true,
+        "signed_message_with_header_axon_hotkey": "1792672893150500306.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.2792065dc8ce849c2fd6bac2c0189934746b514c4a2b273d8381b60a0dc253fb",
+        "signature_verifies_with_header_axon_hotkey": true
+      },
+      "response": {
+        "start_line": "HTTP/1.1 500 Internal Server Error",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:32 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "500"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Internal Server Error #f95248ec-2e93-4be0-994e-077d6d6f7368"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "0.008289337158203125"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_version",
+            "10005000"
+          ],
+          [
+            "bt_header_axon_nonce",
+            "1792672893161013331"
+          ],
+          [
+            "bt_header_axon_uuid",
+            "e8575fc1-ce15-11f1-b80d-847b57c7b217"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_axon_signature",
+            "0xe611f8ccbaac19d9667363be505b6db51c51594d7d03a7f5c2f61d92c6a7361d09fa252bf40d2135fd250f2674a74b4e8d3b9e6c30ab0ba2db1138037886b289"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_dendrite_port",
+            "47420"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672893150500306"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0xcae4cac2bf8b0e3751a3c41b7c4b7aecee9827373f6c459fb842987fd5bd116c69381a67400d3d23f7a1148c06d0d03075b6f173ccb32f76748c750c87cd0387"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "3355"
+          ],
+          [
+            "computed_body_hash",
+            "a68efd02bf8190c171a54f9de439df1e213eecc103415619956235432088c17a"
+          ],
+          [
+            "content-length",
+            "73"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "status": 500,
+        "body_utf8": "{\"message\":\"Internal Server Error #f95248ec-2e93-4be0-994e-077d6d6f7368\"}",
+        "body_base64": "eyJtZXNzYWdlIjoiSW50ZXJuYWwgU2VydmVyIEVycm9yICNmOTUyNDhlYy0yZTkzLTRiZTAtOTk0ZS0wNzdkNmQ2ZjczNjgifQ==",
+        "body_sha256": "6b90fad3da80d31c04ccd03700e2b0530ed5f24745133cd260c4e595e52434c7"
+      },
+      "response_expected": {
+        "status": 500,
+        "axon_status_code_header": "500",
+        "axon_signed_message": "1792672893161013331.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e8575fc1-ce15-11f1-b80d-847b57c7b217",
+        "axon_signature_verifies": true
+      }
+    },
+    {
+      "id": "N5",
+      "description": "valid signature but nonce 30 s old (first request for this uuid)",
+      "synapse": "Dummy",
+      "accepted_by_v10_axon": false,
+      "accepted_matches_status": true,
+      "notes": [],
+      "request": {
+        "start_line": "POST /Dummy HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672863376112691"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e99609ca-ce15-11f1-a03b-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x983d08dfeb48e345e4883a8ad2f0e76f930878bd4689310bbc380a057babaa1ec1e19784087060de4d803d880ec5467bf9a4421405bcd9f2396a271a98d9978c"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2775"
+          ],
+          [
+            "computed_body_hash",
+            "9cbd4f434ce15a8e47df65054139034a2f448b7bbc29423d5c51c663a59fd248"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ],
+          [
+            "Content-Length",
+            "802"
+          ]
+        ],
+        "method": "POST",
+        "target": "/Dummy",
+        "body_utf8": "{\"name\": \"Dummy\", \"timeout\": 12.0, \"total_size\": 2775, \"header_size\": 0, \"dendrite\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"198.51.100.20\", \"port\": null, \"version\": 10005000, \"nonce\": 1792672863376112691, \"uuid\": \"e99609ca-ce15-11f1-a03b-847b57c7b217\", \"hotkey\": \"5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\", \"signature\": \"0x983d08dfeb48e345e4883a8ad2f0e76f930878bd4689310bbc380a057babaa1ec1e19784087060de4d803d880ec5467bf9a4421405bcd9f2396a271a98d9978c\"}, \"axon\": {\"status_code\": null, \"status_message\": null, \"process_time\": null, \"ip\": \"127.0.0.1\", \"port\": 39333, \"version\": null, \"nonce\": null, \"uuid\": null, \"hotkey\": \"5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\", \"signature\": null}, \"computed_body_hash\": \"\", \"dummy_input\": 9, \"dummy_output\": null}",
+        "body_base64": "eyJuYW1lIjogIkR1bW15IiwgInRpbWVvdXQiOiAxMi4wLCAidG90YWxfc2l6ZSI6IDI3NzUsICJoZWFkZXJfc2l6ZSI6IDAsICJkZW5kcml0ZSI6IHsic3RhdHVzX2NvZGUiOiBudWxsLCAic3RhdHVzX21lc3NhZ2UiOiBudWxsLCAicHJvY2Vzc190aW1lIjogbnVsbCwgImlwIjogIjE5OC41MS4xMDAuMjAiLCAicG9ydCI6IG51bGwsICJ2ZXJzaW9uIjogMTAwMDUwMDAsICJub25jZSI6IDE3OTI2NzI4NjMzNzYxMTI2OTEsICJ1dWlkIjogImU5OTYwOWNhLWNlMTUtMTFmMS1hMDNiLTg0N2I1N2M3YjIxNyIsICJob3RrZXkiOiAiNUdyd3ZhRUY1elhiMjZGejlyY1FwRFdTNTdDdEVSSHBOZWhYQ1BjTm9IR0t1dFFZIiwgInNpZ25hdHVyZSI6ICIweDk4M2QwOGRmZWI0OGUzNDVlNDg4M2E4YWQyZjBlNzZmOTMwODc4YmQ0Njg5MzEwYmJjMzgwYTA1N2JhYmFhMWVjMWUxOTc4NDA4NzA2MGRlNGQ4MDNkODgwZWM1NDY3YmY5YTQ0MjE0MDViY2Q5ZjIzOTZhMjcxYTk4ZDk5NzhjIn0sICJheG9uIjogeyJzdGF0dXNfY29kZSI6IG51bGwsICJzdGF0dXNfbWVzc2FnZSI6IG51bGwsICJwcm9jZXNzX3RpbWUiOiBudWxsLCAiaXAiOiAiMTI3LjAuMC4xIiwgInBvcnQiOiAzOTMzMywgInZlcnNpb24iOiBudWxsLCAibm9uY2UiOiBudWxsLCAidXVpZCI6IG51bGwsICJob3RrZXkiOiAiNUZIbmVXNDZ4R1hnczVtVWl2ZVU0c2JUeUdCem1zdFVzcFpDOTJVaGpKTTY5NHR5IiwgInNpZ25hdHVyZSI6IG51bGx9LCAiY29tcHV0ZWRfYm9keV9oYXNoIjogIiIsICJkdW1teV9pbnB1dCI6IDksICJkdW1teV9vdXRwdXQiOiBudWxsfQ==",
+        "body_sha256": "8fea8c8be67dc9e98d02b4c6fb97aeca5c6b06560a43a71ba8152200b1b905d8"
+      },
+      "request_expected": {
+        "hash_fields": [
+          "dummy_input"
+        ],
+        "hash_inputs": [
+          {
+            "field": "dummy_input",
+            "str_value": "9",
+            "sha3_256": "7609430974b087595488c154bf5c079887ead0e8efd4055cd136fda96a5ccbf8"
+          }
+        ],
+        "computed_body_hash": "9cbd4f434ce15a8e47df65054139034a2f448b7bbc29423d5c51c663a59fd248",
+        "computed_body_hash_matches_header": true,
+        "signed_message": "1792672863376112691.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e99609ca-ce15-11f1-a03b-847b57c7b217.9cbd4f434ce15a8e47df65054139034a2f448b7bbc29423d5c51c663a59fd248",
+        "signature_verifies": true,
+        "signed_message_with_header_axon_hotkey": "1792672863376112691.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e99609ca-ce15-11f1-a03b-847b57c7b217.9cbd4f434ce15a8e47df65054139034a2f448b7bbc29423d5c51c663a59fd248",
+        "signature_verifies_with_header_axon_hotkey": true
+      },
+      "response": {
+        "start_line": "HTTP/1.1 401 Unauthorized",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:33 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "name",
+            "Dummy"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "401"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Not Verified with error: Nonce is too old: acceptable delta is 16.00 seconds but request was 30.01 seconds old"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "0.001279592514038086"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_version",
+            "10005000"
+          ],
+          [
+            "bt_header_axon_nonce",
+            "1792672893382521331"
+          ],
+          [
+            "bt_header_axon_uuid",
+            "e8575fc1-ce15-11f1-b80d-847b57c7b217"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_axon_signature",
+            "0x4e844c80a5d469de7d639e52c84dd69b563507234f7c345a1d017c9f38292b73575ff3327839d6daaa928ff71642ed00227b2317495df057a93e60d880966a85"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_dendrite_port",
+            "47422"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672863376112691"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e99609ca-ce15-11f1-a03b-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x983d08dfeb48e345e4883a8ad2f0e76f930878bd4689310bbc380a057babaa1ec1e19784087060de4d803d880ec5467bf9a4421405bcd9f2396a271a98d9978c"
+          ],
+          [
+            "bt_header_input_obj_dummy_input",
+            "MA=="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "3406"
+          ],
+          [
+            "computed_body_hash",
+            "a68efd02bf8190c171a54f9de439df1e213eecc103415619956235432088c17a"
+          ],
+          [
+            "content-length",
+            "124"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "status": 401,
+        "body_utf8": "{\"message\":\"Not Verified with error: Nonce is too old: acceptable delta is 16.00 seconds but request was 30.01 seconds old\"}",
+        "body_base64": "eyJtZXNzYWdlIjoiTm90IFZlcmlmaWVkIHdpdGggZXJyb3I6IE5vbmNlIGlzIHRvbyBvbGQ6IGFjY2VwdGFibGUgZGVsdGEgaXMgMTYuMDAgc2Vjb25kcyBidXQgcmVxdWVzdCB3YXMgMzAuMDEgc2Vjb25kcyBvbGQifQ==",
+        "body_sha256": "bde9527a8b09e29c188f4e078721919aae04debb945e6cb887907d03b12d3d73"
+      },
+      "response_expected": {
+        "status": 401,
+        "axon_status_code_header": "401",
+        "axon_signed_message": "1792672893382521331.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e8575fc1-ce15-11f1-b80d-847b57c7b217",
+        "axon_signature_verifies": true
+      }
+    },
+    {
+      "id": "N6",
+      "description": "unknown Synapse name in the path: 404",
+      "synapse": null,
+      "accepted_by_v10_axon": false,
+      "accepted_matches_status": true,
+      "notes": [],
+      "request": {
+        "start_line": "POST /Unknown HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ],
+          [
+            "Content-Length",
+            "2"
+          ]
+        ],
+        "method": "POST",
+        "target": "/Unknown",
+        "body_utf8": "{}",
+        "body_base64": "e30=",
+        "body_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+      },
+      "request_expected": {},
+      "response": {
+        "start_line": "HTTP/1.1 404 Not Found",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:33 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "name",
+            "Synapse"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "404"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Synapse name 'Unknown' not found. Available synapses ['Synapse', 'Dummy', 'TextOps', 'NoHash', 'LegacyFieldHash']"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "0.0001609325408935547"
+          ],
+          [
+            "header_size",
+            "184"
+          ],
+          [
+            "total_size",
+            "2228"
+          ],
+          [
+            "computed_body_hash",
+            "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+          ],
+          [
+            "content-length",
+            "127"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "status": 404,
+        "body_utf8": "{\"message\":\"Synapse name 'Unknown' not found. Available synapses ['Synapse', 'Dummy', 'TextOps', 'NoHash', 'LegacyFieldHash']\"}",
+        "body_base64": "eyJtZXNzYWdlIjoiU3luYXBzZSBuYW1lICdVbmtub3duJyBub3QgZm91bmQuIEF2YWlsYWJsZSBzeW5hcHNlcyBbJ1N5bmFwc2UnLCAnRHVtbXknLCAnVGV4dE9wcycsICdOb0hhc2gnLCAnTGVnYWN5RmllbGRIYXNoJ10ifQ==",
+        "body_sha256": "82f996892e211358386b6ac5bdc451073505bfc655e39c59f74287d1f28f2a77"
+      },
+      "response_expected": {
+        "status": 404,
+        "axon_status_code_header": "404",
+        "axon_signed_message": null,
+        "axon_signature_verifies": null
+      }
+    },
+    {
+      "id": "N7",
+      "description": "btauth/1-style request without v10 headers: how a v10 axon answers",
+      "synapse": "Dummy",
+      "accepted_by_v10_axon": false,
+      "accepted_matches_status": true,
+      "notes": [],
+      "request": {
+        "start_line": "POST /Dummy HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ],
+          [
+            "X-Bittensor-Version",
+            "1"
+          ],
+          [
+            "X-Bittensor-Hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "X-Bittensor-Receiver",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "X-Bittensor-Nonce",
+            "1792672893795692835"
+          ],
+          [
+            "X-Bittensor-Signature",
+            "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          ],
+          [
+            "Content-Length",
+            "18"
+          ]
+        ],
+        "method": "POST",
+        "target": "/Dummy",
+        "body_utf8": "{\"dummy_input\": 1}",
+        "body_base64": "eyJkdW1teV9pbnB1dCI6IDF9",
+        "body_sha256": "640ffe8088a609c4c9a86b378631ae29242ef696fc2e874d6e69da0350c4e925"
+      },
+      "request_expected": {},
+      "response": {
+        "start_line": "HTTP/1.1 500 Internal Server Error",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:33 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "name",
+            "Synapse"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "500"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Internal Server Error #f586555c-93c2-4be5-84fb-0770a5eba307"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "0.0020837783813476562"
+          ],
+          [
+            "header_size",
+            "184"
+          ],
+          [
+            "total_size",
+            "2174"
+          ],
+          [
+            "computed_body_hash",
+            "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+          ],
+          [
+            "content-length",
+            "73"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ]
+        ],
+        "status": 500,
+        "body_utf8": "{\"message\":\"Internal Server Error #f586555c-93c2-4be5-84fb-0770a5eba307\"}",
+        "body_base64": "eyJtZXNzYWdlIjoiSW50ZXJuYWwgU2VydmVyIEVycm9yICNmNTg2NTU1Yy05M2MyLTRiZTUtODRmYi0wNzcwYTVlYmEzMDcifQ==",
+        "body_sha256": "047345abe5ded48c7d118eb6e2c7eb58241670dcddf2c572b32cb6c8da329d58"
+      },
+      "response_expected": {
+        "status": 500,
+        "axon_status_code_header": "500",
+        "axon_signed_message": null,
+        "axon_signature_verifies": null
+      }
+    },
+    {
+      "id": "N8",
+      "description": "NoHash body field changed on the wire after signing: still accepted",
+      "synapse": "NoHash",
+      "accepted_by_v10_axon": true,
+      "accepted_matches_status": true,
+      "notes": [
+        "Shows that unhashed fields are not protected (spec 8.11.1)."
+      ],
+      "request": {
+        "start_line": "POST /NoHash HTTP/1.1",
+        "headers": [
+          [
+            "Host",
+            "127.0.0.1:39333"
+          ],
+          [
+            "name",
+            "NoHash"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_ip",
+            "127.0.0.1"
+          ],
+          [
+            "bt_header_axon_port",
+            "39333"
+          ],
+          [
+            "bt_header_axon_hotkey",
+            "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+          ],
+          [
+            "bt_header_dendrite_ip",
+            "198.51.100.20"
+          ],
+          [
+            "bt_header_dendrite_version",
+            "10005000"
+          ],
+          [
+            "bt_header_dendrite_nonce",
+            "1792672894011072115"
+          ],
+          [
+            "bt_header_dendrite_uuid",
+            "e85a70d0-ce15-11f1-a10f-847b57c7b217"
+          ],
+          [
+            "bt_header_dendrite_hotkey",
+            "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+          ],
+          [
+            "bt_header_dendrite_signature",
+            "0x2e0c9c5291b494ab8ddfc00c5f1ea5fb7975a690a3700ad5313a951b118dd27b446ec339c41065df22bdd091394c4c0c4d4ec621c850d4edd2f41907bf8aa28b"
+          ],
+          [
+            "bt_header_input_obj_payload",
+            "IiI="
+          ],
+          [
+            "header_size",
+            "464"
+          ],
+          [
+            "total_size",
+            "2787"
+          ],
+          [
+            "computed_body_hash",
+            "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+          ],
+          [
+            "Content-Type",
+            "application/json"
+          ],
+          [
+            "Content-Length",
+            "23"
+          ]
+        ],
+        "method": "POST",
+        "target": "/NoHash",
+        "body_utf8": "{\"payload\": \"tampered\"}",
+        "body_base64": "eyJwYXlsb2FkIjogInRhbXBlcmVkIn0=",
+        "body_sha256": "8162988566aa531b1a05693d36a638cccb1b1ea276ffa9dba7a7f5307118bc3a"
+      },
+      "request_expected": {
+        "hash_fields": [],
+        "hash_inputs": [],
+        "computed_body_hash": "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a",
+        "computed_body_hash_matches_header": true,
+        "signed_message": "1792672894011072115.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a",
+        "signature_verifies": true,
+        "signed_message_with_header_axon_hotkey": "1792672894011072115.5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY.5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty.e85a70d0-ce15-11f1-a10f-847b57c7b217.a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a",
+        "signature_verifies_with_header_axon_hotkey": true
+      },
+      "response": {
+        "start_line": "HTTP/1.1 200 OK",
+        "headers": [
+          [
+            "date",
+            "Thu, 22 Oct 2026 12:41:33 GMT"
+          ],
+          [
+            "server",
+            "uvicorn"
+          ],
+          [
+            "content-length",
+            "485"
+          ],
+          [
+            "content-type",
+            "application/json"
+          ],
+          [
+            "name",
+            "NoHash"
+          ],
+          [
+            "timeout",
+            "12.0"
+          ],
+          [
+            "bt_header_axon_status_code",
+            "200"
+          ],
+          [
+            "bt_header_axon_status_message",
+            "Success"
+          ],
+          [
+            "bt_header_axon_process_time",
+            "2.3365020751953125e-05"
+          ],
+          [
+            "bt_header_input_obj_payload",
+            "IiI="
+          ],
+          [
+            "header_size",
+            "272"
+          ],
+          [
+            "total_size",
+            "2319"
+          ],
+          [
+            "computed_body_hash",
+            "a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a"
+          ]
+        ],
+        "status": 200,
+        "body_utf8": "{\"name\":\"NoHash\",\"timeout\":12.0,\"total_size\":0,\"header_size\":0,\"dendrite\":{\"status_code\":null,\"status_message\":null,\"process_time\":null,\"ip\":null,\"port\":null,\"version\":null,\"nonce\":null,\"uuid\":null,\"hotkey\":null,\"signature\":null},\"axon\":{\"status_code\":200,\"status_message\":\"Success\",\"process_time\":2.3365020751953125e-05,\"ip\":null,\"port\":null,\"version\":null,\"nonce\":null,\"uuid\":null,\"hotkey\":null,\"signature\":null},\"computed_body_hash\":\"\",\"payload\":\"tampered\",\"answer\":\"echo:tampered\"}",
+        "body_base64": "eyJuYW1lIjoiTm9IYXNoIiwidGltZW91dCI6MTIuMCwidG90YWxfc2l6ZSI6MCwiaGVhZGVyX3NpemUiOjAsImRlbmRyaXRlIjp7InN0YXR1c19jb2RlIjpudWxsLCJzdGF0dXNfbWVzc2FnZSI6bnVsbCwicHJvY2Vzc190aW1lIjpudWxsLCJpcCI6bnVsbCwicG9ydCI6bnVsbCwidmVyc2lvbiI6bnVsbCwibm9uY2UiOm51bGwsInV1aWQiOm51bGwsImhvdGtleSI6bnVsbCwic2lnbmF0dXJlIjpudWxsfSwiYXhvbiI6eyJzdGF0dXNfY29kZSI6MjAwLCJzdGF0dXNfbWVzc2FnZSI6IlN1Y2Nlc3MiLCJwcm9jZXNzX3RpbWUiOjIuMzM2NTAyMDc1MTk1MzEyNWUtMDUsImlwIjpudWxsLCJwb3J0IjpudWxsLCJ2ZXJzaW9uIjpudWxsLCJub25jZSI6bnVsbCwidXVpZCI6bnVsbCwiaG90a2V5IjpudWxsLCJzaWduYXR1cmUiOm51bGx9LCJjb21wdXRlZF9ib2R5X2hhc2giOiIiLCJwYXlsb2FkIjoidGFtcGVyZWQiLCJhbnN3ZXIiOiJlY2hvOnRhbXBlcmVkIn0=",
+        "body_sha256": "6721069b8f6dd79971655f60a23b9216ce78f3b777e47959c63e6a5e7453e7c5"
+      },
+      "response_expected": {
+        "status": 200,
+        "axon_status_code_header": "200",
+        "axon_signed_message": null,
+        "axon_signature_verifies": null
+      }
+    }
+  ]
+}

@@ -221,7 +221,7 @@ Keys are sr25519 by default. Addresses are SS58 strings with prefix 42 (they sta
 
 ## 3. The v11 SDK surface the kit uses (verified)
 
-Everything below was checked against the source of `bittensor==11.3.0`, and the key behaviours were executed against an installed copy on 22 October 2026: the golden vectors in Appendix C (including the exact ed25519 signature), the nonce-store retention check, `resolve_signer` + `sp_core.verify` for response signing, the removed symbols in 3.8, and the intent constructors in 3.5. 11.3.0 is the **baseline**, not an exact pin. The kit is a library that lives inside subnet projects, which also depend on `bittensor`; an exact pin would block them from taking SDK bug fixes. So the kit accepts `bittensor>=11.3.0,<12`, and safety comes from checks instead of the pin: `scripts/check_sdk_surface.py` re-checks every item in this section, each new SDK release is tested before it is listed as supported (Section 18.3), and the kit runs a light version of the surface check at startup (Section 8.7.3).
+`scripts/check_sdk_surface.py` re-checks this section (45 checks; passing on 11.3.0 and 11.3.1rc73 in Phase 0). Everything below was checked against the source of `bittensor==11.3.0`, and the key behaviours were executed against an installed copy on 22 October 2026: the golden vectors in Appendix C (including the exact ed25519 signature), the nonce-store retention check, `resolve_signer` + `sp_core.verify` for response signing, the removed symbols in 3.8, and the intent constructors in 3.5. 11.3.0 is the **baseline**, not an exact pin. The kit is a library that lives inside subnet projects, which also depend on `bittensor`; an exact pin would block them from taking SDK bug fixes. So the kit accepts `bittensor>=11.3.0,<12`, and safety comes from checks instead of the pin: `scripts/check_sdk_surface.py` re-checks every item in this section, each new SDK release is tested before it is listed as supported (Section 18.3), and the kit runs a light version of the surface check at startup (Section 8.7.3).
 
 ### 3.1 Package facts
 
@@ -291,6 +291,7 @@ Behaviour that matters for the kit (read from the source, not just the docs):
 | A8 | `verify` lower-cases header names itself and accepts a `Mapping[str, str]`. | Pass Starlette's headers directly or convert to `dict`. |
 | A9 | `now_ns` is injectable. | Tests can freeze time without monkeypatching. |
 | A10 | The SDK's verifier (via `sp_core`) also accepts signatures over the `<Bytes>…</Bytes>`-wrapped payload (Polkadot-JS `signRaw` compatibility). Other implementations are not required to accept it and must never produce it. | Conformance vectors include this case as "Python accepts, others may reject". Kit verifiers in other languages **reject** it (strict mode). |
+| A11 | `sp_core.verify` (and so `verify`) accepts the sender's address in **any** SS58 format, not only prefix 42 (checked in Phase 0). | Other implementations accept prefix 42 only (Appendix D); add a negative conformance vector. Python stays safe: the address string is signed, and policy looks callers up by their prefix-42 address, so such a caller fails closed. `tensorwire.crypto` accepts prefix 42 only. |
 
 ### 3.3 Client and reads
 
@@ -325,6 +326,8 @@ The string has **no scheme**. The kit decides `http://` or `https://` (Section 8
 
 Stake fields are `bt.Balance` values. Compare with `bt.tao(x)`, never a bare float (`TypeError`), and never mix TAO with alpha (`bt.UnitMismatchError`).
 
+Units (verified on localnet in Phase 0): `alpha_stake` and `total_stake` are in the subnet's alpha (a `Balance` tagged with the netuid; `.tao` raises `UnitMismatchError`), and `tao_stake` is root TAO. `total_stake` is the chain's stake weight, `alpha_stake + TaoWeight × tao_stake`, not a TAO amount (see 8.3). `Metagraph.raw["axons"][uid]` is a dict `{block, version, ip, port, ip_type, protocol, placeholder1, placeholder2}`, so the published `protocol` byte is readable.
+
 ### 3.5 Intents used
 
 ```python
@@ -337,6 +340,8 @@ bt.SetWeights(netuid: int, uids=None, weights=None, mechid: int = 0,
 #   Normalises, clips, quantises, and auto-picks plain vs timelocked commit-reveal.
 bt.BurnedRegister(netuid: int, hotkey_ss58: Optional[str] = None)   # signed by coldkey
 ```
+
+On chain, `protocol` is a **u8** (0–255); a larger value fails to encode (`ValueError: integer out of range`). The chain rejects `ip="127.0.0.1"` (`InvalidIpAddress`) but accepts other loopback and private addresses, and it accepts `0.0.0.0`, which reads back as "not served" (`axon=None`). `BurnedRegister` is always submitted MEV-shielded (`mev_shield_required`); `ServeAxon` and `SetWeights` are never shielded.
 
 `ServeAxon` and `SetWeights` are **signed by the hotkey**. `BurnedRegister` and staking are signed by the **coldkey**. The kit never handles coldkeys at runtime; registration and staking are operator steps done with `btcli` on a trusted machine.
 
@@ -363,6 +368,7 @@ wallet.hotkey.ss58_address
 ```
 
 - Accessing `wallet.hotkey` does not touch the coldkey. The kit must never access `wallet.coldkey`.
+- On Python 3.10 and 3.11, `resolve_signer` (and so `http_auth.sign`) runs `isinstance(obj, KeyedWallet)` on wallet-shaped objects that are not a `bt.Wallet` or a `Keypair`. Runtime protocols check members with `hasattr` before 3.12, so this **reads `obj.coldkey`**. `tensorwire.crypto.HotkeySigner` passes `obj.hotkey` itself to avoid it. A real `bt.Wallet` is not affected.
 - For signing arbitrary bytes (used by the kit's response signatures), the kit uses `bittensor.signing.resolve_signer(wallet, role="hotkey").sign(payload)`. For verifying, it uses `bittensor.sp_core.verify(payload, signature, ss58, crypto_type)`. Both are what `http_auth` itself uses. Wrap them in `tensorwire/crypto.py` so a rename only touches one file.
 - Local test keys: `from bittensor.keyfiles import Keypair; Keypair.create_from_uri("//Alice")` (sr25519). For ed25519 test keys: `from bittensor.wallets import CRYPTO_ED25519; Keypair.create_from_uri("//Alice", crypto_type=CRYPTO_ED25519)`. A raw `Keypair` can be passed anywhere the SDK expects a wallet, including `http_auth.sign`.
 
@@ -1367,18 +1373,44 @@ Both sides are opt-in and time-boxed. Neither side imports bittensor v10 (ADR-00
 
 #### 8.11.1 The v10 wire format (`wire.py`)
 
-To be confirmed byte-for-byte against vectors captured from `bittensor==10.5.0` in Phase 0 (Section 10b.6). Until then this is the working description:
+Confirmed byte for byte against a real `bittensor==10.5.0` Dendrite and Axon (`conformance/vectors/legacy_v10.json`, captured by `scripts/capture_v10_vectors.py` in Phase 0). `tests/migration/test_legacy_v10_vectors.py` re-derives every value below from the captured bytes with the v11 SDK.
 
-- Request: `POST {scheme}://{ip}:{port}/{SynapseName}`. Body is the Synapse JSON. Headers come from `Synapse.to_headers()`: `name`, `timeout`, `bt_header_axon_{ip,port,hotkey}`, `bt_header_dendrite_{ip,port,version,nonce,uuid,hotkey,signature}`, `header_size`, `total_size`, `computed_body_hash`, plus any `bt_header_input_obj_*` fields.
-- `computed_body_hash`: sha3-256 hex over the concatenation of sha3-256 hex of `str(value)` for each field in the Synapse's `required_hash_fields`, in declared order.
-- Signed message: sr25519 over `f"{nonce}.{dendrite_hotkey}.{axon_hotkey}.{dendrite_uuid}.{computed_body_hash}"`, sent as `0x` + hex.
-- Response: the Synapse JSON with response fields filled, plus `bt_header_axon_{status_code,status_message,process_time,nonce,uuid,hotkey,signature}` headers.
-- v10 Axons expect each sender's nonces to increase and to be recent (relative to the Synapse `timeout`). Kit nonces from `MonotonicNonce` satisfy this.
+**Request (v10 Dendrite → Axon).**
+
+- `POST http://{ip}:{port}/{SynapseName}`. The path is the Synapse class name. v10 Dendrites always use `http`.
+- Headers, in this order: `name`, `timeout` (seconds as a Python float string, `12.0`), `bt_header_axon_{ip,port,hotkey}`, `bt_header_dendrite_{ip,version,nonce,uuid,hotkey,signature}`, one `bt_header_input_obj_{field}` per required Synapse field (a field with no default), `header_size`, `total_size`, `computed_body_hash`, then the HTTP client's own headers and `Content-Type: application/json`. Only non-null values are sent. `version` is the v10 SDK version as an integer (`10005000`). Header names are lower-case with underscores; a reverse proxy that drops underscore headers (nginx's default) breaks v10 traffic.
+- `bt_header_input_obj_{field}` is base64 of the JSON of a **default instance of the field's type** (`int` → `0` → `MA==`), not the field's value. The Axon needs these headers to build a Synapse from the headers; without them it answers 500.
+- `header_size` and `total_size` come from `sys.getsizeof`. The Axon never checks them.
+- Body: the **whole Synapse** as JSON, serialised with `json.dumps` defaults (`", "` and `": "` separators, non-ASCII escaped as `\uXXXX`): `name`, `timeout`, `total_size`, `header_size` (`0`), the `dendrite` and `axon` objects (every TerminalInfo field including nulls; `dendrite.signature` is set), `"computed_body_hash": ""`, then the Synapse's own fields.
+- `dendrite.nonce` is `time.time_ns()`. `dendrite.uuid` is a uuid1 fixed per Dendrite instance.
+
+**`computed_body_hash`.** `sha3_256_hex(concat(sha3_256_hex(str(value)) for each hash field))`, all strings UTF-8.
+
+- `str(value)` is Python's `str()` of the field's value in `model_dump()`: `True`, `None`, `0.1`, `1e-07`, `['a', 'b c']`, `{'x': 1.0, 'y': 1e-07}`. The kit hashes the parsed model values the same way, never the JSON text.
+- Hash fields: the `required_hash_fields` ClassVar, in **declared** order. A Synapse that still declares `required_hash_fields` as a pydantic field (deprecated in v10) is hashed in **model (body) order**, whatever order its list has.
+- With no hash fields (the default, `()`), the hash is `sha3_256("")` = `a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a`.
+- The Axon recomputes the hash from the parsed body and compares it with the header. A mismatch is answered **500**, not 401.
+
+**Request signature.** sr25519 by the dendrite hotkey over the UTF-8 string `f"{nonce}.{dendrite_hotkey}.{axon_hotkey}.{dendrite_uuid}.{computed_body_hash}"`, sent as `0x` + lowercase hex. The raw string is signed (no `<Bytes>` wrapping), so `crypto.verify` accepts it in strict mode. The Axon rebuilds the message with **its own hotkey**, not `bt_header_axon_hotkey`, so a request signed for another axon fails with 401.
+
+**Axon processing order.** Parse headers (unknown Synapse → 404; unparseable, e.g. no `input_obj` headers → 500) → `blacklist_fn` (403) → signature and nonce check (401) → `priority_fn` (503 when full) → body hash check (500) → forward (408 on timeout) → response.
+
+- `blacklist_fn` runs **before** the signature check, on a Synapse built from the headers only: body fields hold placeholder values (`dummy_input == 0` whatever was sent).
+- Freshness is keyed by `(dendrite_hotkey, dendrite_uuid)`. The first nonce seen for a key must be newer than `now − 4 s − timeout` (16 s for `timeout=12`). Later nonces must be strictly greater than the last accepted one. There is no upper bound, so future nonces pass. These rules apply only when `bt_header_dendrite_version ≥ 7002000`.
+
+**Response (Axon → Dendrite).**
+
+- The HTTP status equals `bt_header_axon_status_code`. On success the body is the full Synapse with output fields filled, as compact JSON (`","` and `":"`, UTF-8). On error it is `{"message": "..."}`.
+- Headers: `name`, `timeout`, `bt_header_axon_{status_code,status_message,process_time,ip,port,hotkey}`, the request's `bt_header_dendrite_*` echoed, `bt_header_input_obj_*`, `header_size`, `total_size`, `computed_body_hash`.
+- **A successful (200) response carries no axon nonce, uuid, version or signature.** Rejections raised after the headers parsed (401, 403, 500 on a hash mismatch) add `bt_header_axon_{version,nonce,uuid,signature}`. That signature is sr25519 by the axon hotkey over `f"{axon_nonce}.{dendrite_hotkey}.{axon_hotkey}.{axon_uuid}"`, where `axon_hotkey` is the request's `bt_header_axon_hotkey`. It covers neither body nor status, and v10 Dendrites do not check it.
+- A btauth/1 request sent to a v10 Axon gets **500** with `bt_header_axon_status_code: 500` and body `{"message": "Internal Server Error #<uuid>"}`. The `bt_header_axon_status_code` header is the reliable marker of a v10 Axon (8.11.3).
+
+**For the kit.** The v10 client sends the full Synapse body and the `input_obj` headers. The server side computes the hash from the `compat.Synapse` model values. The kit's own freshness window and replay store (8.11.2) apply on top of the v10 rules, which allow future nonces and accept any nonce for a new uuid. The kit's v10 responses use the v10 shape; adding an axon signature to successful responses is harmless, because v10 Dendrites ignore it.
 
 **What the v10 scheme does and does not protect** (document in `docs/security.md`):
-- It binds the receiver (the axon hotkey is in the message), the sender and the nonce.
-- It does **not** cover the HTTP method, the path, or any body field outside `required_hash_fields`. Those fields can be changed on the wire without breaking the signature. Fields that matter for scoring must be in `required_hash_fields`; `migrate scan` warns when a Synapse has an empty or partial list.
-- There is no response signature that v10 Dendrites check.
+- It binds the receiver (the axon checks against its own hotkey), the sender and the nonce.
+- It does **not** cover the HTTP method, the path, or any body field outside `required_hash_fields`. Those fields can be changed on the wire without breaking the signature (vector N8). Fields that matter for scoring must be in `required_hash_fields`; `migrate scan` warns when a Synapse has an empty or partial list.
+- Successful responses are not signed at all; error-response signatures cover neither body nor status. There is no response signature that v10 Dendrites check.
 
 #### 8.11.2 Server side: v10 validators → TensorWire miner (`server.py`)
 
