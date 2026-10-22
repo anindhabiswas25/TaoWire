@@ -15,7 +15,10 @@ Rules it enforces:
   signature, only on connect errors, timeouts (idempotent requests only)
   and 502/503/504; never on 4xx.
 - Each attempt has a deadline (``timeout_s``) and the response is read with
-  a byte cap (``max_response_bytes``, ``tw.response_too_large``).
+  a byte cap (``max_response_bytes``, ``tw.response_too_large``). All
+  attempts for one miner, the v10 fallback included, share one budget of
+  ``max_attempts * timeout_s``: an attempt gets its deadline or the time
+  left, whichever is less, so a round's length is bounded.
 - With ``verify_responses`` (the default) a 200 is accepted only with a
   valid ``twresp/1`` signature (spec 9.1); otherwise the result is
   ``ok=False, error_code="tw.bad_response_signature"``, and scoring code
@@ -40,7 +43,7 @@ import contextlib
 import json
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Literal, Protocol
 
 import anyio
@@ -253,6 +256,7 @@ class ValidatorClient:
         self._legacy = legacy
         self._selector = selector
         self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._monotonic = monotonic
         self._legacy_traffic = (
             None
             if metrics is None or legacy is None
@@ -348,6 +352,11 @@ class ValidatorClient:
         ``legacy_synapse`` is the same request as a v10 Synapse; without it
         a v10 miner cannot be reached and its answer counts as a failure.
         ``timeout_s`` overrides the per-attempt deadline for this call.
+
+        One time budget covers every attempt, the v10 fallback included:
+        ``max_attempts * timeout`` (spec 8.8). Each attempt's deadline is the
+        per-attempt timeout or the time left, whichever is less; with no time
+        left, no further attempt is sent.
         """
         timeout = self.timeout_s if timeout_s is None else float(timeout_s)
         if timeout <= 0:
@@ -384,6 +393,7 @@ class ValidatorClient:
     ) -> MinerResult:
         if neuron.axon is None:
             return _failed(neuron, "tw.no_axon", attempts=0)
+        budget = _Budget(self._monotonic, deadline_s, self.max_attempts)
         selector = self._selector
         if (
             selector is not None
@@ -391,14 +401,20 @@ class ValidatorClient:
             and selector.choose(neuron) == "v10"
         ):
             return await self._query_v10(
-                neuron, legacy_synapse, response_model, 0, deadline_s
+                neuron, legacy_synapse, response_model, 0, budget
             )
         url = self._url(neuron, route)
         attempts = 1
-        last = await self._attempt(neuron, method, url, body, deadline_s)
-        while attempts < self.max_attempts and self._should_retry(last, idempotent):
+        last = await self._attempt(neuron, method, url, body, budget.next_deadline())
+        while (
+            attempts < self.max_attempts
+            and self._should_retry(last, idempotent)
+            and budget.left() > 0
+        ):
             attempts += 1
-            last = await self._attempt(neuron, method, url, body, deadline_s)
+            last = await self._attempt(
+                neuron, method, url, body, budget.next_deadline()
+            )
         result = self._to_result(neuron, last, attempts, response_model)
         if selector is None or legacy_synapse is None:
             return result
@@ -413,7 +429,7 @@ class ValidatorClient:
             return result
         _log.info("miner_speaks_v10", uid=neuron.uid)
         return await self._query_v10(
-            neuron, legacy_synapse, response_model, attempts, deadline_s
+            neuron, legacy_synapse, response_model, attempts, budget
         )
 
     def _url(self, neuron: NeuronView, route: str) -> httpx.URL:
@@ -569,17 +585,29 @@ class ValidatorClient:
         synapse: BaseModel,
         response_model: type[BaseModel] | None,
         attempts: int,
-        deadline_s: float,
+        budget: _Budget,
     ) -> MinerResult:
         if self._legacy is None:
             raise RuntimeError("the legacy v10 client is off")
-        legacy = await self._legacy.query(
-            self._http,
-            neuron,
-            synapse,
-            timeout_s=deadline_s,
-            max_response_bytes=self.max_response_bytes,
-        )
+        deadline_s = budget.next_deadline()
+        if deadline_s <= 0:
+            # The btauth/1 attempts used the whole budget (spec 8.8).
+            return replace(
+                _failed(neuron, "tw.timeout", attempts=attempts), protocol="v10"
+            )
+        started = time.perf_counter()
+        legacy: LegacyResultLike
+        try:
+            with anyio.fail_after(deadline_s):
+                legacy = await self._legacy.query(
+                    self._http,
+                    neuron,
+                    synapse,
+                    timeout_s=deadline_s,
+                    max_response_bytes=self.max_response_bytes,
+                )
+        except TimeoutError:
+            legacy = _LegacyTimeout((time.perf_counter() - started) * 1000)
         data: Any = legacy.synapse
         code = legacy.error_code
         ok = legacy.status == 200 and code is None and data is not None
@@ -616,6 +644,36 @@ class ValidatorClient:
         self.metrics.validator_miner_results.labels(
             ok=str(result.ok).lower(), code=result.error_code or "ok"
         ).inc()
+
+
+class _Budget:
+    """One query's time budget: ``max_attempts * per-attempt timeout`` (spec 8.8)."""
+
+    def __init__(
+        self, monotonic: Callable[[], float], per_attempt_s: float, max_attempts: int
+    ) -> None:
+        self._monotonic = monotonic
+        self._per_attempt_s = per_attempt_s
+        self._ends = monotonic() + per_attempt_s * max_attempts
+
+    def left(self) -> float:
+        """Seconds left; never negative."""
+        return max(0.0, self._ends - self._monotonic())
+
+    def next_deadline(self) -> float:
+        """The next attempt's deadline: the per-attempt timeout or the time left."""
+        return min(self._per_attempt_s, self.left())
+
+
+@dataclass(frozen=True)
+class _LegacyTimeout:
+    """A v10 attempt cut off by the query budget (shaped like a legacy result)."""
+
+    latency_ms: float
+    status: int | None = None
+    synapse: BaseModel | None = None
+    error_code: str | None = "tw.timeout"
+    status_message: str | None = None
 
 
 def _failed(

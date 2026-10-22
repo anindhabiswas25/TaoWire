@@ -92,6 +92,11 @@ never raise for one miner's failure. Rules (spec 8.8):
   on 502/503/504; never on 4xx. `TW_MAX_ATTEMPTS` (2).
 - Each attempt has a deadline (`TW_QUERY_TIMEOUT_S`, 12 s; `timeout_s=` per
   call) and the response is read with a cap (`TW_MAX_RESPONSE_BYTES`, 4 MiB).
+- One time budget per miner per query: every attempt, the v10 fallback
+  included, finishes within `TW_MAX_ATTEMPTS × TW_QUERY_TIMEOUT_S` (24 s by
+  default). Each attempt gets its own deadline or the time left, whichever is
+  less; with nothing left the result is `tw.timeout`. A round therefore never
+  takes longer than that, however miners answer.
 - With `TW_VERIFY_RESPONSES=1` (default) a 200 counts only with a valid
   `twresp/1` signature from that miner, over that request's nonce and
   sender. Signed error answers are verified too.
