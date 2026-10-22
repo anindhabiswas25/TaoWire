@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from tensorwire import crypto
 
 VECTORS_PATH = (

@@ -28,6 +28,21 @@ def test_for_tempo_defaults() -> None:
     )
 
 
+def test_for_tempo_short_tempo_caps_default_soft_age() -> None:
+    thresholds = StalenessThresholds.for_tempo(10)
+    assert thresholds == StalenessThresholds(soft_age_s=120.0, max_age_s=240.0)
+
+
+def test_for_tempo_explicit_soft_age_is_validated() -> None:
+    with pytest.raises(ValueError, match="thresholds must satisfy"):
+        StalenessThresholds.for_tempo(10, soft_age_s=DEFAULT_SOFT_AGE_S)
+
+
+def test_for_tempo_default_soft_age_with_explicit_max() -> None:
+    thresholds = StalenessThresholds.for_tempo(360, max_age_s=600)
+    assert thresholds == StalenessThresholds(soft_age_s=300.0, max_age_s=600)
+
+
 def test_for_tempo_overrides() -> None:
     thresholds = StalenessThresholds.for_tempo(360, soft_age_s=120, max_age_s=300)
     assert thresholds == StalenessThresholds(soft_age_s=120, max_age_s=300)
