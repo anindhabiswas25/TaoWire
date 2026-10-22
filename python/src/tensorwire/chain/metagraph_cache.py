@@ -78,14 +78,21 @@ class StalenessThresholds:
         cls,
         tempo: int,
         *,
-        soft_age_s: float = DEFAULT_SOFT_AGE_S,
+        soft_age_s: float | None = None,
         max_age_s: float | None = None,
     ) -> StalenessThresholds:
-        """Build thresholds, defaulting ``max_age_s`` to two tempos."""
-        return cls(
-            soft_age_s=soft_age_s,
-            max_age_s=default_max_age_s(tempo) if max_age_s is None else max_age_s,
-        )
+        """Build thresholds from operator settings, filling the defaults from ``tempo``.
+
+        ``None`` means "not set by the operator". ``max_age_s`` defaults to two
+        tempos. ``soft_age_s`` defaults to :data:`DEFAULT_SOFT_AGE_S`, capped at
+        half the max age so a short tempo (localnet: tempo 10 gives 240 s)
+        still yields a valid degraded stage. Values the operator set are used
+        as given and must satisfy ``soft_age_s < max_age_s``.
+        """
+        max_age = default_max_age_s(tempo) if max_age_s is None else max_age_s
+        if soft_age_s is None:
+            soft_age_s = min(DEFAULT_SOFT_AGE_S, max_age / 2)
+        return cls(soft_age_s=soft_age_s, max_age_s=max_age)
 
     def stage_for(self, age_s: float | None) -> StalenessStage:
         """Return the stage for a snapshot of ``age_s`` seconds.

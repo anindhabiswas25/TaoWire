@@ -71,6 +71,10 @@ class HotkeySigner:
     resolved once, at construction, with ``role="hotkey"``. Asynchronous
     signers (Ledger, Vault, browser extensions) are rejected: the kit signs
     on the request path and needs a synchronous signature (spec 3.2, A6).
+
+    It satisfies ``bittensor.signing.Signer`` (``ss58_address``,
+    ``public_key``, ``crypto_type``, ``sign``), so it can be passed to
+    ``bittensor.http_auth.sign`` directly.
     """
 
     def __init__(self, wallet: WalletLike) -> None:
@@ -80,6 +84,7 @@ class HotkeySigner:
                 "asynchronous signers are not supported; use a local hotkey file"
             )
         self.ss58_address: str = self._signer.ss58_address
+        self.public_key: bytes = bytes(self._signer.public_key)
         self.crypto_type: int = self._signer.crypto_type
         self.scheme: str = scheme_name(self.crypto_type)
 

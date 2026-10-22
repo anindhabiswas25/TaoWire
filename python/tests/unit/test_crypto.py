@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 from bittensor import http_auth
+from bittensor.signing import Signer
 
 from tensorwire import crypto
 
@@ -219,6 +220,24 @@ def test_rejects_signer_returning_awaitable() -> None:
     signer = crypto.HotkeySigner(_AwaitableResultSigner())
     with pytest.raises(TypeError, match="asynchronous signers"):
         signer.sign(b"payload")
+
+
+def test_signer_satisfies_sdk_signer_protocol(alice: crypto.Keypair) -> None:
+    signer = crypto.HotkeySigner(alice)
+    assert isinstance(signer, Signer)
+    assert signer.public_key == ALICE_PUBKEY
+    headers = http_auth.sign(
+        signer, method="POST", path="/x", body=b"{}", receiver_ss58=BOB
+    )
+    caller = http_auth.verify(
+        headers,
+        b"{}",
+        method="POST",
+        path="/x",
+        self_hotkey_ss58=BOB,
+        nonce_store=http_auth.InMemoryNonceStore(),
+    )
+    assert caller.hotkey_ss58 == ALICE
 
 
 def test_repr_has_no_secrets(alice: crypto.Keypair) -> None:
