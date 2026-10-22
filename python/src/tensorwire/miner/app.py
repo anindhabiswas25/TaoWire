@@ -52,6 +52,7 @@ from tensorwire.errors import ConfigError, StartupError
 from tensorwire.limits.body import BodySizeLimit
 from tensorwire.limits.ratelimit import MemoryRateLimiter, PreAuthRateLimit
 from tensorwire.miner.health import health_routes
+from tensorwire.miner.legacy import LegacyServerFactory
 from tensorwire.miner.lifecycle import Lifecycle, MinerParts
 from tensorwire.miner.pipeline import RouteEndpoint
 from tensorwire.miner.routes import Handler, Route, RouteRegistry
@@ -103,6 +104,7 @@ class Miner:
         ntp_query: NtpQuery | None = None,
         metrics: Metrics | None = None,
         check_sdk: bool = True,
+        legacy_server: LegacyServerFactory | None = None,
     ) -> None:
         self.settings = settings
         self.metrics = Metrics() if metrics is None else metrics
@@ -121,6 +123,7 @@ class Miner:
                 monotonic=monotonic,
                 ntp_query=ntp_query,
                 check_sdk=check_sdk,
+                legacy_server=legacy_server,
             ),
         )
         self._app: FastAPI | None = None
