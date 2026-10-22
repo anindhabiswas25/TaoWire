@@ -24,6 +24,12 @@ def test_example_is_the_scaffold() -> None:
         assert (EXAMPLE / rel).read_text(encoding="utf-8") == content, rel
 
 
+def test_dot_files_are_rendered() -> None:
+    files = render_project("x-subnet")
+    assert {".env.example", ".gitignore"} <= set(files)
+    assert "TW_EXTERNAL_IP=127.0.0.2" in files[".env.example"]
+
+
 def test_rendering_renames_project_and_package() -> None:
     files = render_project("My.Subnet-2")
     assert "my_subnet_2/miner.py" in files

@@ -8,8 +8,9 @@
 The project has a protocol, a miner, a validator, tests that pass out of the
 box (in process, on TensorWire's FakeChain), ``.env.example`` and a compose
 file. Templates live in ``tensorwire/cli/templates/<name>/`` as ``*.tmpl``
-files; ``text-ops-subnet`` and ``text_ops`` in them become the project name
-and its package name. The target directory must be new or empty; nothing is
+files (``dot-x`` names become ``.x``, so dot-files survive packaging);
+``text-ops-subnet`` and ``text_ops`` in them become the project name and its
+package name. The target directory must be new or empty; nothing is
 ever overwritten.
 """
 
@@ -74,7 +75,12 @@ def _walk(node: Traversable, prefix: str = "") -> list[tuple[str, Traversable]]:
         if child.is_dir():
             out.extend(_walk(child, rel + "/"))
         elif child.name.endswith(".tmpl"):
-            out.append((rel.removesuffix(".tmpl"), child))
+            target = rel.removesuffix(".tmpl").split("/")
+            target = [
+                "." + part.removeprefix("dot-") if part.startswith("dot-") else part
+                for part in target
+            ]
+            out.append(("/".join(target), child))
     return out
 
 

@@ -32,7 +32,7 @@ test: setup
 
 # Python coverage (definition of done: >= 90% on auth/ policy/ limits/ ..., >= 80% elsewhere)
 coverage: setup
-    cd python && uv run coverage run -m pytest tests/unit tests/property tests/integration && uv run coverage report
+    cd python && uv run coverage run -m pytest tests/unit tests/property tests/integration tests/migration && uv run coverage report
 
 # Each language's conformance runner lands in Phase 5; until then the step is skipped.
 conformance: setup
