@@ -104,6 +104,18 @@ FIXTURES: dict[str, tuple[str, str]] = {
         "axon.attach(forward_fn=f, verify_fn=check)\n",
         "axon.attach(forward_fn=f, verify_fn=None)\n",
     ),
+    "TWM021": (
+        "import bittensor as bt\ninfo = bt.AxonInfo(ip='1.2.3.4', port=1)\n",
+        "from tensorwire.compat import AxonInfo\n",
+    ),
+    "TWM022": (
+        "from bittensor import NeuronInfo, __ss58_format__\n",
+        "from tensorwire.crypto import SS58_FORMAT\n",
+    ),
+    "TWM023": (
+        "for uid in range(self.metagraph.n.item()):\n    pass\n",
+        "for uid in range(self.metagraph.n):\n    pass\n",
+    ),
     "TWM100": (
         "class Ask(Synapse):\n    question: str\n    answer: str | None = None\n",
         "class Ask(Synapse):\n    question: str\n"
@@ -181,6 +193,8 @@ def test_negative_fixture(rule: str) -> None:
         ("import bittensor.utils\n", "TWM018"),
         ("from bittensor import *\n", "TWM018"),
         ("w = convert_weights_and_uids_for_emit(u, w)\n", "TWM012"),
+        ("from bittensor.subnets import SubnetsAPI\n", "TWM016"),
+        ("uids = self.metagraph.uids.tolist()\n", "TWM023"),
     ],
 )
 def test_more_positives(source: str, rule: str) -> None:
@@ -198,6 +212,7 @@ def test_more_positives(source: str, rule: str) -> None:
         "class A(Synapse):\n    limit: ClassVar[int] = 3\n",
         "import numpy as bt\nbt.Tensor\n",  # bt is not bittensor here
         "from bittensor import Subtensor, Wallet\n",
+        "x = values.item()\n",
     ],
 )
 def test_more_negatives(source: str) -> None:
@@ -311,3 +326,10 @@ def test_cli_rejects_bad_input(tmp_path: Path) -> None:
     assert bad_format.exit_code == 2
     missing = runner.invoke(app, ["migrate", "scan", str(tmp_path / "nope")])
     assert missing.exit_code == 2
+
+
+def test_every_rule_is_documented() -> None:
+    guide = (REPO / "docs" / "migration-from-v10.md").read_text(encoding="utf-8")
+    for rule in RULES.values():
+        assert f'<a id="{rule.id.lower()}"></a>' in guide, rule.id
+        assert rule.doc == f"docs/migration-from-v10.md#{rule.id.lower()}"

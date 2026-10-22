@@ -14,12 +14,14 @@ setup:
 
 lint: setup
     cd python && uv run ruff check . && uv run ruff format --check . && uv run lint-imports
+    cd examples/text-ops-subnet && ../../python/.venv/bin/ruff check . && ../../python/.venv/bin/ruff format --check .
     if [ -f typescript/package.json ]; then cd typescript && npm run lint; else echo "skip: typescript/ not present yet"; fi
     if [ -f go/go.mod ]; then cd go && go vet ./... && staticcheck ./...; else echo "skip: go/ not present yet"; fi
     if [ -f rust/Cargo.toml ]; then cd rust && cargo fmt --check && cargo clippy --all-targets -- -D warnings; else echo "skip: rust/ not present yet"; fi
 
 typecheck: setup
     cd python && uv run mypy --strict src
+    cd examples/text-ops-subnet && ../../python/.venv/bin/mypy text_ops tests
     if [ -f typescript/package.json ]; then cd typescript && npm run typecheck; else echo "skip: typescript/ not present yet"; fi
 
 test: setup

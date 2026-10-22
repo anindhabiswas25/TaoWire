@@ -5,16 +5,18 @@ miner and a validator, and watch the validator's weights land on chain.
 Target time: under 60 minutes. Everything runs on your machine; nothing
 touches testnet or mainnet, and only public development keys are used.
 
-| Step | Time (measured, see the end) |
+| Step | Machine time (measured) |
 |---|---|
 | 0. Prerequisites | — |
-| 1. Get TensorWire | ~2 min |
-| 2. Start a local chain | ~2 min |
-| 3. Create your subnet project | ~1 min |
-| 4. Configure the miner and the validator | ~2 min |
-| 5. Check the setup | ~1 min |
-| 6–7. Run the miner and the validator | ~2 min |
-| 8. See the weights on chain | ~1 min |
+| 1. Get TensorWire | 20 s (empty package cache) |
+| 2. Start a local chain | 1–2 min on a fresh machine, plus the image pull |
+| 3. Create your subnet project | 10 s |
+| 4. Configure the miner and the validator | — |
+| 5. Check the setup | 2 s |
+| 6–7. Run the miner and the validator | 5 s to the first weights |
+| 8. See the weights on chain | 1 s |
+
+Add your own reading and typing time.
 
 ## 0. Prerequisites
 
@@ -191,6 +193,6 @@ Press Ctrl-C in both terminals (the miner drains in-flight requests first).
 
 ## Measured
 
-Followed by Engineer A on 2026-10-23 (Linux, chain already running, wheels
-in the uv cache): see `reports/phase-2/a/quickstart-run.md` for the exact
-commands, their output and the time per step.
+Followed by Engineer A on 2026-10-23 (Linux; the chain was already running):
+`reports/phase-2/a/quickstart-run.md` has the exact commands, their output
+and the time per step.

@@ -277,6 +277,8 @@ class _Visitor(cst.CSTVisitor):
             self.add(node, "TWM009", name)
         elif last == "add_argument":
             self.check_add_argument(node)
+        elif last in ("item", "tolist") and ".metagraph." in f".{receiver}":
+            self.add(node, "TWM023", name)
         self.check_keywords(node, last)
 
     def check_keywords(self, node: cst.Call, last: str) -> None:

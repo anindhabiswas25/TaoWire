@@ -181,6 +181,26 @@ RULES: Mapping[str, Rule] = _table(
         "blacklist_fn",
     ),
     Rule(
+        "TWM021",
+        "bt.AxonInfo",
+        "auto",
+        "tensorwire.compat.AxonInfo (ip, port, hotkey, is_serving)",
+    ),
+    Rule(
+        "TWM022",
+        "v10 chain info types",
+        "manual",
+        "NeuronInfo / PrometheusInfo are gone: read NeuronView from the kit's "
+        "metagraph; the SS58 format is 42 (tensorwire.crypto.SS58_FORMAT)",
+    ),
+    Rule(
+        "TWM023",
+        "tensor methods on metagraph values",
+        "manual",
+        "compat.Metagraph values are plain ints and lists: drop .item() / "
+        ".tolist(), or wrap in numpy.array(...)",
+    ),
+    Rule(
         "TWM100",
         "Synapse without required_hash_fields",
         "risk",
@@ -236,6 +256,10 @@ ATTRIBUTE_RULES: Mapping[str, str] = MappingProxyType(
         "MockMetagraph": "TWM015",
         "SubnetsAPI": "TWM016",
         "Keypair": "TWM017",
+        "AxonInfo": "TWM021",
+        "NeuronInfo": "TWM022",
+        "PrometheusInfo": "TWM022",
+        "__ss58_format__": "TWM022",
         "utils": "TWM018",
         "core": "TWM018",
     }
@@ -248,5 +272,6 @@ MODULE_RULES: Mapping[str, str] = MappingProxyType(
         "bittensor.utils": "TWM018",
         "bittensor.core": "TWM018",
         "bittensor.mock": "TWM015",
+        "bittensor.subnets": "TWM016",
     }
 )
