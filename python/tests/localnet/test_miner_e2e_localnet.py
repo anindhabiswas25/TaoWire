@@ -123,6 +123,38 @@ async def _published_axon(
     raise AssertionError(f"miner did not publish {want} on chain; miner log:\n{tail}")
 
 
+async def _ready(base_url: str, log: Path) -> None:
+    """Wait for ``/readyz``: the axon goes on chain before the server listens."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + PUBLISH_TIMEOUT_S
+    async with httpx.AsyncClient(timeout=2.0) as http:
+        while loop.time() < deadline:
+            try:
+                if (await http.get(base_url + "/readyz")).status_code == 200:
+                    return
+            except httpx.TransportError:
+                pass
+            await asyncio.sleep(0.5)
+    tail = (await asyncio.to_thread(log.read_text, errors="replace"))[-4000:]
+    raise AssertionError(f"miner at {base_url} never became ready; log:\n{tail}")
+
+
+async def _registered_without_permit(
+    gw: BittensorGateway, localnet: Localnet
+) -> Keypair:
+    """A dev miner that is registered but holds no validator permit right now.
+
+    Permits move: on a small localnet subnet every staked neuron gets one, and
+    miners that receive weights earn stake within a few tempos.
+    """
+    mg = await gw.metagraph(localnet.netuid)
+    for name in ("miner_rs", "miner_go", "miner_ts"):
+        neuron = mg.by_hotkey(localnet.wallets[name]["hotkey"])
+        if neuron is not None and not neuron.validator_permit:
+            return localnet.hotkey(name)
+    raise AssertionError("every dev miner holds a validator permit; rerun localnet")
+
+
 def _signed(signer: Keypair, receiver: str, body: bytes) -> dict[str, str]:
     headers = http_auth.sign(
         signer, method="POST", path=ROUTE, body=body, receiver_ss58=receiver
@@ -139,11 +171,12 @@ async def test_miner_publishes_axon_and_serves_signed_request(
     miner_hotkey = localnet.wallets[MINER_WALLET]["hotkey"]
     axon, protocol = await _published_axon(chain, localnet, miner_hotkey, port, log)
     assert protocol == PROTOCOL_TAG
+    await _ready(axon.base_url("http"), log)
     url = axon.base_url("http") + ROUTE
 
     body = json.dumps({"text": "TensorWire", "op": "sha256"}).encode()
     validator = localnet.hotkey("validator")
-    stranger = localnet.hotkey("miner_ts")  # registered, no validator permit
+    stranger = await _registered_without_permit(chain, localnet)
     results: dict[str, Any] = {"miner_axon": str(axon), "protocol": protocol}
     async with httpx.AsyncClient(timeout=10.0) as http:
         ok = await http.post(

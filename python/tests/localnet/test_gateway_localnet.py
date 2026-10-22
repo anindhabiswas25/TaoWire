@@ -217,6 +217,11 @@ async def test_set_weights_commit_without_permit_is_accepted(
     """
     gw = await gateway_for("miner_go")
     uid = localnet.wallets["miner_go"]["uid"]
+    me = (await gw.metagraph(localnet.netuid)).by_hotkey(
+        localnet.wallets["miner_go"]["hotkey"]
+    )
+    assert me is not None
+    assert not me.validator_permit, "miner_go gained a permit; rerun localnet"
     await wait_for_weights_window(gw, localnet, uid)
     miner_py = localnet.wallets["miner_py"]["uid"]
     outcome = await gw.set_weights(
