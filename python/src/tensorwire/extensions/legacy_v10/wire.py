@@ -27,6 +27,7 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+import pydantic_core
 from pydantic import BaseModel, ValidationError
 
 from tensorwire import crypto
@@ -410,8 +411,16 @@ def _terminal(**values: Any) -> dict[str, Any]:
 
 
 def _user_fields(synapse: BaseModel) -> dict[str, Any]:
-    dumped = synapse.model_dump(mode="json")
+    # Python mode, as a v10 Dendrite sends it (``json=synapse.model_dump()``):
+    # JSON mode would turn inf / nan into null and break the hash (8.11.1).
+    dumped = synapse.model_dump()
     return {k: v for k, v in dumped.items() if k not in ENVELOPE_FIELDS}
+
+
+def _dumps(data: Any) -> str:
+    # Types plain JSON lacks (bytes, dates...) as pydantic writes them; the
+    # receiver parses them back to the same values.
+    return json.dumps(data, default=pydantic_core.to_jsonable_python)
 
 
 def _input_obj_headers(synapse: BaseModel) -> list[tuple[str, str]]:
@@ -490,7 +499,7 @@ def encode_request(
     headers += _input_obj_headers(synapse)
     header_size = sum(len(k) + len(v) for k, v in headers)
     user = _user_fields(synapse)
-    total_size = header_size + len(json.dumps(user))
+    total_size = header_size + len(_dumps(user))
     body: dict[str, Any] = {
         "name": name,
         "timeout": float(timeout),
@@ -510,7 +519,7 @@ def encode_request(
     return EncodedRequest(
         path="/" + name,
         headers=headers,
-        body=json.dumps(body).encode("utf-8"),
+        body=_dumps(body).encode("utf-8"),
         computed_body_hash=digest,
         nonce=nonce,
     )
