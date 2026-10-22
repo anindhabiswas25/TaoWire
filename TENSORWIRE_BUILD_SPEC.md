@@ -5,9 +5,10 @@ Python core · btauth/1 native · v10 → v11 migration (compat layer, two-way b
 
 | Field | Value |
 |---|---|
-| Document version | 1.2 |
+| Document version | 1.3 |
 | Changes in 1.1 | Migration of existing v10 subnets is a first-class goal: new Section 10b, two-way legacy bridge (8.11), `tensorwire migrate` CLI, migration rollout runbook, success criterion S6, phase plan updated |
 | Changes in 1.2 | SDK version range instead of an exact pin (3, 18); staged metagraph staleness instead of a 15-minute hard stop (8.5.1); product metrics (1.6); relationship with the core team (1.7); sustainability and maintenance (Section 20) |
+| Changes in 1.3 | Phase 0–1 findings: protocol tag is a u8, default 87 (D1); stake units and `total_stake_tao` (D2, 2, 8.3); v10 marker (D3, 8.11.3); write retries and `set_weights` meaning (8.3); stricter shape rules (4.3); localnet facts (14.2, 14.5); 8.11.1 rewritten from captured vectors (by Engineer B) |
 | Date | 22 October 2026 |
 | Target SDK | `bittensor>=11.3.0,<12` (baseline verified against 11.3.0, stable, released 7 Oct 2026; see Section 18.3) |
 | Target protocol | `btauth/1` (hotkey-signed HTTP, defined by the Bittensor v11 docs) |
@@ -207,7 +208,7 @@ Keys are sr25519 by default. Addresses are SS58 strings with prefix 42 (they sta
 
 **Metagraph.** A snapshot of a subnet: every UID's hotkey, coldkey, stake, validator permit, axon and scores. Validators read it to find miners. Miners read it to decide which callers are real validators.
 
-**Validator permit.** Each epoch, the top `MaxAllowedValidators` (default 128) neurons by stake weight get a permit. On mainnet, stake below roughly 1,000 TAO-equivalent (`StakeThreshold`) counts as zero; the runtime default is 0. Only permit holders with enough stake can set weights.
+**Validator permit.** Each epoch, the top `MaxAllowedValidators` (default 128) neurons by stake weight get a permit. On mainnet, a stake weight below roughly 1,000 (`StakeThreshold`) counts as zero; the runtime default is 0. Stake weight is `alpha stake + TaoWeight × root TAO stake`, in the subnet's alpha units (verified on localnet, ADR-0001), not TAO. Only permit holders with enough stake can set weights.
 
 **Weights.** A validator's scores for miners, submitted with the `SetWeights` intent. Rate-limited by `weights_rate_limit` (default 100 blocks). On subnets with commit-reveal enabled (the default), weights are timelock-encrypted and revealed automatically later; `SetWeights` handles this.
 
@@ -432,6 +433,7 @@ Rules:
 ### 4.3 Verification order (normative)
 
 1. **Shape.** All required headers present and parseable; version is `1`; scheme (if present) is known. Signature is hex (an optional `0x` prefix is stripped). Else `MalformedAuth`.
+   TensorWire verifiers are **stricter than the SDK** here, in every language, and reject with `tw.auth_malformed`: a sender address that is not SS58 prefix 42 (fact A11); any duplicated `X-Bittensor-*` header; a nonce that is not `[0-9]{1,20}`; an `X-Bittensor-Crypto` value other than exactly `ed25519` or `sr25519`. Each has a vector in `negative.json`.
 2. **Receiver.** `X-Bittensor-Receiver` must equal the server's hotkey. Missing receiver is rejected unless explicitly allowed. Else `WrongReceiver`.
 3. **Freshness.** `now - nonce <= max_age` (default 10 s) and `nonce - now <= allowed_skew` (default 2 s). Else `StaleRequest`.
 4. **Signature.** Rebuild the payload from the *received* method, target and body (always recompute the body hash). Decode the sender's SS58. Verify under the declared scheme **only**; never try both. Address or signature that cannot be decoded → `MalformedAuth`. Invalid signature → `BadSignature`.
@@ -991,8 +993,9 @@ Implementation notes (`BittensorGateway`):
 
 - Hold one `bt.Subtensor(network, fallback_endpoints=...)` client opened with `await bt.Subtensor(...)` and closed on shutdown.
 - `metagraph()` calls `client.subnets.metagraph(netuid, commitments=False)`. If it returns `None`, raise `SubnetNotFound`.
-- **Stake conversion.** `total_stake_tao` is for coarse policy thresholds only. Compute it as `float(n.total_stake.tao)` if the Balance is TAO-denominated. If the SDK reports it as alpha, read the documented `Balance.amount` and use the pool price (`metagraph.price`) to convert, and label the field "approximate". **Task for Phase 1:** confirm the unit of `total_stake` on 11.3.0 against a localnet with known stakes and record the result in ADR-0001.
-- **Retries.** Reads: exponential backoff (0.5 s → 8 s, 5 attempts, jitter) on connection errors. Writes: never auto-retry blindly. On `rate_limited` return the outcome; the caller schedules.
+- **Stake conversion (decision D2, ADR-0001).** On 11.3.0, `total_stake` is the chain's stake weight in alpha (`.tao` raises `UnitMismatchError`), so it is never used directly. `total_stake_tao = alpha_stake × metagraph.price + tao_stake`: the TAO value at the current spot price, **approximate** (no slippage; a large swap can move the spot price briefly). If `price` is `None` (empty pool), the alpha part counts as 0, so a minimum-stake check fails closed. It is for coarse policy thresholds only.
+- **Retries.** Reads: exponential backoff (0.5 s → 8 s, 5 attempts, jitter) on connection errors. Writes: never auto-retry blindly. Each attempt first runs the SDK preflight (`client.plan`); a preflight refusal (for example `rate_limited`) is returned with its own code and nothing is submitted, and the caller schedules. If the pool rejects a submission for fork or era reasons ("signature does not match the extrinsic payload", era expired), build and sign a **new** extrinsic against a fresh block, up to 3 attempts. After a submission has been accepted, a timeout or lost connection returns `unknown` and is never resent.
+- **Meaning of `set_weights` success.** On subnets with commit-reveal (the default), `TxOutcome.ok` means the timelocked **commit was included**, not that the weights were applied. The chain accepts a commit even from a hotkey without a permit (verified on localnet); whether the weights count is only known after the reveal.
 - Wrap every call with a timeout (`TW_CHAIN_TIMEOUT_S`, default 30 s).
 - Log every write with intent summary, block hash and outcome code.
 
@@ -1231,7 +1234,7 @@ def parse_axon(s: str | None) -> Endpoint | None: ...
 
 Scheme selection: the subnet declares `TW_SCHEME_POLICY` = `http` | `https` | `https-if-tls-published`. In the third mode the validator uses HTTPS for miners that published with `ServeAxonTls`, after checking the published key (Section 16.3).
 
-**Protocol tag.** `ServeAxon.protocol` is a subnet-defined number stored on chain (default 4). TensorWire publishes `protocol=TW_PROTOCOL_TAG` (default `0x5457` = 21591, "TW"). Validators may filter to miners advertising it. Document this; it is advisory, not security.
+**Protocol tag.** `ServeAxon.protocol` is a subnet-defined number stored on chain (default 4). TensorWire publishes `protocol=TW_PROTOCOL_TAG` (default `87`, 0x57 "W"). The on-chain field is a **u8** (0–255; larger values fail to encode), so collisions with other subnets' values are possible; it only weakens the M1 count and the 8.11.3 hint, never security (decision D1). Validators may filter to miners advertising it. Document this; it is advisory, not security.
 
 #### 8.7.3 Lifecycle (`miner/lifecycle.py`)
 
@@ -1243,7 +1246,7 @@ On startup, in order:
 4. Check that our hotkey is registered on `TW_NETUID`. If not: exit with code 3 and the message "register first: btcli tx burned-register --netuid N -w <coldkey> -H <hotkey>".
 5. Build the nonce store and rate limiters; run the multi-worker safety check (8.4.3).
 6. Clock check (8.4.4).
-7. **Axon publish:** compare our on-chain axon with `TW_EXTERNAL_IP:TW_EXTERNAL_PORT`. If different and `TW_AUTO_SERVE_AXON=1` (default), execute `ServeAxon` (or `ServeAxonTls`). On `rate_limited`, log the remediation and retry after `serving_rate_limit` blocks. **Never publish from more than one replica:** only the instance with `TW_AXON_PUBLISHER=1` (default 1 when `TW_INSTANCE_COUNT=1`) publishes.
+7. **Axon publish:** compare our on-chain axon with `TW_EXTERNAL_IP:TW_EXTERNAL_PORT`. If different and `TW_AUTO_SERVE_AXON=1` (default), execute `ServeAxon` (or `ServeAxonTls`). On `rate_limited`, log the remediation and retry after the subnet's `serving_rate_limit` blocks, read from chain through the gateway (not a fixed number). **Never publish from more than one replica:** only the instance with `TW_AXON_PUBLISHER=1` (default 1 when `TW_INSTANCE_COUNT=1`) publishes.
 8. Start background tasks: metagraph refresh, clock check, axon drift check (every 30 min).
 9. Mark ready.
 
@@ -1424,8 +1427,8 @@ Confirmed byte for byte against a real `bittensor==10.5.0` Dendrite and Axon (`c
 
 - Enabled with `TW_LEGACY_V10_CLIENT=auto|off` (default `off`) and `TW_LEGACY_V10_CLIENT_UNTIL=<ISO date>` (required when `auto`).
 - **Protocol choice per miner** (`auto`):
-  1. If the on-chain axon `protocol` field is readable through the gateway and equals `TW_PROTOCOL_TAG`, use btauth/1. (Phase 0 task: confirm whether v11's metagraph exposes the protocol field, directly or via `raw`.)
-  2. Otherwise try btauth/1 first. If the answer has the v10 shape (a `bt_header_axon_status_code` header, or the v10 "missing headers" error), retry once immediately with a fresh v10 request and remember `v10` for that hotkey.
+  1. If the on-chain axon `protocol` field is readable through the gateway and equals `TW_PROTOCOL_TAG`, use btauth/1. (Confirmed in Phase 0: the field is readable through `Metagraph.raw["axons"][uid]["protocol"]` and exposed as `NeuronView.axon_protocol`.)
+  2. Otherwise try btauth/1 first. If the answer has the v10 shape (an HTTP 500 carrying a `bt_header_axon_status_code` header, which every v10 Axon response has; vector N7), retry once immediately with a fresh v10 request and remember `v10` for that hotkey.
   3. Re-probe v10 miners with btauth/1 once per tempo, so upgraded miners switch over without a restart.
   4. **No downgrade:** once a hotkey has answered with btauth/1, never send it v10 again until the hotkey changes. This stops an on-path attacker from forcing the weaker format.
 - v10 results come back as `MinerResult(protocol="v10", response_verified=False)`. Scoring code decides whether unverified answers count; the default `SubnetValidator` treats them as valid answers but exposes the flag.
@@ -1898,7 +1901,7 @@ All settings are environment variables with the prefix `TW_` (Pydantic Settings;
 | `TW_STARTUP_TIMEOUT_S` | `120` | |
 | `TW_NTP_SERVERS` | `pool.ntp.org,time.cloudflare.com` | empty disables |
 | `TW_REDIS_URL` | empty | required when instances/workers > 1 |
-| `TW_PROTOCOL_TAG` | `21591` | stored in `ServeAxon.protocol` |
+| `TW_PROTOCOL_TAG` | `87` | stored in `ServeAxon.protocol`; 0–255 (u8 on chain) |
 | `TW_SCHEME_POLICY` | `http` | `http` \| `https` \| `https-if-tls-published` |
 | `TW_ALLOW_PRIVATE_AXONS` | `0` | set `1` on localnet only |
 
@@ -1922,7 +1925,7 @@ All settings are environment variables with the prefix `TW_` (Pydantic Settings;
 | `TW_RATE_HOTKEY_PER_S` / `TW_RATE_HOTKEY_BURST` | `20` / `40` | |
 | `TW_TRUSTED_PROXIES` | empty | CIDRs |
 | `TW_REQUIRE_PERMIT` | `1` | |
-| `TW_MIN_CALLER_STAKE_TAO` | `0` | suggest ≥ 1000 on mainnet |
+| `TW_MIN_CALLER_STAKE_TAO` | `0` | TAO value of the caller's stake at spot price, approximate (8.3, D2); suggest ≥ 1000 on mainnet |
 | `TW_ALLOW_HOTKEYS` / `TW_DENY_HOTKEYS` | empty | comma-separated SS58 |
 | `TW_HANDLER_TIMEOUT_S` | `10` | per-route override |
 | `TW_SIGN_RESPONSES` | `1` | twresp/1 |
@@ -2074,6 +2077,8 @@ Tags: `devnet` (what devnet runs), `testnet` (what testnet runs, **use this befo
 
 **Fast-blocks caveat:** rate limits, immunity and tempo pass 48× faster than wall-clock. Run timing tests (weights rate limit, serving rate limit) with 12-second blocks.
 
+**Localnet facts (verified in Phases 0–1):** `scripts/localnet_up.sh` sets the test subnet's tempo to 10 blocks (on 12-second blocks too, via the localnet sudo key), so permits move within minutes: on a 6-neuron subnet, miners that receive weights get validator permits after a few tempos, so tests must not hard-code which dev hotkey lacks a permit. The chain rejects `ServeAxon` with `127.0.0.1` (`InvalidIpAddress`); use `127.0.0.2` on Linux (all of 127/8 is loopback) or the LAN address on macOS. Fast-block localnets produce transient write failures (short forks, era expiry, MEV-shield timeouts); the setup script and the gateway rebuild and re-sign on these.
+
 ### 14.3 Wallets and funding (local only)
 
 ```bash
@@ -2112,8 +2117,9 @@ Exact flag names can change between v11 releases; check `btcli tx --help` and `b
 ```bash
 cp .env.example .env.local   # TW_NETWORK=local TW_NETUID=2 TW_ALLOW_PRIVATE_AXONS=1 ...
 docker run -d --name tw-redis -p 6379:6379 redis:7
-TW_WALLET_NAME=miner_py TW_EXTERNAL_IP=127.0.0.1 TW_BIND_PORT=8091 \
+TW_WALLET_NAME=miner_py TW_EXTERNAL_IP=127.0.0.2 TW_BIND_PORT=8091 \
   uv run python examples/text-ops-subnet/text_ops/miner.py
+# localnet dev wallets have unencrypted coldkeys: add TW_REFUSE_IF_COLDKEY_PRESENT=0 (localnet only; logged as unsafe)
 TW_WALLET_NAME=validator uv run python examples/text-ops-subnet/text_ops/validator.py
 ```
 
@@ -2438,7 +2444,7 @@ When CI/CD is added later, move these exact steps into workflows and switch PyPI
 | Metagraph staleness rules too loose | A de-permitted validator keeps access during a long chain outage | Only callers already accepted on fresh data; `TW_METAGRAPH_STRICT=1` for subnets that prefer hard stops (8.5.1) |
 | `total_stake` unit ambiguity | Wrong policy thresholds | Resolve in Phase 0 (8.3) |
 | `ServeAxonTls` key format | TLS pinning mode wrong | Confirm from chain source before enabling (16.3) |
-| v10 wire format details wrong (8.11.1 is written from memory) | Bridge fails against real v10 nodes | Captured vectors in Phase 0 (10b.6); mixed-fleet test every release |
+| v10 wire format details wrong | Bridge fails against real v10 nodes | **Closed in Phase 0:** 8.11.1 rewritten from vectors captured from a real 10.5.0 Dendrite/Axon; mixed-fleet test every release |
 | Existing subnets drift far from the template shape | `migrate` and `compat` cover less than expected | Design-partner ports in Phase 3; every miss becomes a rule; `scan` reports coverage honestly |
 | Teams keep the legacy bridge on indefinitely | Weaker v10 security lingers on the subnet | Mandatory end dates on both sides; refuse to start after them; traffic counters for owners |
 | Chain runtime upgrade breaks v10 nodes mid-transition | Stage 1–3 subnets lose their v10 half suddenly | Track release notes; runbook says to start migration early; v11 side is unaffected |
