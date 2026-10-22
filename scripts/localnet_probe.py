@@ -123,11 +123,11 @@ async def stake_units(
         "total_equals_alpha_plus_tao_weight_times_tao": abs(total - predicted)
         <= 1 + 1e-9 * total,
         "total_stake_sdk_unit": "alpha of the subnet (Balance tagged with netuid)",
-        "total_stake_tao_property_raises": _tao_raises(client, netuid),
+        "total_stake_tao_property_raises": _tao_raises(netuid),
     }
 
 
-def _tao_raises(client: Any, netuid: int) -> str:
+def _tao_raises(netuid: int) -> str:
     try:
         _ = bt.Balance.from_rao(1, netuid).tao
     except bt.UnitMismatchError as e:
@@ -164,7 +164,7 @@ async def axon_protocol(
             case["success"] = result.success
             case["code"] = getattr(getattr(result.error, "code", None), "value", None)
             case["message"] = result.message
-        except Exception as e:  # encoding errors surface as exceptions
+        except Exception as e:  # noqa: BLE001 - encoding errors surface as exceptions
             case["success"] = False
             case["exception"] = f"{type(e).__name__}: {e}"
         mg = await client.subnets.metagraph(netuid, commitments=False)

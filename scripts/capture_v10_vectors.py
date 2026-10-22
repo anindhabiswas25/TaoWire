@@ -355,7 +355,7 @@ def verifies(
         return None
     try:
         return bool(bt.Keypair(ss58_address=ss58).verify(message, signature))
-    except Exception:
+    except Exception:  # noqa: BLE001 - any verify error means "not valid"
         return False
 
 

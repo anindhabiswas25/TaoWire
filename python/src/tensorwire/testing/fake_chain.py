@@ -51,6 +51,7 @@ OPERATIONS = frozenset(
         "uid_for_hotkey",
         "weights_rate_limit",
         "blocks_since_last_update",
+        "serving_rate_limit",
         "serve_axon",
         "set_weights",
     }
@@ -451,6 +452,11 @@ class FakeChain:
         self._enter("blocks_since_last_update")
         neuron = self._subnet_or_raise(netuid).neurons.get(uid)
         return None if neuron is None else self._state.block - neuron.last_update
+
+    async def serving_rate_limit(self, netuid: int) -> int:
+        """Return the subnet's serving rate limit in blocks."""
+        self._enter("serving_rate_limit")
+        return self._subnet_or_raise(netuid).serving_rate_limit
 
     async def serve_axon(
         self,

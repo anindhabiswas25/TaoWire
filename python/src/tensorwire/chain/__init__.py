@@ -2,6 +2,7 @@
 
 from tensorwire.chain.axon import Endpoint, parse_axon
 from tensorwire.chain.gateway import (
+    BittensorGateway,
     ChainGateway,
     ChainUnavailable,
     GatewayError,
@@ -11,6 +12,7 @@ from tensorwire.chain.gateway import (
     TxOutcome,
 )
 from tensorwire.chain.metagraph_cache import (
+    MetagraphCache,
     MetagraphSource,
     StalenessStage,
     StalenessThresholds,
@@ -18,10 +20,12 @@ from tensorwire.chain.metagraph_cache import (
 )
 
 __all__ = [
+    "BittensorGateway",
     "ChainGateway",
     "ChainUnavailable",
     "Endpoint",
     "GatewayError",
+    "MetagraphCache",
     "MetagraphSource",
     "MetagraphView",
     "NeuronView",

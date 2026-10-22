@@ -6,6 +6,15 @@ registers a validator and four miners, stakes the validator and waits until
 it holds a validator permit. Every step checks the chain first, so running
 it again on a prepared chain changes nothing.
 
+Fast-block localnets (0.25 s blocks) finalize 3 to 8 blocks behind the head,
+and the SDK anchors a transaction's mortal era at the finalized head. A
+MEV-shielded call (``BurnedRegister``) lives for only 8 blocks, so it often
+expires before inclusion; short forks also invalidate signatures. Every
+attempt is therefore a new extrinsic, built and signed right after a new
+block is finalized, and attempts are spaced by blocks, not seconds. When the
+retries run out on transient errors only, the script exits with
+``EXIT_TRANSIENT`` so ``localnet_up.sh`` can restart the chain with 12 s blocks.
+
 LOCALNET ONLY. Every key below is derived from a public seed printed in
 this file. Anyone can recompute them. Never fund them on a real network.
 Wallets are written to ``<state-dir>/wallets``, never ``~/.bittensor``.
@@ -30,6 +39,7 @@ from typing import Any
 
 import bittensor as bt
 from bittensor.keyfiles import Keypair
+from bittensor.result import BittensorError
 
 ALICE_SEED = "0xe5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a"
 """//Alice's public dev seed (spec 14.3). Pre-funded on every localnet."""
@@ -57,7 +67,35 @@ ROLES = (
     Role("miner_rs", 50.0),
 )
 VALIDATOR_STAKE_TAO = 500.0
-RETRY_PAUSE_S = 2.0
+
+ATTEMPTS = 10
+"""Submissions per step before giving up."""
+
+RETRY_SPACING_BLOCKS = 2
+"""Blocks to wait after failed attempt ``n``: ``n`` times this."""
+
+FINALITY_WAIT_BLOCKS = 60
+"""Give up waiting for a new finalized block after this many block times."""
+
+EXIT_TRANSIENT = 75
+"""Exit code (EX_TEMPFAIL) when a step failed on transient errors only."""
+
+PERMANENT_CODES = frozenset(
+    {
+        "insufficient_balance",
+        "insufficient_liquidity",
+        "not_authorized",
+        "subnet_not_exists",
+        "unit_mismatch",
+        "policy_violation",
+        "disabled",
+    }
+)
+"""Failures that a new attempt cannot fix. Everything else is retried."""
+
+
+class TransientFailure(Exception):
+    """A step kept failing on errors that a later attempt could fix."""
 
 
 def dev_seed(wallet: str, role: str) -> str:
@@ -107,34 +145,62 @@ async def ensure(
     intent: Any,
     wallet: bt.Wallet,
     *,
-    attempts: int = 8,
+    attempts: int = ATTEMPTS,
 ) -> None:
     """Submit ``intent`` unless ``done()`` already holds, retrying failed submissions.
 
     ``done()`` is re-checked before every attempt, so a submission whose outcome
-    was unknown is never applied twice. Retries cover the transient failures of
-    fast-block localnets: short forks invalidate a mortal transaction's era
-    ("signature does not match"), and MEV-shielded calls (``BurnedRegister``)
-    can miss their era while the shield key rotates every block.
+    was unknown is never applied twice. Each attempt is a new extrinsic (fresh
+    nonce, fresh era) signed right after a new block is finalized, which gives
+    the mortal era the most blocks left (see the module docstring). Failed
+    attempts are spaced by a growing number of blocks. A permanent failure
+    (for example ``insufficient_balance``) stops at once.
     """
+    block_time = await client.block_time()
     for attempt in range(1, attempts + 1):
         if await done():
             log(f"{what}: done" if attempt > 1 else f"{what}: already done")
             return
-        result = await client.execute(
-            intent, wallet, wait_for_inclusion=True, wait_for_finalization=True
-        )
-        if result.success:
-            log(f"{what}: ok (block {result.block_hash})")
-            if not await done():
-                raise SystemExit(f"{what}: included, but the chain does not show it")
-            return
-        error = result.error
-        code = getattr(getattr(error, "code", None), "value", "unknown")
-        message = getattr(error, "message", None) or result.message
+        try:
+            await wait_for_new_finalized(client, block_time)
+            result = await client.execute(
+                intent, wallet, wait_for_inclusion=True, wait_for_finalization=True
+            )
+        except (BittensorError, OSError, TimeoutError) as e:
+            # Raised instead of returned: RPC drops, a missing MEV-shield key.
+            code, message = "error", f"{type(e).__name__}: {e}"
+        else:
+            if result.success:
+                log(f"{what}: ok (block {result.block_hash})")
+                if not await done():
+                    raise SystemExit(
+                        f"{what}: included, but the chain does not show it"
+                    )
+                return
+            error = result.error
+            code = getattr(getattr(error, "code", None), "value", "unknown")
+            message = getattr(error, "message", None) or result.message
         log(f"{what}: attempt {attempt}/{attempts} failed ({code}: {message})")
-        await asyncio.sleep(RETRY_PAUSE_S)
-    raise SystemExit(f"{what}: failed after {attempts} attempts")
+        if code in PERMANENT_CODES:
+            raise SystemExit(f"{what}: failed permanently ({code})")
+        if attempt < attempts:
+            head = await client.block()
+            await client.wait_for_block(head + RETRY_SPACING_BLOCKS * attempt)
+    if await done():
+        log(f"{what}: done")
+        return
+    raise TransientFailure(f"{what}: failed after {attempts} attempts")
+
+
+async def wait_for_new_finalized(client: Any, block_time: float) -> None:
+    """Return as soon as the finalized head moves past its current value."""
+    start = await client.finalized_block()
+    deadline = time.monotonic() + max(10.0, FINALITY_WAIT_BLOCKS * block_time)
+    while time.monotonic() < deadline:
+        await asyncio.sleep(block_time / 4)
+        if await client.finalized_block() > start:
+            return
+    raise TransientFailure(f"finality stalled at block {start}")
 
 
 async def wait_for_chain(endpoint: str, timeout_s: float) -> None:
@@ -147,7 +213,7 @@ async def wait_for_chain(endpoint: str, timeout_s: float) -> None:
                 await asyncio.sleep(1.0)
                 if await client.block() > first:
                     return
-        except Exception as e:  # the node is still starting
+        except Exception as e:  # noqa: BLE001 - the node is still starting
             last_error = e
         await asyncio.sleep(1.0)
     raise SystemExit(f"chain at {endpoint} not producing blocks: {last_error}")
@@ -206,7 +272,6 @@ async def setup(
             subnet_registered,
             bt.RegisterSubnet(hotkey_ss58=owner.hotkey.ss58_address),
             owner,
-            attempts=3,
         )
         netuid = await find_owned_subnet(client, owner_cold)
         assert netuid is not None
@@ -233,7 +298,6 @@ async def setup(
                     netuid=netuid, hotkey_ss58=wallet.hotkey.ss58_address
                 ),
                 wallet,
-                attempts=12,
             )
 
         validator = wallets["validator"]
@@ -264,7 +328,9 @@ async def setup(
         mg = await wait_for_permit(
             client, netuid, validator.hotkey.ss58_address, permit_timeout_s
         )
-        return summary(netuid, mg, alice, wallets, await client.block())
+        info = summary(netuid, mg, alice, wallets, await client.block())
+        info["block_time_s"] = await client.block_time()
+        return info
 
 
 async def fund(client: Any, alice: bt.Wallet, wallet: bt.Wallet, role: Role) -> None:
@@ -300,7 +366,10 @@ async def subnet_started(client: Any, netuid: int) -> bool:
 async def wait_for_permit(
     client: Any, netuid: int, hotkey: str, timeout_s: float
 ) -> Any:
-    deadline = time.monotonic() + timeout_s
+    """Wait for ``hotkey``'s validator permit: ``timeout_s`` or three tempos."""
+    mg = await client.subnets.metagraph(netuid, commitments=False)
+    tempo_s = (mg.tempo if mg is not None else 0) * await client.block_time()
+    deadline = time.monotonic() + max(timeout_s, 3 * tempo_s)
     while True:
         mg = await client.subnets.metagraph(netuid, commitments=False)
         neuron = mg.by_hotkey(hotkey) if mg is not None else None
@@ -371,7 +440,11 @@ def main(argv: list[str] | None = None) -> int:
 
     asyncio.run(wait_for_chain(args.endpoint, args.chain_timeout))
     alice, wallets = prepare_wallets(state_dir)
-    info = asyncio.run(setup(args.endpoint, alice, wallets, args.permit_timeout))
+    try:
+        info = asyncio.run(setup(args.endpoint, alice, wallets, args.permit_timeout))
+    except TransientFailure as e:
+        log(f"giving up on transient errors: {e}")
+        return EXIT_TRANSIENT
     write_outputs(state_dir, args.endpoint, info)
     log(f"done: netuid {info['netuid']} at block {info['block']}")
     print(json.dumps(info, indent=2))
