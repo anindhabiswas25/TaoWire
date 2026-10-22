@@ -58,7 +58,8 @@ def test_defaults_match_section_12(env: TWEnv) -> None:
     assert s.metrics_bind == c.HostPort("127.0.0.1", 9100)
     assert s.chain_timeout_s == 30
     assert s.metagraph_refresh_s == 120
-    assert s.metagraph_soft_age_s == 900
+    # unset: for_tempo applies 900 s (capped on short tempos); B's 19:45 note
+    assert s.metagraph_soft_age_s is None
     assert s.metagraph_max_age_s is None
     assert s.metagraph_strict is False
     assert s.startup_timeout_s == 120
@@ -296,7 +297,7 @@ def test_comma_lists(env: TWEnv) -> None:
         ("external_ip", "0.0.0.0", "routable"),
         ("external_ip", "224.0.0.1", "routable"),
         ("external_ip", "10.0.0.5", "TW_ALLOW_PRIVATE_AXONS"),
-        ("external_ip", "127.0.0.1", "TW_ALLOW_PRIVATE_AXONS"),
+        ("external_ip", "127.0.0.2", "TW_ALLOW_PRIVATE_AXONS"),
     ],
 )
 def test_bad_formats(env: TWEnv, name: str, value: str, match: str) -> None:
@@ -332,11 +333,22 @@ def test_log_level_case_insensitive(env: TWEnv) -> None:
     assert miner().log_level == "DEBUG"
 
 
-def test_private_external_ip_allowed_on_localnet(env: TWEnv) -> None:
-    env.set(external_ip="127.0.0.1", allow_private_axons=True)
+@pytest.mark.parametrize("ip", ["127.0.0.2", "10.0.0.5", "192.168.1.10"])
+def test_private_external_ip_allowed_on_localnet(env: TWEnv, ip: str) -> None:
+    env.set(external_ip=ip, allow_private_axons=True)
     s = miner()
-    assert s.external_ip == "127.0.0.1"
+    assert s.external_ip == ip
     assert s.weakened_settings() == ("TW_ALLOW_PRIVATE_AXONS",)
+
+
+@pytest.mark.parametrize("ip", ["0.0.0.0", "::", "127.0.0.1"])
+def test_external_ip_the_chain_refuses_is_rejected_even_on_localnet(
+    env: TWEnv, ip: str
+) -> None:
+    # D4: the chain rejects 127.0.0.1 and reads 0.0.0.0 / :: back as "not served".
+    env.set(external_ip=ip, allow_private_axons=True)
+    with fails("TW_EXTERNAL_IP must be a routable address"):
+        miner()
 
 
 def test_external_port_defaults_to_bind_port(env: TWEnv) -> None:
@@ -416,6 +428,23 @@ def test_legacy_until_must_be_future(env: TWEnv, day: str) -> None:
 def test_legacy_until_future_ok(env: TWEnv) -> None:
     env.set(legacy_v10_until=TOMORROW)
     assert miner().legacy_v10_until == dt.date.fromisoformat(TOMORROW)
+
+
+def test_legacy_until_horizon_is_180_days(env: TWEnv, tw_env: TWEnv) -> None:
+    # D4: no "forever" end date; at most 180 days after the process starts.
+    today = dt.datetime.now(dt.timezone.utc).date()
+    last_ok = (today + dt.timedelta(days=c.LEGACY_MAX_HORIZON_DAYS)).isoformat()
+    too_far = (today + dt.timedelta(days=c.LEGACY_MAX_HORIZON_DAYS + 1)).isoformat()
+    env.set(legacy_v10_until=last_ok)
+    assert miner().legacy_v10_until == dt.date.fromisoformat(last_ok)
+    for far in (too_far, "9999-12-31"):
+        env.set(legacy_v10_until=far)
+        with fails("TW_LEGACY_V10_UNTIL: end date must be at most 180 days"):
+            miner()
+    tw_env.set(legacy_v10_client="auto", legacy_v10_client_until=too_far)
+    tw_env.unset("legacy_v10_until", "external_ip")
+    with fails("TW_LEGACY_V10_CLIENT_UNTIL: end date must be at most 180 days"):
+        c.ValidatorSettings.from_env()
 
 
 def test_validator_legacy_client(tw_env: TWEnv) -> None:

@@ -171,3 +171,12 @@ def test_config_error_detail_stays_private() -> None:
     assert str(err) == "TW_NETUID: field required"
     assert err.detail == "TW_NETUID: field required"
     assert b"TW_NETUID" not in err.response_body()
+
+
+def test_startup_error_detail_stays_private() -> None:
+    err = e.StartupError("hotkey file not found: /home/x/hotkeys/default")
+    assert err.exit_code == 1
+    assert str(err) == "hotkey file not found: /home/x/hotkeys/default"
+    assert err.public_message == "internal error"
+    assert b"/home/x" not in err.response_body()
+    assert e.StartupError("register first", exit_code=3).exit_code == 3

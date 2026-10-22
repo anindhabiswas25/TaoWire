@@ -32,11 +32,12 @@ test: setup
 coverage: setup
     cd python && uv run coverage run -m pytest tests/unit tests/property tests/integration && uv run coverage report
 
-conformance:
-    cd python && uv run tensorwire conformance --vectors ../conformance/vectors
-    cd typescript && npm run conformance
-    cd go && go test ./btauth -run Conformance
-    cd rust && cargo test --test conformance
+# Each language's conformance runner lands in Phase 5; until then the step is skipped.
+conformance: setup
+    if [ -f python/src/tensorwire/cli/conformance_cmd.py ]; then cd python && uv run tensorwire conformance --vectors ../conformance/vectors; else echo "skip: tensorwire conformance not present yet (Phase 5)"; fi
+    if [ -f typescript/package.json ]; then cd typescript && npm run conformance; else echo "skip: typescript/ not present yet"; fi
+    if [ -f go/go.mod ]; then cd go && go test ./btauth -run Conformance; else echo "skip: go/ not present yet"; fi
+    if [ -f rust/Cargo.toml ]; then cd rust && cargo test --test conformance; else echo "skip: rust/ not present yet"; fi
 
 localnet-up:
     ./scripts/localnet_up.sh
@@ -56,8 +57,8 @@ mixed-fleet:
 bench:
     cd python && uv run tensorwire bench --duration 60
 
-audit:
+audit: setup
     cd python && uv run pip-audit
-    cd typescript && npm audit --audit-level=high
-    cd go && govulncheck ./...
-    cd rust && cargo audit
+    if [ -f typescript/package.json ]; then cd typescript && npm audit --audit-level=high; else echo "skip: typescript/ not present yet"; fi
+    if [ -f go/go.mod ]; then cd go && govulncheck ./...; else echo "skip: go/ not present yet"; fi
+    if [ -f rust/Cargo.toml ]; then cd rust && cargo audit; else echo "skip: rust/ not present yet"; fi

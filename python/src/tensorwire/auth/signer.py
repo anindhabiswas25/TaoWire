@@ -18,26 +18,9 @@ from collections.abc import Callable
 from bittensor import http_auth
 from bittensor.signing import WalletLike
 
-from tensorwire.crypto import HotkeySigner, public_key_from_ss58
+from tensorwire.crypto import HotkeySigner
 
 __all__ = ["MonotonicNonce", "RequestSigner"]
-
-
-class _BtauthSigner:
-    """Presents a :class:`HotkeySigner` as a ``bittensor.signing.Signer``.
-
-    ``http_auth.sign`` passes a ``Signer`` straight through, so the SDK never
-    inspects the original wallet object (and never reads its coldkey).
-    """
-
-    def __init__(self, hotkey: HotkeySigner) -> None:
-        self._hotkey = hotkey
-        self.ss58_address = hotkey.ss58_address
-        self.crypto_type = hotkey.crypto_type
-        self.public_key = public_key_from_ss58(hotkey.ss58_address)
-
-    def sign(self, payload: bytes) -> bytes:
-        return self._hotkey.sign(payload)
 
 
 class MonotonicNonce:
@@ -75,8 +58,10 @@ class RequestSigner:
         self, wallet: WalletLike, *, nonce: MonotonicNonce | None = None
     ) -> None:
         # HotkeySigner resolves the hotkey only and rejects async signers (fact A6)
-        # and schemes other than sr25519/ed25519 (fact A7).
-        self._signer = _BtauthSigner(HotkeySigner(wallet))
+        # and schemes other than sr25519/ed25519 (fact A7). It is a
+        # ``bittensor.signing.Signer``, so ``http_auth.sign`` uses it as is and
+        # never inspects the original wallet object (or its coldkey).
+        self._signer = HotkeySigner(wallet)
         self._nonce = MonotonicNonce() if nonce is None else nonce
         #: The SS58 address requests are signed as.
         self.hotkey_ss58: str = self._signer.ss58_address

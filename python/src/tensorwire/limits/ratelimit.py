@@ -6,6 +6,9 @@ Two layers use this module:
    from :func:`client_ip`.
 2. **Post-auth, per hotkey and route** (default 20 req/s, burst 40).
 
+:class:`PreAuthRateLimit` is the ASGI middleware for layer 1; the miner
+pipeline applies layer 2 after authentication.
+
 A bucket holds up to ``burst`` tokens and refills at ``rate`` tokens per
 second. Each request takes one token; an empty bucket rejects with 429 and a
 ``Retry-After`` of the seconds until one token is back.
@@ -22,14 +25,16 @@ import math
 import threading
 import time
 from collections import OrderedDict
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, MutableMapping, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from tensorwire.errors import RateLimited
+from tensorwire.limits.body import send_error
 
 __all__ = [
     "MemoryRateLimiter",
+    "PreAuthRateLimit",
     "RateDecision",
     "RateLimiter",
     "TokenBucket",
@@ -188,3 +193,55 @@ def client_ip(
             return str(ip) if ip is not None else hop
     # Every hop is a trusted proxy: the left-most is the closest we get to the client.
     return str(_parse_ip(hops[0])) if hops else peer_key
+
+
+Scope = MutableMapping[str, Any]
+Message = MutableMapping[str, Any]
+Receive = Callable[[], Awaitable[Message]]
+Send = Callable[[Message], Awaitable[None]]
+ASGIApp = Callable[[Scope, Receive, Send], Awaitable[None]]
+
+
+def _scope_client_ip(scope: Scope, trusted_proxies: Sequence[IPNetwork]) -> str:
+    client = scope.get("client")
+    peer = client[0] if client else None
+    forwarded = [
+        v.decode("latin-1")
+        for k, v in scope.get("headers", [])
+        if k.lower() == b"x-forwarded-for"
+    ]
+    return client_ip(peer, forwarded, trusted_proxies)
+
+
+class PreAuthRateLimit:
+    """Layer 1: per-client-IP token bucket, before anything else is read.
+
+    Rejections are 429 ``tw.rate_limited`` with ``Retry-After``, unsigned
+    (spec Appendix A). ``scope["state"]["tw_rate_layer"]`` is set to ``ip``.
+    """
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        *,
+        limiter: RateLimiter,
+        trusted_proxies: Sequence[IPNetwork] = (),
+    ) -> None:
+        self.app = app
+        self._limiter = limiter
+        self._proxies = tuple(trusted_proxies)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        decision = await self._limiter.acquire(_scope_client_ip(scope, self._proxies))
+        if not decision.allowed:
+            state = scope.setdefault("state", {})
+            state["tw_rate_layer"] = "ip"
+            error = RateLimited(retry_after_s=decision.retry_after_s, layer="ip")
+            await send_error(
+                send, error, request_id=state.get("request_id"), scope=scope
+            )
+            return
+        await self.app(scope, receive, send)

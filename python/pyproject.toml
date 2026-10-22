@@ -104,6 +104,10 @@ warn_unreachable = true
 mypy_path = "src"
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+module = ["ntplib"]   # optional extra without type information
+ignore_missing_imports = true
+
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true

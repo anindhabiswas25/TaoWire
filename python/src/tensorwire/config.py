@@ -41,6 +41,7 @@ from tensorwire.errors import ConfigError
 
 __all__ = [
     "DEFAULT_PROTOCOL_TAG",
+    "LEGACY_MAX_HORIZON_DAYS",
     "CommonSettings",
     "HostPort",
     "MinerSettings",
@@ -52,11 +53,20 @@ __all__ = [
 
 ENV_PREFIX = "TW_"
 
-#: Default ``ServeAxon.protocol`` tag. The chain stores this field as a u8
-#: (``serve_axon(..., protocol: u8, ...)`` in bittensor 11.3.0), so the spec's
-#: 0x5457 cannot be published; 0x57 ("W", Engineer B's proposal) is used until
-#: the PM decides (spec-question in COORDINATION.md).
+#: Default ``ServeAxon.protocol`` tag (PM decision D1). The chain stores this
+#: field as a u8, so the range is 0-255; 0x57 is "W".
 DEFAULT_PROTOCOL_TAG = 0x57
+
+#: Latest allowed legacy-bridge end date, in days after the process starts
+#: (PM decision D4): the v10 bridge is time-boxed, never "forever".
+LEGACY_MAX_HORIZON_DAYS = 180
+
+#: ``TW_EXTERNAL_IP`` values the chain rejects (``127.0.0.1``) or reads back as
+#: "not served" (``0.0.0.0``, ``::``); refused even on localnet (D4).
+_NEVER_EXTERNAL_IPS = frozenset(
+    ipaddress.ip_address(a)
+    for a in ("0.0.0.0", "::", "127.0.0.1")  # noqa: S104
+)
 
 _NETWORK_NAMES = frozenset({"finney", "test", "local"})
 _SS58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -166,10 +176,18 @@ def _check_simple_name(value: str) -> str:
     return value
 
 
-def _check_future_date(value: dt.date | None) -> dt.date | None:
-    # Spec 8.11.2 / 8.11.3: an end date in the past means the process must not start.
-    if value is not None and value <= dt.datetime.now(dt.timezone.utc).date():
+def _check_end_date(value: dt.date | None) -> dt.date | None:
+    # Spec 8.11.2 / 8.11.3: an end date in the past means the process must not
+    # start; D4: and one more than LEGACY_MAX_HORIZON_DAYS ahead is refused.
+    if value is None:
+        return None
+    today = dt.datetime.now(dt.timezone.utc).date()
+    if value <= today:
         raise ValueError("end date must be in the future (UTC)")
+    if value > today + dt.timedelta(days=LEGACY_MAX_HORIZON_DAYS):
+        raise ValueError(
+            f"end date must be at most {LEGACY_MAX_HORIZON_DAYS} days from today (UTC)"
+        )
     return value
 
 
@@ -199,7 +217,9 @@ class CommonSettings(BaseSettings):
     metrics_bind: Annotated[HostPort, NoDecode] = HostPort("127.0.0.1", 9100)
     chain_timeout_s: float = Field(default=30.0, gt=0, le=600)
     metagraph_refresh_s: float = Field(default=120.0, ge=10, le=3600)
-    metagraph_soft_age_s: float = Field(default=900.0, gt=0, le=86_400)
+    #: ``None`` = not set: ``StalenessThresholds.for_tempo`` applies the 900 s
+    #: default, capped at half the max age on short tempos.
+    metagraph_soft_age_s: float | None = Field(default=None, gt=0, le=86_400)
     #: ``None`` = 2 x the subnet's tempo in seconds, resolved by
     #: ``chain.metagraph_cache.StalenessThresholds.for_tempo``.
     metagraph_max_age_s: float | None = Field(default=None, gt=0, le=7 * 86_400)
@@ -288,6 +308,7 @@ class CommonSettings(BaseSettings):
     def _ages(self) -> CommonSettings:
         if (
             self.metagraph_max_age_s is not None
+            and self.metagraph_soft_age_s is not None
             and self.metagraph_max_age_s <= self.metagraph_soft_age_s
         ):
             raise ValueError(
@@ -383,7 +404,7 @@ class MinerSettings(CommonSettings):
     @field_validator("legacy_v10_until")
     @classmethod
     def _legacy_until(cls, value: dt.date | None) -> dt.date | None:
-        return _check_future_date(value)
+        return _check_end_date(value)
 
     @field_validator("tls_cert_file", "tls_key_file", mode="after")
     @classmethod
@@ -398,8 +419,11 @@ class MinerSettings(CommonSettings):
     @model_validator(mode="after")
     def _miner_rules(self) -> MinerSettings:
         ip = _ip(self.external_ip, "TW_EXTERNAL_IP")
-        if ip.is_unspecified or ip.is_multicast:
-            raise ValueError("TW_EXTERNAL_IP must be a routable address")
+        if ip.is_unspecified or ip.is_multicast or ip in _NEVER_EXTERNAL_IPS:
+            raise ValueError(
+                "TW_EXTERNAL_IP must be a routable address "
+                "(the chain rejects 127.0.0.1 and un-serves 0.0.0.0 and ::)"
+            )
         if not ip.is_global and not self.allow_private_axons:
             raise ValueError(
                 "TW_EXTERNAL_IP is a private/loopback address; validators reject it "
@@ -460,7 +484,7 @@ class ValidatorSettings(CommonSettings):
     @field_validator("legacy_v10_client_until")
     @classmethod
     def _legacy_until(cls, value: dt.date | None) -> dt.date | None:
-        return _check_future_date(value)
+        return _check_end_date(value)
 
     @model_validator(mode="after")
     def _legacy(self) -> ValidatorSettings:
