@@ -411,3 +411,16 @@ async def test_reject_next_set_weights(chain: FakeChain) -> None:
             outcome.remediation == "this hotkey lacks a validator permit on the subnet"
         )
     assert (await validator.set_weights(2, {1: 1.0}, mechid=0, version_key=0)).ok
+
+
+@pytest.mark.asyncio
+async def test_serving_rate_limit(chain: FakeChain) -> None:
+    assert await chain.serving_rate_limit(2) == 5
+    chain.set_hyperparameters(2, serving_rate_limit=50)
+    assert await chain.serving_rate_limit(2) == 50
+    assert chain.calls["serving_rate_limit"] == 2
+    with pytest.raises(SubnetNotFound):
+        await chain.serving_rate_limit(9)
+    chain.fail_next("serving_rate_limit")
+    with pytest.raises(ChainUnavailable):
+        await chain.serving_rate_limit(2)

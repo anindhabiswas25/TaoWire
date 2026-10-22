@@ -249,7 +249,7 @@ def _raises(exc_type: type[BaseException], func: Callable[[], object]) -> BaseEx
         func()
     except exc_type as e:
         return e
-    except Exception as e:  # report the unexpected type
+    except Exception as e:  # noqa: BLE001 - report the unexpected type
         raise CheckFailed(
             f"expected {exc_type.__name__}, got {type(e).__name__}: {e}"
         ) from None
@@ -1099,7 +1099,7 @@ def run() -> list[Result]:
             item.func()
         except CheckFailed as e:
             results.append(Result(item.section, item.name, False, str(e)))
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - one broken check must not stop the report
             detail = f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}"
             results.append(Result(item.section, item.name, False, detail))
         else:
