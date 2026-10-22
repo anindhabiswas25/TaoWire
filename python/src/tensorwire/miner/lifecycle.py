@@ -182,6 +182,7 @@ class Lifecycle:
             direction="inbound",
             monotonic=parts.monotonic,
             until=settings.legacy_v10_until,
+            clock_ns=parts.clock_ns,
         )
 
     @property

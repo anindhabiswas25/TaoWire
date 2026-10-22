@@ -343,3 +343,29 @@ def test_route_options_are_checked(tw_miner_kwargs: dict[str, Any]) -> None:
 
     with pytest.raises(ValueError, match="v10 path"):
         _ = miner.app
+
+
+async def test_inbound_days_remaining_is_current_at_every_scrape(
+    tw_miner_kwargs: dict[str, Any], tw_clock: FakeClock
+) -> None:
+    # Spec 8.11.2 / G3-5: a long-running miner reports the real count.
+    today = dt.datetime.fromtimestamp(tw_clock.time(), dt.timezone.utc).date()
+    kwargs = dict(tw_miner_kwargs)
+    kwargs["settings"] = kwargs["settings"].model_copy(
+        update={"legacy_v10_until": today + dt.timedelta(days=15)}
+    )
+    miner = Miner(**kwargs, legacy_server=lambda **kw: FakeLegacyServer(kw))
+
+    def days_left() -> float | None:
+        return miner.metrics.registry.get_sample_value(
+            "tw_legacy_v10_days_remaining", {"direction": "inbound"}
+        )
+
+    async with miner.running():
+        assert days_left() == 15.0
+        tw_clock.advance(86_400)
+        assert days_left() == 14.0
+        tw_clock.advance(86_400)
+        assert days_left() == 13.0  # below the 14-day alert line, no restart
+        tw_clock.advance(20 * 86_400)
+        assert days_left() == 0.0

@@ -21,7 +21,7 @@ miner port. Label values never contain hotkeys or IP addresses.
 | `tw_nonce_store_errors_total` | counter | `backend` | Replay-store outages (503 `tw.replay_store_unavailable`) |
 | `tw_unsafe_settings_active` | gauge | `name` | 1 per active setting that weakens a default |
 | `tw_legacy_v10_requests_total` | counter | `direction`, `result` | Legacy v10 bridge traffic |
-| `tw_legacy_v10_days_remaining` | gauge | `direction` | Days to the bridge end date |
+| `tw_legacy_v10_days_remaining` | gauge | `direction` | Days to the bridge end date (`inbound`: `TW_LEGACY_V10_UNTIL`, `outbound`: `TW_LEGACY_V10_CLIENT_UNTIL`), computed at every scrape; alert below 14 |
 | `tw_validator_miners_by_protocol` | gauge | `protocol` | Miners reached per protocol |
 | `tw_validator_round_duration_seconds` | histogram | | Validator round duration |
 | `tw_validator_miner_results_total` | counter | `ok`, `code` | Miner query results |

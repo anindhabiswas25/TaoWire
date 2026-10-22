@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import io
 import json
 import logging
@@ -196,3 +197,13 @@ async def test_full_hotkeys_only_at_debug() -> None:
         with structlog.testing.capture_logs() as logs:
             await run(mw)
         assert logs[-1]["caller_hotkey"] == expected
+
+
+def test_legacy_days_remaining_uses_the_real_clock_by_default() -> None:
+    m = Metrics()
+    today = dt.datetime.now(dt.timezone.utc).date()
+    m.track_legacy_v10_end("inbound", today + dt.timedelta(days=7))
+    value = m.registry.get_sample_value(
+        "tw_legacy_v10_days_remaining", {"direction": "inbound"}
+    )
+    assert value in (6.0, 7.0)  # 6 only if the test straddles midnight UTC

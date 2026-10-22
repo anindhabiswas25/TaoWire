@@ -39,7 +39,6 @@ __all__ = [
     "LegacyServerLike",
     "LegacyTraffic",
     "build_legacy_server",
-    "days_remaining",
 ]
 
 #: Seconds between two WARNING lines for the same legacy sender.
@@ -152,12 +151,6 @@ def _bridge_class() -> LegacyServerFactory:
     return factory
 
 
-def days_remaining(until: dt.date, today: dt.date | None = None) -> int:
-    """Whole days until ``until`` (UTC), never negative."""
-    now = dt.datetime.now(dt.timezone.utc).date() if today is None else today
-    return max(0, (until - now).days)
-
-
 class LegacyTraffic:
     """Counts and logs legacy v10 calls in one direction."""
 
@@ -168,15 +161,14 @@ class LegacyTraffic:
         direction: str,
         monotonic: Callable[[], float],
         until: dt.date | None = None,
+        clock_ns: Callable[[], int] | None = None,
     ) -> None:
         self._metrics = metrics
         self._direction = direction
         self._monotonic = monotonic
         self._warned: dict[str, float] = {}
         if until is not None:
-            metrics.legacy_v10_days_remaining.labels(direction=direction).set(
-                days_remaining(until)
-            )
+            metrics.track_legacy_v10_end(direction, until, clock_ns=clock_ns)
 
     def record(self, sender: str | None, result: str) -> None:
         """Count one call (``result`` is ``ok`` or a ``tw.*`` code) and log it."""

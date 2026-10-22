@@ -332,6 +332,10 @@ class ValidatorRunner:
         if s.legacy_v10_client == "auto":
             factory = self._legacy_factory or _bridge_client
             legacy, selector = factory(s, raw)
+            if s.legacy_v10_client_until is not None:
+                self.metrics.track_legacy_v10_end(
+                    "outbound", s.legacy_v10_client_until, clock_ns=self._clock_ns
+                )
             _log.warning(
                 "legacy_v10_outbound_enabled",
                 until=str(s.legacy_v10_client_until),

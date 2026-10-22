@@ -11,6 +11,8 @@ are the registered route paths, codes are ``tw.*`` codes.
 
 from __future__ import annotations
 
+import datetime as dt
+import time
 from collections.abc import Callable, Iterable
 from typing import Any
 
@@ -150,6 +152,30 @@ class Metrics:
         """Export ``tw_unsafe_settings_active{name}`` = 1 for each name."""
         for name in names:
             self.unsafe_settings_active.labels(name=name).set(1)
+
+    def track_legacy_v10_end(
+        self,
+        direction: str,
+        until: dt.date,
+        *,
+        clock_ns: Callable[[], int] | None = None,
+    ) -> None:
+        """Keep ``tw_legacy_v10_days_remaining{direction}`` current (spec 8.11.2).
+
+        The value is computed at every scrape from ``until`` and today's UTC
+        date (``clock_ns``, wall-clock nanoseconds; tests inject one), so a
+        long-running process reports the real count and the "< 14 days"
+        alert fires on time. 0 from the end date on.
+        """
+        now_ns = time.time_ns if clock_ns is None else clock_ns
+
+        def remaining() -> float:
+            today = dt.datetime.fromtimestamp(now_ns() / 1e9, dt.timezone.utc).date()
+            return float(max(0, (until - today).days))
+
+        self.legacy_v10_days_remaining.labels(direction=direction).set_function(
+            remaining
+        )
 
     def render(self) -> bytes:
         """The registry in Prometheus text format."""

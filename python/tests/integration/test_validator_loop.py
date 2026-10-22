@@ -394,3 +394,51 @@ async def test_legacy_auto_uses_an_injected_bridge(
     assert built == [dev_key("alice").ss58]
     assert report is not None
     assert report.n_ok == 2
+
+
+def _days_left(r: ValidatorRunner, direction: str) -> float | None:
+    return r.metrics.registry.get_sample_value(
+        "tw_legacy_v10_days_remaining", {"direction": direction}
+    )
+
+
+async def test_outbound_days_remaining_is_current_at_every_scrape(
+    router: AppRouter, fake_chain: FakeChain, tw_clock: FakeClock, tmp_path: Path
+) -> None:
+    # Spec 8.11.2 / G3-5: computed at scrape time, not once at startup.
+    r = runner(
+        fake_chain,
+        tw_clock,
+        tmp_path,
+        router,
+        legacy=lambda settings, signer: (object(), _StaticSelector()),
+    )
+    today = dt.datetime.fromtimestamp(tw_clock.time(), dt.timezone.utc).date()
+    r.settings = r.settings.model_copy(
+        update={
+            "legacy_v10_client": "auto",
+            "legacy_v10_client_until": today + dt.timedelta(days=3),
+        }
+    )
+    assert _days_left(r, "outbound") is None
+    async with r.running():
+        assert _days_left(r, "outbound") == 3.0
+        tw_clock.advance(86_400)  # the date changes in a running process
+        assert _days_left(r, "outbound") == 2.0
+        assert b'tw_legacy_v10_days_remaining{direction="outbound"} 2.0' in (
+            r.metrics.render()
+        )
+        tw_clock.advance(3 * 86_400)
+        assert _days_left(r, "outbound") == 0.0  # never negative
+
+
+class _StaticSelector:
+    def choose(self, n: Any) -> str:
+        return "btauth/1"
+
+    def after_btauth(self, n: Any, **kw: Any) -> bool:
+        return False
+
+    def reprobe(self) -> None: ...
+
+    def forget(self, hk: str) -> None: ...
