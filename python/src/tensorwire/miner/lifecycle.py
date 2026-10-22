@@ -51,11 +51,13 @@ from tensorwire.auth.keys import (
 from tensorwire.auth.nonce_store import MemoryNonceStore, NonceStore, RedisNonceStore
 from tensorwire.auth.sdk_check import check_sdk
 from tensorwire.auth.verifier import RequestVerifier
-from tensorwire.chain import gateway as gateway_module
-from tensorwire.chain import metagraph_cache as cache_module
 from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import ChainGateway, GatewayError
-from tensorwire.chain.metagraph_cache import MetagraphSource, StalenessStage
+from tensorwire.chain.gateway import BittensorGateway, ChainGateway, GatewayError
+from tensorwire.chain.metagraph_cache import (
+    MetagraphCache,
+    MetagraphSource,
+    StalenessStage,
+)
 from tensorwire.config import MinerSettings
 from tensorwire.crypto import HotkeySigner
 from tensorwire.errors import StartupError
@@ -151,18 +153,11 @@ def _real_chain(
 ) -> tuple[ChainGateway, MetagraphSource]:
     """Build the production ``BittensorGateway`` / ``MetagraphCache`` from settings.
 
-    Both classes are Engineer B's (``chain/``); a given ``gateway`` is reused.
+    A given ``gateway`` is reused.
     """
-    gateway_cls: Any = getattr(gateway_module, "BittensorGateway", None)
-    cache_cls: Any = getattr(cache_module, "MetagraphCache", None)
-    if (gateway is None and gateway_cls is None) or cache_cls is None:
-        raise StartupError(
-            "the real chain gateway is not in this build; pass gateway= and "
-            "metagraph= to Miner"
-        )
     if gateway is None:
-        gateway = gateway_cls.from_settings(settings, hotkey)
-    cache: MetagraphSource = cache_cls.from_settings(
+        gateway = BittensorGateway.from_settings(settings, hotkey)
+    cache: MetagraphSource = MetagraphCache.from_settings(
         gateway, settings, on_refresh_failure=metrics.metagraph_refresh_failures.inc
     )
     return gateway, cache

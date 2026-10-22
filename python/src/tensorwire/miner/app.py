@@ -61,7 +61,7 @@ from tensorwire.observability.metrics import Metrics
 from tensorwire.observability.middleware import RequestContext
 from tensorwire.policy.caller import CallerPolicy
 
-__all__ = ["DEFAULT_LIMIT_CONCURRENCY", "MAX_HEADER_BYTES", "Miner"]
+__all__ = ["DEFAULT_LIMIT_CONCURRENCY", "MAX_HEADER_BYTES", "Miner", "NoSignalServer"]
 
 #: uvicorn ``--limit-concurrency``: connections beyond this get 503 at once.
 DEFAULT_LIMIT_CONCURRENCY = 1024
@@ -72,8 +72,8 @@ _KEEP_ALIVE_S = 5
 _H = TypeVar("_H", bound=Handler)
 
 
-class _NoSignalServer(uvicorn.Server):
-    """The metrics listener: stopped by the main server, never by signals."""
+class NoSignalServer(uvicorn.Server):
+    """A uvicorn server that leaves signal handling to its owner (side listeners)."""
 
     @contextlib.contextmanager
     def capture_signals(self) -> Iterator[None]:
@@ -328,7 +328,7 @@ class Miner:
             access_log=False,
             server_header=False,
         )
-        return _NoSignalServer(config)
+        return NoSignalServer(config)
 
     async def _serve(self) -> None:
         app = self.app

@@ -251,16 +251,6 @@ async def test_startup_timeout(tw_miner_kwargs: dict[str, Any]) -> None:
     assert source.stopped
 
 
-async def test_real_chain_not_in_this_build(
-    tw_miner_kwargs: dict[str, Any], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Passes with or without Engineer B's chain classes merged.
-    monkeypatch.delattr(lifecycle_mod.gateway_module, "BittensorGateway", raising=False)
-    monkeypatch.delattr(lifecycle_mod.cache_module, "MetagraphCache", raising=False)
-    with pytest.raises(StartupError, match="real chain gateway is not in this build"):
-        await build(tw_miner_kwargs, gateway=None, metagraph=None).lifecycle.start()
-
-
 async def test_real_chain_factories_are_used_when_present(
     tw_miner_kwargs: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -282,12 +272,8 @@ async def test_real_chain_factories_are_used_when_present(
             on_refresh_failure()
             return FakeMetagraphSource(gateway, settings.netuid)
 
-    monkeypatch.setattr(
-        lifecycle_mod.gateway_module, "BittensorGateway", Gateway, raising=False
-    )
-    monkeypatch.setattr(
-        lifecycle_mod.cache_module, "MetagraphCache", Cache, raising=False
-    )
+    monkeypatch.setattr(lifecycle_mod, "BittensorGateway", Gateway)
+    monkeypatch.setattr(lifecycle_mod, "MetagraphCache", Cache)
     miner = build(tw_miner_kwargs, gateway=None, metagraph=None)
     async with miner.running():
         assert built == {"gateway": (TEST_NETUID, BOB.ss58), "cache": chain}
