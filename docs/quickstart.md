@@ -30,16 +30,16 @@ TensorWire is not on PyPI yet, so install it from the repository:
 ```bash
 git clone <tensorwire repository URL> tensorwire
 cd tensorwire
-export TW_REPO="$PWD"
+export TENSORWIRE_REPO="$PWD"
 (cd python && uv sync --all-extras)
-export PATH="$TW_REPO/python/.venv/bin:$PATH"
+export PATH="$TENSORWIRE_REPO/python/.venv/bin:$PATH"
 tensorwire --version
 ```
 
 ## 2. Start a local chain
 
 ```bash
-"$TW_REPO/scripts/localnet_up.sh"
+"$TENSORWIRE_REPO/scripts/localnet_up.sh"
 ```
 
 This starts `subtensor-localnet` (fast 0.25 s blocks), creates a subnet,
@@ -52,9 +52,13 @@ export LOCALNET_DIR="${LOCALNET_DIR:-$HOME/.tensorwire/localnet}"
 cat "$LOCALNET_DIR/localnet.env"        # TW_NETWORK, TW_NETUID, TW_WALLET_PATH, ...
 ```
 
-Running it again reuses the chain. If a chain is already running and you
-want a separate subnet of your own on it, set `LOCALNET_DIR` to a new
-directory before running the script.
+Running it again reuses the chain, the subnet and the wallets: every
+development key comes from a fixed, public seed. On a fresh machine the
+first run takes about two minutes (it also pulls the image).
+
+Shell variables you set yourself must not start with `TW_`: TensorWire
+refuses unknown `TW_*` names at startup (typo protection), which is why the
+repository path above is `TENSORWIRE_REPO`.
 
 ## 3. Create your subnet project
 
@@ -62,7 +66,7 @@ directory before running the script.
 tensorwire init ~/my-subnet
 cd ~/my-subnet
 uv venv
-uv pip install -e "$TW_REPO/python" -e '.[dev]'
+uv pip install -e "$TENSORWIRE_REPO/python" -e '.[dev]'
 .venv/bin/pytest -q                      # 7 passed: miner, scoring and a validator round, in process
 ```
 
@@ -177,7 +181,7 @@ whole loop: a signed request, a signed answer, a score, a weight on chain.
 ## 9. Stop
 
 Press Ctrl-C in both terminals (the miner drains in-flight requests first).
-`"$TW_REPO/scripts/localnet_down.sh"` stops the chain.
+`"$TENSORWIRE_REPO/scripts/localnet_down.sh"` stops the chain.
 
 ## Where next
 
