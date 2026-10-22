@@ -1,4 +1,4 @@
-"""limits/ratelimit.py: bucket refill math, Retry-After, key bounds, client IP (13.2)."""
+"""limits/ratelimit.py: refill math, Retry-After, key bounds, client IP (13.2)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,12 @@ import ipaddress
 import pytest
 
 from tensorwire.errors import RateLimited
-from tensorwire.limits.ratelimit import MemoryRateLimiter, RateDecision, TokenBucket, client_ip
+from tensorwire.limits.ratelimit import (
+    MemoryRateLimiter,
+    RateDecision,
+    TokenBucket,
+    client_ip,
+)
 
 
 class FakeClock:
@@ -31,7 +36,9 @@ def test_refill_math() -> None:
     assert denied == RateDecision(allowed=False, retry_after_s=0.5)  # 1 token / 2 per s
     assert not b.take(0.25).allowed  # half a token back
     assert b.take(0.25 + 0.25).allowed  # exactly one token at t=0.5
-    assert b.take(0.75).retry_after_s == pytest.approx(0.25)  # 0.5 token back, 0.5 missing
+    assert b.take(0.75).retry_after_s == pytest.approx(
+        0.25
+    )  # 0.5 token back, 0.5 missing
 
 
 def test_refill_is_capped_at_burst() -> None:
@@ -113,13 +120,33 @@ PROXIES = [ipaddress.ip_network("10.0.0.0/8"), ipaddress.ip_network("2001:db8::/
     ("peer", "xff", "proxies", "expected"),
     [
         ("203.0.113.9", [], [], "203.0.113.9"),
-        ("203.0.113.9", ["1.2.3.4"], [], "203.0.113.9"),  # no trusted proxies: header ignored
-        ("203.0.113.9", ["1.2.3.4"], PROXIES, "203.0.113.9"),  # peer not a proxy: header ignored
+        (
+            "203.0.113.9",
+            ["1.2.3.4"],
+            [],
+            "203.0.113.9",
+        ),  # no trusted proxies: header ignored
+        (
+            "203.0.113.9",
+            ["1.2.3.4"],
+            PROXIES,
+            "203.0.113.9",
+        ),  # peer not a proxy: header ignored
         ("10.0.0.1", ["1.2.3.4"], PROXIES, "1.2.3.4"),
-        ("10.0.0.1", ["6.6.6.6, 1.2.3.4"], PROXIES, "1.2.3.4"),  # spoofed left entry ignored
+        (
+            "10.0.0.1",
+            ["6.6.6.6, 1.2.3.4"],
+            PROXIES,
+            "1.2.3.4",
+        ),  # spoofed left entry ignored
         ("10.0.0.1", ["6.6.6.6, 1.2.3.4, 10.0.0.2"], PROXIES, "1.2.3.4"),  # proxy chain
         ("10.0.0.1", ["6.6.6.6", "1.2.3.4"], PROXIES, "1.2.3.4"),  # multiple headers
-        ("10.0.0.1", ["10.0.0.3, 10.0.0.2"], PROXIES, "10.0.0.3"),  # all trusted: left-most
+        (
+            "10.0.0.1",
+            ["10.0.0.3, 10.0.0.2"],
+            PROXIES,
+            "10.0.0.3",
+        ),  # all trusted: left-most
         ("10.0.0.1", [], PROXIES, "10.0.0.1"),
         ("10.0.0.1", [" , "], PROXIES, "10.0.0.1"),
         ("10.0.0.1", ["garbage"], PROXIES, "garbage"),

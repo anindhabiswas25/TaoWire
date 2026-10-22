@@ -39,7 +39,9 @@ def fails(match: str) -> Any:
 
 
 def test_known_variables_are_exactly_section_12(spec_text: str) -> None:
-    section = spec_text[spec_text.index("## 12. Configuration") : spec_text.index("## 13. Testing")]
+    section = spec_text[
+        spec_text.index("## 12. Configuration") : spec_text.index("## 13. Testing")
+    ]
     documented = set(re.findall(r"\bTW_[A-Z0-9_]*[A-Z0-9]", section))
     assert documented == c.known_variables()
 
@@ -111,7 +113,9 @@ def test_sidecar_defaults(tw_env: TWEnv, tmp_path: Path) -> None:
     assert s.sidecar_unsafe_bind is False
     assert s.effective_token_file == tmp_path / "sidecar.token"
     tw_env.set(sidecar_token_file="~/tok")
-    assert c.SidecarSettings.from_env().effective_token_file == Path("~/tok").expanduser()
+    assert (
+        c.SidecarSettings.from_env().effective_token_file == Path("~/tok").expanduser()
+    )
 
 
 # --------------------------------------------------------------- required values
@@ -208,7 +212,9 @@ def test_sidecar_port_range(tw_env: TWEnv) -> None:
 @pytest.mark.parametrize(
     ("soft", "max_age", "ok"), [(900, 901, True), (900, 900, False), (900, 10, False)]
 )
-def test_max_age_must_exceed_soft_age(env: TWEnv, soft: int, max_age: int, ok: bool) -> None:
+def test_max_age_must_exceed_soft_age(
+    env: TWEnv, soft: int, max_age: int, ok: bool
+) -> None:
     env.set(metagraph_soft_age_s=soft, metagraph_max_age_s=max_age)
     if ok:
         assert miner().metagraph_max_age_for(360) == max_age
@@ -263,7 +269,11 @@ def test_comma_lists(env: TWEnv) -> None:
     s = miner()
     assert s.chain_fallbacks == ("wss://a.example", "ws://b.example:9944")
     assert s.ntp_servers == ()
-    assert [str(n) for n in s.trusted_proxies] == ["10.0.0.0/8", "2001:db8::/32", "192.0.2.1/32"]
+    assert [str(n) for n in s.trusted_proxies] == [
+        "10.0.0.0/8",
+        "2001:db8::/32",
+        "192.0.2.1/32",
+    ]
     assert s.allow_hotkeys == {ALICE}
     assert s.deny_hotkeys == {BOB}
 
@@ -440,13 +450,19 @@ def test_weakened_settings(env: TWEnv, tw_env: TWEnv) -> None:
         "TW_REFUSE_IF_COLDKEY_PRESENT",
     }
     env.set(verify_responses=False, sidecar_unsafe_bind=True)
-    assert c.ValidatorSettings.from_env().weakened_settings()[-1] == "TW_VERIFY_RESPONSES"
-    assert c.SidecarSettings.from_env().weakened_settings()[-1] == "TW_SIDECAR_UNSAFE_BIND"
+    assert (
+        c.ValidatorSettings.from_env().weakened_settings()[-1] == "TW_VERIFY_RESPONSES"
+    )
+    assert (
+        c.SidecarSettings.from_env().weakened_settings()[-1] == "TW_SIDECAR_UNSAFE_BIND"
+    )
 
 
 @pytest.mark.parametrize("name", sorted(c.known_variables()))
 @pytest.mark.parametrize("garbage", ["%%not json%%", "[1,", "{}", " "])
-def test_any_value_gives_settings_or_config_error(env: TWEnv, name: str, garbage: str) -> None:
+def test_any_value_gives_settings_or_config_error(
+    env: TWEnv, name: str, garbage: str
+) -> None:
     """No raw parsing error escapes (complex fields must be marked NoDecode)."""
     env.set(**{name.removeprefix("TW_").lower(): garbage})
     for model in (c.MinerSettings, c.ValidatorSettings, c.SidecarSettings):
@@ -465,13 +481,17 @@ def test_unknown_variable_is_an_error_with_hint(
         miner()
 
 
-def test_unknown_variable_without_hint(env: TWEnv, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unknown_variable_without_hint(
+    env: TWEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("TW_ZZZZZZZZZZ", "1")
     with fails(r"TW_ZZZZZZZZZZ$"):
         miner()
 
 
-def test_unknown_variable_lower_case(env: TWEnv, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_unknown_variable_lower_case(
+    env: TWEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("tw_bogus_setting", "1")
     with fails("tw_bogus_setting"):
         miner()
@@ -484,7 +504,9 @@ def test_variables_of_other_process_types_are_known(env: TWEnv) -> None:
     c.ValidatorSettings.from_env()
 
 
-def test_non_tw_variables_are_ignored(env: TWEnv, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_non_tw_variables_are_ignored(
+    env: TWEnv, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("BT_CHAIN_ENDPOINT", "ws://x")
     monkeypatch.setenv("TWX_OTHER", "1")
     miner()
@@ -506,7 +528,9 @@ def test_env_file(tw_env: TWEnv, tmp_path: Path) -> None:
     f = tmp_path / ".env"
     f.write_text("TW_NETUID=3\nTW_WALLET_NAME=m\nTW_EXTERNAL_IP=44.1.2.3\nOTHER=1\n")
     assert c.MinerSettings.from_env(f).netuid == 3
-    f.write_text("TW_NETUID=3\nTW_WALLET_NAME=m\nTW_EXTERNAL_IP=44.1.2.3\nTW_EXTRENAL_PORT=1\n")
+    f.write_text(
+        "TW_NETUID=3\nTW_WALLET_NAME=m\nTW_EXTERNAL_IP=44.1.2.3\nTW_EXTRENAL_PORT=1\n"
+    )
     with fails("TW_EXTRENAL_PORT"):
         c.MinerSettings.from_env(f)
 
@@ -540,7 +564,10 @@ def test_hostport_parse() -> None:
         ("5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu", True),
         (ALICE[:-1] + "Z", False),  # checksum
         ("1" + ALICE, False),  # length
-        ("15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5", False),  # Polkadot prefix 0
+        (
+            "15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5",
+            False,
+        ),  # Polkadot prefix 0
         ("", False),
         ("0OIl", False),  # not base58
     ],
@@ -551,7 +578,9 @@ def test_ss58(address: str, ok: bool) -> None:
 
 def test_direct_construction_type_errors(tw_env: TWEnv) -> None:
     with fails("TW_TRUSTED_PROXIES"):
-        c.MinerSettings(netuid=1, wallet_name="m", external_ip="44.1.2.3", trusted_proxies=5)  # type: ignore[arg-type]
+        c.MinerSettings(
+            netuid=1, wallet_name="m", external_ip="44.1.2.3", trusted_proxies=5
+        )  # type: ignore[arg-type]
     s = c.MinerSettings(
         netuid=1,
         wallet_name="m",
@@ -577,4 +606,6 @@ def test_env_example_loads_with_required_values(tw_env: TWEnv) -> None:
     assert c.ValidatorSettings.from_env(ENV_EXAMPLE) == c.ValidatorSettings(
         netuid=1, wallet_name="m"
     )
-    assert c.SidecarSettings.from_env(ENV_EXAMPLE) == c.SidecarSettings(netuid=1, wallet_name="m")
+    assert c.SidecarSettings.from_env(ENV_EXAMPLE) == c.SidecarSettings(
+        netuid=1, wallet_name="m"
+    )

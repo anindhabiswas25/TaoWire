@@ -43,7 +43,9 @@ def test_memory_expiry() -> None:
     assert len(store) == 2
     clock.now += 0.1  # first entry hits its expiry exactly
     assert len(store) == 1
-    assert store.check_and_store("hk", 1)  # forgotten: outside the freshness window anyway
+    assert store.check_and_store(
+        "hk", 1
+    )  # forgotten: outside the freshness window anyway
     clock.now += 100
     assert len(store) == 0
 
@@ -58,7 +60,9 @@ def test_retention_must_be_positive(bad: float) -> None:
 
 def test_stores_satisfy_protocol() -> None:
     assert isinstance(MemoryNonceStore(), NonceStore)
-    assert isinstance(RedisNonceStore("redis://x", client=fakeredis.FakeRedis()), NonceStore)
+    assert isinstance(
+        RedisNonceStore("redis://x", client=fakeredis.FakeRedis()), NonceStore
+    )
 
 
 def test_memory_store_with_sdk_verify(alice: Keypair, bob: Keypair) -> None:
@@ -78,7 +82,7 @@ def test_memory_store_with_sdk_verify(alice: Keypair, bob: Keypair) -> None:
 
 
 def test_short_retention_is_refused_by_sdk_verify(alice: Keypair, bob: Keypair) -> None:
-    """Fact A3: the SDK reads ``retention`` and refuses a store shorter than the window."""
+    """Fact A3: the SDK refuses a store whose retention is shorter than the window."""
     headers = RequestSigner(alice).sign(
         method="POST", target="/r", body=b"", receiver_ss58=bob.ss58_address
     )
@@ -126,12 +130,16 @@ def test_redis_shared_between_workers(server: fakeredis.FakeServer) -> None:
 
 
 def test_redis_prefix(server: fakeredis.FakeServer) -> None:
-    s = RedisNonceStore("redis://unused", prefix="sn7:", client=fakeredis.FakeRedis(server=server))
+    s = RedisNonceStore(
+        "redis://unused", prefix="sn7:", client=fakeredis.FakeRedis(server=server)
+    )
     s.check_and_store("hk", 1)
     assert fakeredis.FakeRedis(server=server).exists("sn7:hk:1")
 
 
-def test_redis_outage_fails_closed(store: RedisNonceStore, server: fakeredis.FakeServer) -> None:
+def test_redis_outage_fails_closed(
+    store: RedisNonceStore, server: fakeredis.FakeServer
+) -> None:
     assert store.ping() is True
     server.connected = False
     with pytest.raises(ReplayStoreUnavailable) as info:
@@ -144,7 +152,7 @@ def test_redis_outage_fails_closed(store: RedisNonceStore, server: fakeredis.Fak
 def test_redis_outage_propagates_through_sdk_verify(
     store: RedisNonceStore, server: fakeredis.FakeServer, alice: Keypair, bob: Keypair
 ) -> None:
-    """The SDK does not swallow the store error: the verifier sees 503, not an AuthError."""
+    """The SDK does not swallow the store error: 503, not an AuthError."""
     server.connected = False
     headers = RequestSigner(alice).sign(
         method="POST", target="/r", body=b"", receiver_ss58=bob.ss58_address

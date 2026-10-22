@@ -1,4 +1,7 @@
-"""Entry point of the ``tensorwire`` command. Sub-commands are added per phase (spec 8.14)."""
+"""Entry point of the ``tensorwire`` command (spec 8.14).
+
+Sub-commands are added phase by phase.
+"""
 
 from __future__ import annotations
 
@@ -18,7 +21,11 @@ def _print_version(value: bool) -> None:
 @app.callback()
 def main(
     version: bool = typer.Option(
-        False, "--version", callback=_print_version, is_eager=True, help="Print the version."
+        False,
+        "--version",
+        callback=_print_version,
+        is_eager=True,
+        help="Print the version.",
     ),
 ) -> None:
     """TensorWire: networking kit for Bittensor v11 subnets."""

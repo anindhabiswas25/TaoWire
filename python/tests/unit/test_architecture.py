@@ -2,8 +2,12 @@
 
 import-linter (``just lint``) enforces that only ``chain.gateway``, ``crypto``
 and ``auth/*`` import ``bittensor`` at all. It cannot see submodules of an
-external package, so this test adds the finer rule: ``auth/*`` and
-``crypto.py`` may only use ``http_auth``, ``signing`` and ``sp_core``.
+external package, so this test adds the finer rule:
+
+- ``auth/*`` may only use ``http_auth``, ``signing`` and ``sp_core``;
+- ``crypto.py`` may also use ``keyfiles`` (``Keypair``) and ``wallet``
+  (``Wallet``), agreed with Engineer B in COORDINATION.md.
+
 Function-level imports are checked too.
 """
 
@@ -19,11 +23,16 @@ import tensorwire
 
 PACKAGE = Path(tensorwire.__file__).parent
 GATEWAY = Path("chain/gateway.py")
-NARROW = {"http_auth", "signing", "sp_core"}
+AUTH_ALLOWED = frozenset({"http_auth", "signing", "sp_core"})
+CRYPTO_ALLOWED = AUTH_ALLOWED | {"keyfiles", "wallet"}
 
 
-def _narrow_allowed(rel: Path) -> bool:
-    return rel == Path("crypto.py") or rel.parts[0] == "auth"
+def _allowed_submodules(rel: Path) -> frozenset[str]:
+    if rel == Path("crypto.py"):
+        return CRYPTO_ALLOWED
+    if rel.parts[0] == "auth":
+        return AUTH_ALLOWED
+    return frozenset()
 
 
 def bittensor_imports(tree: ast.AST) -> Iterator[tuple[int, str]]:
@@ -49,7 +58,7 @@ def violations(rel: Path, source: str) -> list[str]:
     found = []
     for line, name in bittensor_imports(ast.parse(source)):
         parts = name.split(".")
-        if _narrow_allowed(rel) and len(parts) >= 2 and parts[1] in NARROW:
+        if len(parts) >= 2 and parts[1] in _allowed_submodules(rel):
             continue
         found.append(f"{rel}:{line} imports {name}")
     return found
@@ -70,6 +79,10 @@ def test_package_respects_adr_0001() -> None:
         ("auth/signer.py", "from bittensor import http_auth", False),
         ("auth/verifier.py", "import bittensor.http_auth", False),
         ("crypto.py", "from bittensor.sp_core import verify", False),
+        ("crypto.py", "from bittensor.keyfiles import Keypair", False),
+        ("crypto.py", "from bittensor.wallet import Wallet", False),
+        ("auth/signer.py", "from bittensor.keyfiles import Keypair", True),
+        ("crypto.py", "from bittensor import Subtensor", True),
         ("auth/signer.py", "import bittensor", True),
         ("auth/signer.py", "import bittensor as bt", True),
         ("auth/signer.py", "from bittensor import Subtensor", True),

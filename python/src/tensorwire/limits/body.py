@@ -56,17 +56,24 @@ def _request_id(scope: Scope) -> str | None:
     return None
 
 
-async def send_error(send: Send, error: TWError, *, request_id: str | None = None) -> None:
+async def send_error(
+    send: Send, error: TWError, *, request_id: str | None = None
+) -> None:
     """Send ``error`` as a complete kit-format JSON response."""
     body = error.response_body(request_id)
     headers = [
         (b"content-type", b"application/json"),
         (b"content-length", str(len(body)).encode()),
-        *((k.lower().encode(), v.encode()) for k, v in error.response_headers().items()),
+        *(
+            (k.lower().encode(), v.encode())
+            for k, v in error.response_headers().items()
+        ),
     ]
     if request_id is not None:
         headers.append((b"x-tw-request-id", request_id.encode()))
-    await send({"type": "http.response.start", "status": error.http_status, "headers": headers})
+    await send(
+        {"type": "http.response.start", "status": error.http_status, "headers": headers}
+    )
     await send({"type": "http.response.body", "body": body, "more_body": False})
 
 

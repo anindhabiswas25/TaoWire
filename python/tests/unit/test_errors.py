@@ -1,4 +1,4 @@
-"""errors.py: catalogue matches Appendix A; classes carry the right codes and statuses."""
+"""errors.py: the catalogue matches Appendix A; classes carry the right codes."""
 
 from __future__ import annotations
 
@@ -17,7 +17,9 @@ def _appendix_a(spec_text: str) -> str:
 
 
 def test_every_appendix_a_code_is_in_the_catalogue(spec_text: str) -> None:
-    rows = re.findall(r"^\| `(tw\.[a-z0-9_]+)` \| (\d{3}) \|", _appendix_a(spec_text), re.M)
+    rows = re.findall(
+        r"^\| `(tw\.[a-z0-9_]+)` \| (\d{3}) \|", _appendix_a(spec_text), re.M
+    )
     assert len(rows) == 19
     for code, status in rows:
         assert code in e.ERROR_CODES, code
@@ -26,7 +28,9 @@ def test_every_appendix_a_code_is_in_the_catalogue(spec_text: str) -> None:
 
 def test_signed_column_matches_appendix_a(spec_text: str) -> None:
     rows = re.findall(
-        r"^\| `(tw\.[a-z0-9_]+)` \| \d{3} \| [^|]+ \| ([^|]+) \|", _appendix_a(spec_text), re.M
+        r"^\| `(tw\.[a-z0-9_]+)` \| \d{3} \| [^|]+ \| ([^|]+) \|",
+        _appendix_a(spec_text),
+        re.M,
     )
     for code, signed in rows:
         expected = {"no": False}.get(
@@ -37,7 +41,9 @@ def test_signed_column_matches_appendix_a(spec_text: str) -> None:
 
 def test_client_codes_match_appendix_a(spec_text: str) -> None:
     line = next(
-        ln for ln in _appendix_a(spec_text).splitlines() if ln.startswith("Client-side only")
+        ln
+        for ln in _appendix_a(spec_text).splitlines()
+        if ln.startswith("Client-side only")
     )
     codes = set(re.findall(r"`(tw\.[a-z_<>]+)`", line)) - {"tw.http_<status>"}
     assert codes == e.CLIENT_ERROR_CODES
@@ -59,8 +65,16 @@ def test_catalogue_rejects_duplicates() -> None:
         (lambda: e.AuthFailed(), "tw.auth_failed", 401),
         (lambda: e.AuthFailed(code="tw.auth_stale"), "tw.auth_stale", 401),
         (lambda: e.Forbidden(), "tw.forbidden_denied", 403),
-        (lambda: e.Forbidden(code="tw.forbidden_low_stake"), "tw.forbidden_low_stake", 403),
-        (lambda: e.Forbidden(code="tw.forbidden_blacklisted"), "tw.forbidden_blacklisted", 403),
+        (
+            lambda: e.Forbidden(code="tw.forbidden_low_stake"),
+            "tw.forbidden_low_stake",
+            403,
+        ),
+        (
+            lambda: e.Forbidden(code="tw.forbidden_blacklisted"),
+            "tw.forbidden_blacklisted",
+            403,
+        ),
         (lambda: e.PayloadTooLarge(), "tw.payload_too_large", 413),
         (lambda: e.RateLimited(retry_after_s=0.2, layer="ip"), "tw.rate_limited", 429),
         (lambda: e.MetagraphStale(), "tw.metagraph_stale", 503),
@@ -96,8 +110,12 @@ def test_family_rejects_foreign_codes() -> None:
 
 
 def test_custom_public_message_is_kept() -> None:
-    err = e.AuthFailed("nonce is older than the 10s freshness window", code="tw.auth_stale")
-    assert err.public_message == str(err) == "nonce is older than the 10s freshness window"
+    err = e.AuthFailed(
+        "nonce is older than the 10s freshness window", code="tw.auth_stale"
+    )
+    assert (
+        err.public_message == str(err) == "nonce is older than the 10s freshness window"
+    )
 
 
 def test_response_body_shape() -> None:

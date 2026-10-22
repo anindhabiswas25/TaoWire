@@ -16,12 +16,28 @@ import time
 from collections.abc import Callable
 
 from bittensor import http_auth
-from bittensor.signing import Signer, WalletLike, resolve_signer
-from bittensor.sp_core import CRYPTO_ED25519, CRYPTO_SR25519
+from bittensor.signing import WalletLike
+
+from tensorwire.crypto import HotkeySigner, public_key_from_ss58
 
 __all__ = ["MonotonicNonce", "RequestSigner"]
 
-_BTAUTH_CRYPTO_TYPES = frozenset({CRYPTO_ED25519, CRYPTO_SR25519})  # fact A7
+
+class _BtauthSigner:
+    """Presents a :class:`HotkeySigner` as a ``bittensor.signing.Signer``.
+
+    ``http_auth.sign`` passes a ``Signer`` straight through, so the SDK never
+    inspects the original wallet object (and never reads its coldkey).
+    """
+
+    def __init__(self, hotkey: HotkeySigner) -> None:
+        self._hotkey = hotkey
+        self.ss58_address = hotkey.ss58_address
+        self.crypto_type = hotkey.crypto_type
+        self.public_key = public_key_from_ss58(hotkey.ss58_address)
+
+    def sign(self, payload: bytes) -> bytes:
+        return self._hotkey.sign(payload)
 
 
 class MonotonicNonce:
@@ -55,19 +71,19 @@ class RequestSigner:
     keyfile fails at startup rather than on the first request.
     """
 
-    def __init__(self, wallet: WalletLike, *, nonce: MonotonicNonce | None = None) -> None:
-        signer: Signer = resolve_signer(wallet, role="hotkey")
-        if signer.crypto_type not in _BTAUTH_CRYPTO_TYPES:
-            raise ValueError(
-                f"hotkey crypto type {signer.crypto_type} cannot sign btauth/1 requests; "
-                "use sr25519 or ed25519"
-            )
-        self._signer = signer
+    def __init__(
+        self, wallet: WalletLike, *, nonce: MonotonicNonce | None = None
+    ) -> None:
+        # HotkeySigner resolves the hotkey only and rejects async signers (fact A6)
+        # and schemes other than sr25519/ed25519 (fact A7).
+        self._signer = _BtauthSigner(HotkeySigner(wallet))
         self._nonce = MonotonicNonce() if nonce is None else nonce
         #: The SS58 address requests are signed as.
-        self.hotkey_ss58: str = signer.ss58_address
+        self.hotkey_ss58: str = self._signer.ss58_address
 
-    def sign(self, *, method: str, target: str, body: bytes, receiver_ss58: str) -> dict[str, str]:
+    def sign(
+        self, *, method: str, target: str, body: bytes, receiver_ss58: str
+    ) -> dict[str, str]:
         """Return the btauth/1 headers for one attempt of one request.
 
         ``target`` is the request target exactly as it goes on the wire

@@ -1,1 +1,4 @@
-"""Test helpers for subnet code: fake chain, keys, clock, pytest fixtures (spec 8.13)."""
+"""Test helpers for subnet code (spec 8.13).
+
+Fake chain, deterministic keys, a controllable clock and pytest fixtures.
+"""

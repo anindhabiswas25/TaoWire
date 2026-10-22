@@ -1,4 +1,6 @@
-"""RedisNonceStore against a real Redis (13.2). Skipped unless TENSORWIRE_TEST_REDIS_URL is set.
+"""RedisNonceStore against a real Redis (13.2).
+
+Skipped unless ``TENSORWIRE_TEST_REDIS_URL`` is set.
 
 Engineer B owns the ``tw-redis`` container; point the variable at it, e.g.
 ``TENSORWIRE_TEST_REDIS_URL=redis://127.0.0.1:6379/15``.

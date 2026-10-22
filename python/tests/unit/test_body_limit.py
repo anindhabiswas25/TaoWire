@@ -8,11 +8,24 @@ from typing import Any
 import pytest
 
 from tensorwire.errors import PayloadTooLarge, RateLimited
-from tensorwire.limits.body import BodySizeLimit, Message, Receive, Scope, Send, send_error
+from tensorwire.limits.body import (
+    BodySizeLimit,
+    Message,
+    Receive,
+    Scope,
+    Send,
+    send_error,
+)
 
 
 def http_scope(headers: list[tuple[bytes, bytes]] | None = None, **extra: Any) -> Scope:
-    return {"type": "http", "method": "POST", "path": "/x", "headers": headers or [], **extra}
+    return {
+        "type": "http",
+        "method": "POST",
+        "path": "/x",
+        "headers": headers or [],
+        **extra,
+    }
 
 
 class Client:
@@ -33,12 +46,18 @@ class Client:
 
     @property
     def status(self) -> int:
-        return int(next(m for m in self.sent if m["type"] == "http.response.start")["status"])
+        return int(
+            next(m for m in self.sent if m["type"] == "http.response.start")["status"]
+        )
 
     @property
     def json(self) -> Any:
         return json.loads(
-            b"".join(m.get("body", b"") for m in self.sent if m["type"] == "http.response.body")
+            b"".join(
+                m.get("body", b"")
+                for m in self.sent
+                if m["type"] == "http.response.body"
+            )
         )
 
     def header(self, name: bytes) -> bytes | None:
@@ -189,7 +208,9 @@ async def test_request_id_from_scope_state() -> None:
 async def test_request_id_absent(state: object) -> None:
     client = Client([b""])
     await BodySizeLimit(EchoApp(), 10)(
-        http_scope([(b"content-length", b"99")], state=state), client.receive, client.send
+        http_scope([(b"content-length", b"99")], state=state),
+        client.receive,
+        client.send,
     )
     assert client.json["error"]["request_id"] is None
     assert client.header(b"x-tw-request-id") is None

@@ -48,7 +48,7 @@ class RateDecision:
     retry_after_s: float
 
     def raise_if_denied(self, layer: Literal["ip", "hotkey"]) -> None:
-        """Raise :class:`RateLimited` (429 + ``Retry-After``) if the request was denied."""
+        """Raise :class:`RateLimited` (429, ``Retry-After``) if denied."""
         if not self.allowed:
             raise RateLimited(retry_after_s=self.retry_after_s, layer=layer)
 
@@ -62,7 +62,10 @@ class RateLimiter(Protocol):
 
 
 class TokenBucket:
-    """One token bucket. Not thread-safe on its own; :class:`MemoryRateLimiter` locks."""
+    """One token bucket.
+
+    Not thread-safe on its own; :class:`MemoryRateLimiter` holds the lock.
+    """
 
     __slots__ = ("burst", "rate", "tokens", "updated")
 
@@ -84,7 +87,9 @@ class TokenBucket:
         if self.tokens >= 1.0:
             self.tokens -= 1.0
             return RateDecision(allowed=True, retry_after_s=0.0)
-        return RateDecision(allowed=False, retry_after_s=(1.0 - self.tokens) / self.rate)
+        return RateDecision(
+            allowed=False, retry_after_s=(1.0 - self.tokens) / self.rate
+        )
 
 
 def _check_rate(rate: float, burst: int) -> None:
@@ -151,7 +156,8 @@ def _parse_ip(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | Non
 
 
 def _trusted(
-    ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None, proxies: Sequence[IPNetwork]
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address | None,
+    proxies: Sequence[IPNetwork],
 ) -> bool:
     return ip is not None and any(ip in net for net in proxies)
 

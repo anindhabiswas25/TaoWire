@@ -1,4 +1,6 @@
-"""pytest fixtures shipped with TensorWire (registered through the ``pytest11`` entry point).
+"""pytest fixtures shipped with TensorWire.
+
+Registered through the ``pytest11`` entry point.
 
 Kept import-light: pytest loads this module in every project that has
 ``tensorwire`` installed.

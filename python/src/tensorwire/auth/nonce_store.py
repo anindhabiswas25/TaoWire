@@ -133,7 +133,10 @@ class RedisNonceStore:
         return self._retention
 
     def check_and_store(self, hotkey_ss58: str, nonce_ns: int) -> bool:
-        """True = never seen (and now recorded). False = replay. Raises if Redis is down."""
+        """True = never seen (and now recorded). False = replay.
+
+        Raises :class:`ReplayStoreUnavailable` if Redis cannot be reached.
+        """
         key = f"{self._prefix}{hotkey_ss58}:{nonce_ns}"
         try:
             return bool(self._r.set(key, b"1", nx=True, px=self._px))

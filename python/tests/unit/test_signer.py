@@ -42,7 +42,9 @@ def test_nonces_strictly_increase_under_8_threads_x_100k() -> None:
     assert len(everything) == 800_000
     assert len(set(everything)) == 800_000  # no nonce handed out twice
     for out in per_thread:
-        assert all(a < b for a, b in itertools.pairwise(out))  # each caller sees increasing values
+        assert all(
+            a < b for a, b in itertools.pairwise(out)
+        )  # each caller sees increasing values
 
 
 def test_frozen_clock_still_increases() -> None:
@@ -66,7 +68,10 @@ def test_signed_request_verifies(alice: Keypair, bob: Keypair) -> None:
     signer = RequestSigner(alice)
     assert signer.hotkey_ss58 == alice.ss58_address
     headers = signer.sign(
-        method="POST", target=GOLDEN_TARGET, body=GOLDEN_BODY, receiver_ss58=bob.ss58_address
+        method="POST",
+        target=GOLDEN_TARGET,
+        body=GOLDEN_BODY,
+        receiver_ss58=bob.ss58_address,
     )
     assert headers[http_auth.HEADER_RECEIVER] == bob.ss58_address
     assert http_auth.HEADER_CRYPTO not in headers  # sr25519 sends no crypto header (A7)
@@ -83,18 +88,27 @@ def test_signed_request_verifies(alice: Keypair, bob: Keypair) -> None:
 
 def test_each_call_uses_a_fresh_nonce(alice: Keypair, bob: Keypair) -> None:
     signer = RequestSigner(alice, nonce=MonotonicNonce(clock_ns=lambda: GOLDEN_NONCE))
-    first = signer.sign(method="POST", target="/x", body=b"", receiver_ss58=bob.ss58_address)
-    second = signer.sign(method="POST", target="/x", body=b"", receiver_ss58=bob.ss58_address)
+    first = signer.sign(
+        method="POST", target="/x", body=b"", receiver_ss58=bob.ss58_address
+    )
+    second = signer.sign(
+        method="POST", target="/x", body=b"", receiver_ss58=bob.ss58_address
+    )
     assert int(second[http_auth.HEADER_NONCE]) == int(first[http_auth.HEADER_NONCE]) + 1
 
 
 def test_ed25519_golden_vector(bob: Keypair) -> None:
     """Appendix C: the ed25519 signature is deterministic and fixed."""
     alice_ed = Keypair.create_from_uri("//Alice", crypto_type=CRYPTO_ED25519)
-    signer = RequestSigner(alice_ed, nonce=MonotonicNonce(clock_ns=lambda: GOLDEN_NONCE))
+    signer = RequestSigner(
+        alice_ed, nonce=MonotonicNonce(clock_ns=lambda: GOLDEN_NONCE)
+    )
     assert signer.hotkey_ss58 == "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
     headers = signer.sign(
-        method="POST", target=GOLDEN_TARGET, body=GOLDEN_BODY, receiver_ss58=bob.ss58_address
+        method="POST",
+        target=GOLDEN_TARGET,
+        body=GOLDEN_BODY,
+        receiver_ss58=bob.ss58_address,
     )
     assert headers == {
         "X-Bittensor-Version": "1",
@@ -141,5 +155,18 @@ class _OddSigner:
 
 
 def test_rejects_non_btauth_crypto_type() -> None:
-    with pytest.raises(ValueError, match="cannot sign btauth/1"):
+    with pytest.raises(ValueError, match="unsupported crypto type"):
         RequestSigner(_OddSigner())
+
+
+class _AsyncSigner(_OddSigner):
+    crypto_type = 1
+
+    async def sign(self, payload: bytes) -> bytes:  # type: ignore[override]
+        return b""
+
+
+def test_rejects_async_signers() -> None:
+    """Fact A6: btauth needs a synchronous signature."""
+    with pytest.raises(TypeError, match="asynchronous signers"):
+        RequestSigner(_AsyncSigner())

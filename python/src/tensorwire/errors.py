@@ -72,24 +72,46 @@ def _catalogue(*specs: ErrorSpec) -> Mapping[str, ErrorSpec]:
 ERROR_CODES: Mapping[str, ErrorSpec] = _catalogue(
     ErrorSpec("tw.internal", 500, "internal error", signed=False),
     ErrorSpec("tw.rate_limited", 429, "rate limit exceeded", signed=None),
-    ErrorSpec("tw.payload_too_large", 413, "request body exceeds the size limit", signed=False),
-    ErrorSpec("tw.auth_failed", 401, "authentication failed", signed=False),
-    ErrorSpec("tw.auth_malformed", 401, "malformed authentication headers", signed=False),
     ErrorSpec(
-        "tw.auth_wrong_receiver", 401, "request was signed for a different receiver", signed=False
+        "tw.payload_too_large", 413, "request body exceeds the size limit", signed=False
     ),
-    ErrorSpec("tw.auth_stale", 401, "request nonce is outside the freshness window", signed=False),
+    ErrorSpec("tw.auth_failed", 401, "authentication failed", signed=False),
+    ErrorSpec(
+        "tw.auth_malformed", 401, "malformed authentication headers", signed=False
+    ),
+    ErrorSpec(
+        "tw.auth_wrong_receiver",
+        401,
+        "request was signed for a different receiver",
+        signed=False,
+    ),
+    ErrorSpec(
+        "tw.auth_stale",
+        401,
+        "request nonce is outside the freshness window",
+        signed=False,
+    ),
     ErrorSpec("tw.auth_bad_signature", 401, "signature does not verify", signed=False),
     ErrorSpec("tw.auth_replayed", 401, "request was already accepted", signed=False),
     ErrorSpec("tw.forbidden_denied", 403, "caller is denied", signed=True),
     ErrorSpec(
-        "tw.forbidden_not_registered", 403, "caller is not registered on this subnet", signed=True
+        "tw.forbidden_not_registered",
+        403,
+        "caller is not registered on this subnet",
+        signed=True,
     ),
-    ErrorSpec("tw.forbidden_not_validator", 403, "caller has no validator permit", signed=True),
-    ErrorSpec("tw.forbidden_low_stake", 403, "caller stake is below the minimum", signed=True),
+    ErrorSpec(
+        "tw.forbidden_not_validator", 403, "caller has no validator permit", signed=True
+    ),
+    ErrorSpec(
+        "tw.forbidden_low_stake", 403, "caller stake is below the minimum", signed=True
+    ),
     ErrorSpec("tw.forbidden_blacklisted", 403, "caller is blacklisted", signed=True),
     ErrorSpec(
-        "tw.invalid_request", 422, "request body does not match the route model", signed=True
+        "tw.invalid_request",
+        422,
+        "request body does not match the route model",
+        signed=True,
     ),
     ErrorSpec("tw.handler_error", 500, "handler failed", signed=True),
     ErrorSpec(
@@ -99,12 +121,20 @@ ERROR_CODES: Mapping[str, ErrorSpec] = _catalogue(
         signed=False,
     ),
     ErrorSpec(
-        "tw.replay_store_unavailable", 503, "replay protection store is unavailable", signed=False
+        "tw.replay_store_unavailable",
+        503,
+        "replay protection store is unavailable",
+        signed=False,
     ),
     ErrorSpec("tw.handler_timeout", 504, "handler timed out", signed=True),
-    ErrorSpec("tw.legacy_auth_failed", 401, "legacy v10 authentication failed", signed=False),
     ErrorSpec(
-        "tw.legacy_disabled", 410, "legacy v10 requests are no longer accepted", signed=False
+        "tw.legacy_auth_failed", 401, "legacy v10 authentication failed", signed=False
+    ),
+    ErrorSpec(
+        "tw.legacy_disabled",
+        410,
+        "legacy v10 requests are no longer accepted",
+        signed=False,
     ),
     ErrorSpec("tw.config_invalid", 500, "internal error", signed=False),
 )
@@ -143,14 +173,18 @@ class TWError(Exception):
     #: Extra codes this class may carry besides its default ``code``.
     allowed_codes: ClassVar[frozenset[str]] = frozenset()
 
-    def __init__(self, public_message: str | None = None, *, code: str | None = None) -> None:
+    def __init__(
+        self, public_message: str | None = None, *, code: str | None = None
+    ) -> None:
         chosen = type(self).code if code is None else code
         if chosen != type(self).code and chosen not in self.allowed_codes:
             raise ValueError(f"{type(self).__name__} cannot carry code {chosen!r}")
         spec = ERROR_CODES[chosen]
         self.code = spec.code
         self.http_status: int = spec.http_status
-        self.public_message: str = spec.public_message if public_message is None else public_message
+        self.public_message: str = (
+            spec.public_message if public_message is None else public_message
+        )
         self._signed = bool(spec.signed)
         super().__init__(self.public_message)
 
@@ -266,7 +300,10 @@ class HandlerTimeout(TWError):
 
 
 class LegacyAuthFailed(TWError):
-    """A v10 request failed its signature, hash, freshness or replay check (spec 8.11.2)."""
+    """A v10 request failed its signature, hash, freshness or replay check.
+
+    See spec 8.11.2.
+    """
 
     code = "tw.legacy_auth_failed"
 
@@ -319,5 +356,7 @@ class SubnetNotFound(ChainError):
     """The requested subnet does not exist on the connected chain (spec 8.3)."""
 
     def __init__(self, netuid: int) -> None:
-        super().__init__("subnet_not_exists", f"subnet {netuid} does not exist on this chain")
+        super().__init__(
+            "subnet_not_exists", f"subnet {netuid} does not exist on this chain"
+        )
         self.netuid = netuid

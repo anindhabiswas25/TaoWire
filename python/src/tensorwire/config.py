@@ -81,7 +81,9 @@ _S = TypeVar("_S", bound="CommonSettings")
 
 CommaList = Annotated[tuple[str, ...], NoDecode]
 HotkeySet = Annotated[frozenset[str], NoDecode]
-CidrList = Annotated[tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...], NoDecode]
+CidrList = Annotated[
+    tuple[ipaddress.IPv4Network | ipaddress.IPv6Network, ...], NoDecode
+]
 
 
 class HostPort(NamedTuple):
@@ -110,7 +112,9 @@ class HostPort(NamedTuple):
         return cls(host, port)
 
 
-def _ip(value: str, what: str = "value") -> ipaddress.IPv4Address | ipaddress.IPv6Address:
+def _ip(
+    value: str, what: str = "value"
+) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
     try:
         return ipaddress.ip_address(value)
     except ValueError:
@@ -155,7 +159,13 @@ def _check_endpoint_url(value: str) -> str:
 
 
 def _check_simple_name(value: str) -> str:
-    if not value or value in (".", "..") or "/" in value or "\\" in value or "\x00" in value:
+    if (
+        not value
+        or value in (".", "..")
+        or "/" in value
+        or "\\" in value
+        or "\x00" in value
+    ):
         raise ValueError("must be a plain name, not a path")
     return value
 
@@ -173,7 +183,9 @@ class CommonSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix=ENV_PREFIX,
         case_sensitive=False,
-        extra="ignore",  # other models' variables; unknown ones are caught by check_environment
+        # Other models' variables are ignored here; check_environment rejects
+        # names no model knows.
+        extra="ignore",
         frozen=True,
         validate_default=True,
         hide_input_in_errors=True,
@@ -208,7 +220,9 @@ class CommonSettings(BaseSettings):
         if unknown:
             raise ConfigError(f"unknown setting(s): {', '.join(unknown)}")
         env_file = values.get("_env_file")
-        check_environment(os.environ, env_file if isinstance(env_file, (str, Path)) else None)
+        check_environment(
+            os.environ, env_file if isinstance(env_file, (str, Path)) else None
+        )
         try:
             super().__init__(**values)
         except ValidationError as exc:
@@ -216,7 +230,7 @@ class CommonSettings(BaseSettings):
 
     @classmethod
     def from_env(cls: type[_S], env_file: str | Path | None = None) -> _S:
-        """Load from the environment (and ``env_file`` if given); validate everything."""
+        """Load from the environment (and ``env_file`` if given) and validate."""
         return cls(_env_file=env_file)
 
     # ------------------------------------------------------------ validators
@@ -279,7 +293,9 @@ class CommonSettings(BaseSettings):
             self.metagraph_max_age_s is not None
             and self.metagraph_max_age_s <= self.metagraph_soft_age_s
         ):
-            raise ValueError("TW_METAGRAPH_MAX_AGE_S must be greater than TW_METAGRAPH_SOFT_AGE_S")
+            raise ValueError(
+                "TW_METAGRAPH_MAX_AGE_S must be greater than TW_METAGRAPH_SOFT_AGE_S"
+            )
         return self
 
     # ------------------------------------------------------------ helpers
@@ -402,20 +418,29 @@ class MinerSettings(CommonSettings):
             )
         if self.nonce_retention_s < self.auth_max_age_s + self.auth_allowed_skew_s:
             raise ValueError(
-                "TW_NONCE_RETENTION_S must be >= TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S"
+                "TW_NONCE_RETENTION_S must be >= "
+                "TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S"
             )
         if (self.tls_cert_file is None) != (self.tls_key_file is None):
-            raise ValueError("set both TW_TLS_CERT_FILE and TW_TLS_KEY_FILE, or neither")
+            raise ValueError(
+                "set both TW_TLS_CERT_FILE and TW_TLS_KEY_FILE, or neither"
+            )
         overlap = self.allow_hotkeys & self.deny_hotkeys
         if overlap:
             raise ValueError(
-                f"{len(overlap)} hotkey(s) are in both TW_ALLOW_HOTKEYS and TW_DENY_HOTKEYS"
+                f"{len(overlap)} hotkey(s) are in both TW_ALLOW_HOTKEYS "
+                "and TW_DENY_HOTKEYS"
             )
         multi = self.workers > 1 or self.instance_count > 1
-        if multi and self.redis_url is None and not self.unsafe_allow_memory_nonce_multiworker:
+        if (
+            multi
+            and self.redis_url is None
+            and not self.unsafe_allow_memory_nonce_multiworker
+        ):
             raise ValueError(
-                "TW_REDIS_URL is required when TW_WORKERS > 1 or TW_INSTANCE_COUNT > 1: "
-                "a per-process nonce store lets replays through (spec 8.4.3)"
+                "TW_REDIS_URL is required when TW_WORKERS > 1 or "
+                "TW_INSTANCE_COUNT > 1: a per-process nonce store lets replays "
+                "through (spec 8.4.3)"
             )
         return self
 
@@ -451,7 +476,9 @@ class ValidatorSettings(CommonSettings):
     @model_validator(mode="after")
     def _legacy(self) -> ValidatorSettings:
         if self.legacy_v10_client == "auto" and self.legacy_v10_client_until is None:
-            raise ValueError("TW_LEGACY_V10_CLIENT=auto requires TW_LEGACY_V10_CLIENT_UNTIL")
+            raise ValueError(
+                "TW_LEGACY_V10_CLIENT=auto requires TW_LEGACY_V10_CLIENT_UNTIL"
+            )
         return self
 
 
@@ -476,18 +503,29 @@ class SidecarSettings(CommonSettings):
         return self.state_dir / "sidecar.token"
 
 
-_ALL_MODELS: tuple[type[CommonSettings], ...] = (MinerSettings, ValidatorSettings, SidecarSettings)
+_ALL_MODELS: tuple[type[CommonSettings], ...] = (
+    MinerSettings,
+    ValidatorSettings,
+    SidecarSettings,
+)
 
 
 def known_variables() -> frozenset[str]:
     """Every ``TW_*`` variable name any TensorWire process understands."""
     return frozenset(
-        f"{ENV_PREFIX}{name.upper()}" for model in _ALL_MODELS for name in model.model_fields
+        f"{ENV_PREFIX}{name.upper()}"
+        for model in _ALL_MODELS
+        for name in model.model_fields
     )
 
 
-def check_environment(environ: Mapping[str, str], env_file: str | Path | None = None) -> None:
-    """Raise :class:`ConfigError` if ``environ`` or ``env_file`` has an unknown ``TW_*`` name."""
+def check_environment(
+    environ: Mapping[str, str], env_file: str | Path | None = None
+) -> None:
+    """Raise :class:`ConfigError` for an unknown ``TW_*`` name.
+
+    Both ``environ`` and, if given, ``env_file`` are checked.
+    """
     names = {k for k in environ if k.upper().startswith(ENV_PREFIX)}
     if env_file is not None:
         path = Path(env_file)

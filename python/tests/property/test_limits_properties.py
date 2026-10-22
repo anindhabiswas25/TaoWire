@@ -10,7 +10,9 @@ from hypothesis import strategies as st
 from tensorwire.limits.body import _content_length
 from tensorwire.limits.ratelimit import TokenBucket
 
-steps = st.lists(st.floats(min_value=0, max_value=5, allow_nan=False), min_size=1, max_size=200)
+steps = st.lists(
+    st.floats(min_value=0, max_value=5, allow_nan=False), min_size=1, max_size=200
+)
 
 
 @given(
