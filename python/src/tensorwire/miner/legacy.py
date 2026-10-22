@@ -89,12 +89,19 @@ class LegacyServerLike(Protocol):
         self,
         request_headers: Mapping[str, str],
         *,
+        request: LegacyRequestLike | None,
         status: int,
         synapse: BaseModel | None,
         error: TWError | None,
         process_time_s: float,
+        raw_body: bytes | None = None,
     ) -> tuple[bytes, list[tuple[str, str]]]:
-        """The v10-shaped response body and headers."""
+        """The v10-shaped response body and headers.
+
+        ``request`` is the verified request, or ``None`` when verification
+        did not pass (the answer then carries no axon signature).
+        ``raw_body`` is the 200 body of a ``legacy_body_hash`` route.
+        """
         ...
 
 

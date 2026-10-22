@@ -155,8 +155,8 @@ class RouteEndpoint:
                 return _legacy_response(
                     legacy,
                     request,
+                    verified=state.get("tw_legacy_request"),
                     status=err.http_status,
-                    synapse=None,
                     error=err,
                     started=started,
                 )
@@ -273,13 +273,20 @@ class RouteEndpoint:
             self._metrics.auth_verify_duration.observe(
                 time.perf_counter() - verify_started
             )
+        state["tw_legacy_request"] = verified
         ctx = await self._admit(rt, state, verified.caller, request_id)  # [7] [8]
         argument = self._legacy_argument(verified, body)  # [9]
         result = await self._invoke(argument, ctx)  # [10]
-        synapse = self._legacy_result(verified, result)  # [11]
+        synapse, raw = self._legacy_result(verified, result)  # [11]
         self._lifecycle.legacy_traffic.record(verified.caller.hotkey_ss58, "ok")
         return _legacy_response(
-            legacy, request, status=200, synapse=synapse, error=None, started=started
+            legacy,
+            request,
+            verified=verified,
+            status=200,
+            synapse=synapse,
+            raw_body=raw,
+            started=started,
         )
 
     def _legacy_argument(self, verified: LegacyRequestLike, body: bytes) -> Any:
@@ -295,12 +302,20 @@ class RouteEndpoint:
         except ValidationError:
             raise InvalidRequest() from None
 
-    def _legacy_result(self, verified: LegacyRequestLike, result: Any) -> BaseModel:
+    def _legacy_result(
+        self, verified: LegacyRequestLike, result: Any
+    ) -> tuple[BaseModel | None, bytes | None]:
+        """The v10 answer: a filled Synapse, or (body-hash routes) raw JSON."""
         synapse = verified.synapse
-        if synapse is not None and isinstance(result, type(synapse)):
-            return result
-        if synapse is not None and isinstance(result, BaseModel):
-            return synapse.model_copy(update=result.model_dump())
+        if synapse is None:
+            if isinstance(result, (bytes, bytearray)):
+                return None, bytes(result)
+            if isinstance(result, BaseModel):
+                return None, result.model_dump_json().encode()
+        elif isinstance(result, type(synapse)):
+            return result, None
+        elif isinstance(result, BaseModel):
+            return synapse.model_copy(update=result.model_dump()), None
         _log.error(
             "legacy_bad_return",
             route=self.route.path,
@@ -349,17 +364,21 @@ def _legacy_response(
     legacy: LegacyServerLike,
     request: Request,
     *,
+    verified: LegacyRequestLike | None,
     status: int,
-    synapse: BaseModel | None,
-    error: TWError | None,
     started: float,
+    synapse: BaseModel | None = None,
+    error: TWError | None = None,
+    raw_body: bytes | None = None,
 ) -> Response:
     content, headers = legacy.respond(
         request.headers,
+        request=verified,
         status=status,
         synapse=synapse,
         error=error,
         process_time_s=time.perf_counter() - started,
+        raw_body=raw_body,
     )
     response = Response(content=content, status_code=status)
     for name, value in headers:

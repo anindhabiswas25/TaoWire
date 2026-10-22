@@ -22,22 +22,21 @@ Rules it enforces:
   must treat it as a failed response.
 - Neurons without a usable axon are never contacted (``tw.no_axon``).
 
-Legacy v10 miners (``legacy_mode="auto"``, spec 8.11.3): a miner whose
-on-chain axon protocol is ``TW_PROTOCOL_TAG`` always gets btauth/1. Any
-other miner gets btauth/1 first; if it answers like a v10 Axon (HTTP 500
-with a ``bt_header_axon_status_code`` header) and the call carries a
-``legacy_synapse``, the client retries once at once in the v10 format and
-remembers ``v10`` for that hotkey. :meth:`ValidatorClient.reprobe` (the
-loop calls it once per tempo) forgets those, so upgraded miners switch
-back. A hotkey that has answered with btauth/1 is never sent v10 again
-(no downgrade).
+Legacy v10 miners (spec 8.11.3, ``TW_LEGACY_V10_CLIENT=auto``): pass the
+bridge's ``legacy`` client and its ``selector``
+(``extensions.legacy_v10.client.ProtocolSelector``), which owns the
+protocol choice: btauth/1 for miners advertising ``TW_PROTOCOL_TAG``,
+btauth/1 first for the others with one immediate v10 attempt when the
+answer has the v10 shape, memory per hotkey, a re-probe once per tempo
+(:meth:`ValidatorClient.reprobe`) and no downgrade after a verified
+btauth/1 answer. v10 needs the request as a Synapse (``legacy_synapse``);
+without one a v10 miner's answer counts as a failure.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
-import datetime as dt
 import json
 import time
 from collections.abc import Callable, Sequence
@@ -51,7 +50,6 @@ from pydantic import BaseModel, ValidationError
 
 from tensorwire.auth.signer import RequestSigner
 from tensorwire.chain.gateway import NeuronView
-from tensorwire.config import DEFAULT_PROTOCOL_TAG
 from tensorwire.errors import ERROR_CODES, client_http_code
 from tensorwire.extensions.response_sig import (
     HEADER_SIGNATURE,
@@ -63,10 +61,10 @@ from tensorwire.observability.metrics import Metrics
 
 __all__ = [
     "RETRY_STATUSES",
-    "V10_MARKER_HEADER",
     "LegacyClientLike",
     "LegacyResultLike",
     "MinerResult",
+    "ProtocolSelectorLike",
     "ValidatorClient",
     "WireProtocol",
 ]
@@ -76,9 +74,6 @@ SchemePolicy = Literal["http", "https", "https-if-tls-published"]
 
 #: Statuses retried with a fresh signature (spec 8.8).
 RETRY_STATUSES = frozenset({502, 503, 504})
-#: Every v10 Axon response has this header; on a 500 it marks a v10 miner (N7).
-V10_MARKER_HEADER = "bt_header_axon_status_code"
-_MAX_REMEMBERED = 65_536
 
 _log = structlog.stdlib.get_logger("tensorwire.validator")
 
@@ -128,6 +123,11 @@ class LegacyResultLike(Protocol):
         """Time to the full response."""
         ...
 
+    @property
+    def status_message(self) -> str | None:
+        """The v10 status message (body ``message`` or header), if any."""
+        ...
+
 
 class LegacyClientLike(Protocol):
     """Sends one v10-format request (``extensions.legacy_v10.client.LegacyClient``)."""
@@ -142,6 +142,33 @@ class LegacyClientLike(Protocol):
         max_response_bytes: int,
     ) -> LegacyResultLike:
         """One attempt, fresh nonce; never raises for the miner's failure."""
+        ...
+
+
+class ProtocolSelectorLike(Protocol):
+    """Per-miner wire-format choice (``legacy_v10.client.ProtocolSelector``)."""
+
+    def choose(self, neuron: NeuronView) -> WireProtocol:
+        """The format to use for the next query to ``neuron``."""
+        ...
+
+    def after_btauth(
+        self,
+        neuron: NeuronView,
+        *,
+        status: int | None,
+        headers: httpx.Headers | None,
+        verified: bool,
+    ) -> bool:
+        """Record a btauth/1 answer; True = send one v10 attempt now."""
+        ...
+
+    def reprobe(self) -> None:
+        """Forget the v10 memory (once per tempo)."""
+        ...
+
+    def forget(self, hotkey: str) -> None:
+        """Forget everything about ``hotkey`` (its UID changed hands)."""
         ...
 
 
@@ -169,8 +196,7 @@ class ValidatorClient:
 
     ``transport`` replaces the network transport (tests pass an ASGI or
     mock transport); transport-level retries stay off either way.
-    ``legacy`` and ``legacy_mode="auto"`` turn on the v10 fallback;
-    ``legacy_until`` stops it after that date (UTC).
+    ``legacy`` and ``selector`` (both or neither) turn on the v10 fallback.
     """
 
     def __init__(
@@ -183,41 +209,32 @@ class ValidatorClient:
         verify_responses: bool = True,
         scheme_policy: SchemePolicy = "http",
         max_response_bytes: int = 4 * 1024 * 1024,
-        protocol_tag: int = DEFAULT_PROTOCOL_TAG,
         legacy: LegacyClientLike | None = None,
-        legacy_mode: Literal["auto", "off"] = "off",
-        legacy_until: dt.date | None = None,
+        selector: ProtocolSelectorLike | None = None,
         metrics: Metrics | None = None,
         transport: httpx.AsyncBaseTransport | None = None,
         monotonic: Callable[[], float] = time.monotonic,
-        today: Callable[[], dt.date] | None = None,
     ) -> None:
         if timeout_s <= 0 or max_concurrency < 1 or max_attempts < 1:
             raise ValueError("timeout_s, max_concurrency and max_attempts must be > 0")
         if max_response_bytes < 1:
             raise ValueError("max_response_bytes must be at least 1")
-        if legacy_mode == "auto" and legacy is None:
-            raise ValueError("legacy_mode='auto' needs a legacy client")
+        if (legacy is None) != (selector is None):
+            raise ValueError("pass both legacy and selector, or neither")
         self.signer = signer
         self.timeout_s = float(timeout_s)
         self.max_attempts = max_attempts
         self.verify_responses = verify_responses
         self.scheme_policy = scheme_policy
         self.max_response_bytes = max_response_bytes
-        self.protocol_tag = protocol_tag
         self.metrics = metrics
-        self._legacy = legacy if legacy_mode == "auto" else None
-        self._legacy_until = legacy_until
-        self._today = today or (lambda: dt.datetime.now(dt.timezone.utc).date())
+        self._legacy = legacy
+        self._selector = selector
         self._semaphore = asyncio.Semaphore(max_concurrency)
-        self._v10_hotkeys: set[str] = set()
-        self._btauth_hotkeys: set[str] = set()
         self._legacy_traffic = (
             None
-            if metrics is None or self._legacy is None
-            else LegacyTraffic(
-                metrics, direction="outbound", monotonic=monotonic, until=legacy_until
-            )
+            if metrics is None or legacy is None
+            else LegacyTraffic(metrics, direction="outbound", monotonic=monotonic)
         )
         self._http = httpx.AsyncClient(
             transport=transport
@@ -245,44 +262,20 @@ class ValidatorClient:
 
     # ------------------------------------------------------------ protocol memory
 
+    @property
+    def legacy_enabled(self) -> bool:
+        """Whether v10 miners can be reached."""
+        return self._selector is not None
+
     def reprobe(self) -> None:
-        """Forget which miners answered v10, so they are probed with btauth/1 again.
+        """Probe miners remembered as v10 with btauth/1 again (once per tempo)."""
+        if self._selector is not None:
+            self._selector.reprobe()
 
-        The validator loop calls this once per tempo (spec 8.11.3 step 3).
-        """
-        self._v10_hotkeys.clear()
-
-    def retain(self, hotkeys: set[str]) -> None:
-        """Forget protocol memory for hotkeys no longer in the metagraph."""
-        self._v10_hotkeys &= hotkeys
-        self._btauth_hotkeys &= hotkeys
-
-    def protocol_of(self, hotkey: str) -> WireProtocol | None:
-        """What the client remembers about ``hotkey``, if anything."""
-        if hotkey in self._btauth_hotkeys:
-            return "btauth/1"
-        if hotkey in self._v10_hotkeys:
-            return "v10"
-        return None
-
-    def _legacy_active(self) -> bool:
-        if self._legacy is None:
-            return False
-        return self._legacy_until is None or self._today() < self._legacy_until
-
-    def _may_use_v10(self, neuron: NeuronView, synapse: BaseModel | None) -> bool:
-        return (
-            synapse is not None
-            and self._legacy_active()
-            and neuron.axon_protocol != self.protocol_tag
-            and neuron.hotkey not in self._btauth_hotkeys
-        )
-
-    @staticmethod
-    def _remember(bucket: set[str], hotkey: str) -> None:
-        if len(bucket) >= _MAX_REMEMBERED:
-            bucket.clear()
-        bucket.add(hotkey)
+    def forget(self, hotkey: str) -> None:
+        """Drop protocol memory for ``hotkey`` (its UID changed hands)."""
+        if self._selector is not None:
+            self._selector.forget(hotkey)
 
     # ------------------------------------------------------------ queries
 
@@ -360,11 +353,11 @@ class ValidatorClient:
     ) -> MinerResult:
         if neuron.axon is None:
             return _failed(neuron, "tw.no_axon", attempts=0)
-        may_v10 = self._may_use_v10(neuron, legacy_synapse)
+        selector = self._selector
         if (
-            may_v10
+            selector is not None
             and legacy_synapse is not None
-            and neuron.hotkey in self._v10_hotkeys
+            and selector.choose(neuron) == "v10"
         ):
             return await self._query_v10(neuron, legacy_synapse, response_model, 0)
         url = self._url(neuron, route)
@@ -373,19 +366,20 @@ class ValidatorClient:
         while attempts < self.max_attempts and self._should_retry(last, idempotent):
             attempts += 1
             last = await self._attempt(neuron, method, url, body)
-        answer = last.answer
-        v10 = answer is not None and _is_v10_answer(answer)
-        if v10 and may_v10 and legacy_synapse is not None:
-            self._remember(self._v10_hotkeys, neuron.hotkey)
-            _log.info("miner_speaks_v10", uid=neuron.uid)
-            return await self._query_v10(
-                neuron, legacy_synapse, response_model, attempts
-            )
         result = self._to_result(neuron, last, attempts, response_model)
-        if result.response_verified or (result.ok and not self.verify_responses):
-            self._v10_hotkeys.discard(neuron.hotkey)
-            self._remember(self._btauth_hotkeys, neuron.hotkey)
-        return result
+        if selector is None or legacy_synapse is None:
+            return result
+        answer = last.answer
+        switch = selector.after_btauth(
+            neuron,
+            status=None if answer is None else answer.status,
+            headers=None if answer is None else answer.headers,
+            verified=result.response_verified,
+        )
+        if not switch:
+            return result
+        _log.info("miner_speaks_v10", uid=neuron.uid)
+        return await self._query_v10(neuron, legacy_synapse, response_model, attempts)
 
     def _url(self, neuron: NeuronView, route: str) -> httpx.URL:
         if neuron.axon is None:
@@ -584,10 +578,6 @@ def _failed(
         error_code=code,
         attempts=attempts,
     )
-
-
-def _is_v10_answer(answer: _Answer) -> bool:
-    return answer.status == 500 and V10_MARKER_HEADER in answer.headers
 
 
 def _error_code(answer: _Answer) -> str:
