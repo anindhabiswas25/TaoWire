@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import threading
 import time
+from collections import OrderedDict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field, replace
 
@@ -25,7 +26,12 @@ from tensorwire.chain.metagraph_cache import MetagraphSource, StalenessStage
 from tensorwire.config import MinerSettings
 from tensorwire.errors import Forbidden, MetagraphStale
 
-__all__ = ["CallerGate", "CallerPolicy", "KnownCallers"]
+__all__ = ["DEFAULT_MAX_KNOWN_CALLERS", "CallerGate", "CallerPolicy", "KnownCallers"]
+
+#: Bound on the known-callers set. A route with a relaxed policy admits any
+#: authenticated hotkey, and during a long chain outage nothing clears the
+#: set, so it must not grow without limit.
+DEFAULT_MAX_KNOWN_CALLERS = 65_536
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,12 +105,16 @@ class KnownCallers:
     Keyed by ``(scope, hotkey)`` (the miner uses the route path as scope, so
     passing a relaxed route's policy does not admit a caller to a strict
     route). The value is the monotonic time of the last accepted request.
-    Bounded by the number of distinct callers that pass policy, which the
-    metagraph size and the allow list bound.
+    At most ``max_entries`` are kept; when full, the caller accepted longest
+    ago is forgotten (on strict routes the metagraph bounds the set long
+    before that).
     """
 
-    def __init__(self) -> None:
-        self._seen: dict[tuple[str, str], float] = {}
+    def __init__(self, max_entries: int = DEFAULT_MAX_KNOWN_CALLERS) -> None:
+        if max_entries < 1:
+            raise ValueError("max_entries must be at least 1")
+        self.max_entries = max_entries
+        self._seen: OrderedDict[tuple[str, str], float] = OrderedDict()
         self._lock = threading.Lock()
 
     def __len__(self) -> int:
@@ -115,8 +125,12 @@ class KnownCallers:
 
     def add(self, scope: str, hotkey: str, now: float) -> None:
         """Remember that ``hotkey`` passed policy for ``scope`` at ``now``."""
+        key = (scope, hotkey)
         with self._lock:
-            self._seen[(scope, hotkey)] = now
+            self._seen[key] = now
+            self._seen.move_to_end(key)
+            while len(self._seen) > self.max_entries:
+                self._seen.popitem(last=False)
 
     def last_accepted(self, scope: str, hotkey: str) -> float | None:
         """When ``hotkey`` last passed policy for ``scope``, or ``None``."""

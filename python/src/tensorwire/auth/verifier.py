@@ -17,6 +17,8 @@ step 1 of the normative order (spec 4.3) and fail as ``tw.auth_malformed``:
 - **The nonce is plain ASCII digits** (at most 20). Python's ``int()`` also
   accepts signs, underscores, spaces and non-ASCII digits; the TypeScript,
   Go and Rust verifiers do not.
+- **``X-Bittensor-Crypto`` is exactly ``ed25519`` or ``sr25519``** (spec 4.1:
+  values are exact). The SDK also takes ``0``/``1``, any case and padding.
 
 ``require_receiver`` is always ``True``; there is no way to turn it off.
 """
@@ -53,6 +55,8 @@ _AUTH_CODES: Mapping[type[http_auth.AuthError], str] = {
 _HEADER_PREFIX = "x-bittensor-"
 _HOTKEY = http_auth.HEADER_HOTKEY.lower()
 _NONCE = http_auth.HEADER_NONCE.lower()
+_CRYPTO = http_auth.HEADER_CRYPTO.lower()
+_SCHEMES = frozenset({"ed25519", "sr25519"})
 _NONCE_RE = re.compile(r"[0-9]{1,20}")
 
 Headers = Mapping[str, str] | Iterable[tuple[str, str]]
@@ -105,6 +109,9 @@ def _check_shape(headers: Mapping[str, str]) -> None:
     nonce = headers.get(_NONCE)
     if nonce is not None and not _NONCE_RE.fullmatch(nonce):
         raise _malformed(f"{http_auth.HEADER_NONCE} is not a decimal integer")
+    crypto = headers.get(_CRYPTO)
+    if crypto is not None and crypto not in _SCHEMES:
+        raise _malformed(f"unsupported {http_auth.HEADER_CRYPTO}")
 
 
 class RequestVerifier:

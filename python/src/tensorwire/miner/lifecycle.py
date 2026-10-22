@@ -300,14 +300,15 @@ class Lifecycle:
     ) -> Runtime:
         s = self.settings
         store = self.parts.nonce_store
-        if store is None:
-            store = (
-                RedisNonceStore(
+        if store is None and s.redis_url is not None:
+            try:
+                store = RedisNonceStore(
                     s.redis_url.get_secret_value(), retention=s.nonce_retention_s
                 )
-                if s.redis_url is not None
-                else MemoryNonceStore(s.nonce_retention_s, clock=self.parts.monotonic)
-            )
+            except RuntimeError as exc:  # the redis extra is not installed
+                raise StartupError(str(exc)) from None
+        if store is None:
+            store = MemoryNonceStore(s.nonce_retention_s, clock=self.parts.monotonic)
         backend = "memory" if isinstance(store, MemoryNonceStore) else "redis"
         multi = s.workers > 1 or s.instance_count > 1
         if backend == "memory" and multi:

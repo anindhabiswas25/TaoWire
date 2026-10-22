@@ -93,7 +93,11 @@ class SignedClient:
         if json is not None:
             signed["content-type"] = "application/json"
         signed.update(headers or {})
-        return await self.http.request(method, path, content=body, headers=signed)
+        # An absolute URL, so httpx sends exactly the target that was signed
+        # (a relative path is merged with base_url, which rewrites "//x").
+        return await self.http.request(
+            method, BASE_URL + path, content=body, headers=signed
+        )
 
     async def post(self, path: str, **kwargs: Any) -> httpx.Response:
         """Signed ``POST``."""
@@ -108,7 +112,7 @@ class SignedClient:
     ) -> httpx.Response:
         """Send exactly ``content`` and ``headers`` (for replays and tampering)."""
         return await self.http.request(
-            method, path, content=content, headers=dict(headers)
+            method, BASE_URL + path, content=content, headers=dict(headers)
         )
 
     async def aclose(self) -> None:

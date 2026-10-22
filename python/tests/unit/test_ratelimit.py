@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import ipaddress
+from typing import Any
 
 import pytest
 
 from tensorwire.errors import RateLimited
 from tensorwire.limits.ratelimit import (
     MemoryRateLimiter,
+    PreAuthRateLimit,
     RateDecision,
     TokenBucket,
     client_ip,
@@ -163,3 +165,67 @@ def test_client_ip(
     expected: str,
 ) -> None:
     assert client_ip(peer, xff, proxies) == expected
+
+
+# ---------------------------------------------------------------- PreAuthRateLimit
+
+
+async def _call(
+    mw: Any, *, client: tuple[str, int] | None, headers: list[tuple[bytes, bytes]]
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    sent: list[dict[str, Any]] = []
+    scope: dict[str, Any] = {"type": "http", "client": client, "headers": headers}
+
+    async def receive() -> dict[str, Any]:
+        return {"type": "http.request", "body": b""}
+
+    async def send(message: Any) -> None:
+        sent.append(message)
+
+    await mw(scope, receive, send)
+    return sent, scope
+
+
+async def _ok(scope: Any, receive: Any, send: Any) -> None:
+    await send({"type": "http.response.start", "status": 200, "headers": []})
+    await send({"type": "http.response.body", "body": b""})
+
+
+async def test_pre_auth_limit_keys_by_client_ip() -> None:
+    limiter = MemoryRateLimiter(rate=0.001, burst=1)
+    mw = PreAuthRateLimit(_ok, limiter=limiter)
+    sent, _ = await _call(mw, client=("1.1.1.1", 5), headers=[])
+    assert sent[0]["status"] == 200
+    sent, scope = await _call(mw, client=("1.1.1.1", 6), headers=[])
+    assert sent[0]["status"] == 429
+    headers = dict(sent[0]["headers"])
+    assert int(headers[b"retry-after"]) >= 1
+    assert b'"tw.rate_limited"' in sent[1]["body"]
+    assert scope["state"] == {"tw_rate_layer": "ip", "tw_code": "tw.rate_limited"}
+    sent, _ = await _call(mw, client=("2.2.2.2", 5), headers=[])
+    assert sent[0]["status"] == 200
+
+
+async def test_pre_auth_limit_uses_trusted_proxy_header() -> None:
+    limiter = MemoryRateLimiter(rate=0.001, burst=1)
+    proxies = [ipaddress.ip_network("10.0.0.0/8")]
+    mw = PreAuthRateLimit(_ok, limiter=limiter, trusted_proxies=proxies)
+    for client_ip_ in ("7.7.7.7", "8.8.8.8"):
+        xff = [(b"x-forwarded-for", f"6.6.6.6, {client_ip_}".encode())]
+        sent, _ = await _call(mw, client=("10.0.0.1", 1), headers=xff)
+        assert sent[0]["status"] == 200  # two distinct clients behind one proxy
+    # an untrusted peer cannot choose its key with the header
+    xff = [(b"x-forwarded-for", b"9.9.9.9")]
+    assert (await _call(mw, client=("3.3.3.3", 1), headers=xff))[0][0]["status"] == 200
+    assert (await _call(mw, client=("3.3.3.3", 1), headers=[]))[0][0]["status"] == 429
+
+
+async def test_pre_auth_limit_passes_non_http_through() -> None:
+    seen: list[str] = []
+
+    async def app(scope: Any, receive: Any, send: Any) -> None:
+        seen.append(scope["type"])
+
+    mw = PreAuthRateLimit(app, limiter=MemoryRateLimiter(rate=1, burst=1))
+    await mw({"type": "lifespan"}, None, None)  # type: ignore[arg-type]
+    assert seen == ["lifespan"]
