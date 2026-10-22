@@ -137,6 +137,11 @@ again; unknown callers are never admitted on stale data. Set at least one
    `TW_PROTOCOL_TAG`) when the chain shows something else and
    `TW_AUTO_SERVE_AXON=1` and `TW_AXON_PUBLISHER=1`. Re-checked every 30 min.
 
+The axon is published before the server starts listening, so a validator
+that reads it from the metagraph can reach the miner a moment before it
+accepts connections. Clients and deployment checks should wait for `/readyz`
+to return 200 rather than for the axon to appear on chain.
+
 On SIGTERM the server stops accepting, gives in-flight requests `TW_DRAIN_S`,
 then closes the chain connection and the replay store.
 

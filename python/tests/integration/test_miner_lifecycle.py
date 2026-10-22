@@ -250,7 +250,12 @@ async def test_startup_timeout(tw_miner_kwargs: dict[str, Any]) -> None:
     assert source.stopped
 
 
-async def test_real_chain_not_in_this_build(tw_miner_kwargs: dict[str, Any]) -> None:
+async def test_real_chain_not_in_this_build(
+    tw_miner_kwargs: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Passes with or without Engineer B's chain classes merged.
+    monkeypatch.delattr(lifecycle_mod.gateway_module, "BittensorGateway", raising=False)
+    monkeypatch.delattr(lifecycle_mod.cache_module, "MetagraphCache", raising=False)
     with pytest.raises(StartupError, match="real chain gateway is not in this build"):
         await build(tw_miner_kwargs, gateway=None, metagraph=None).lifecycle.start()
 
