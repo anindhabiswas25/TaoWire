@@ -145,7 +145,7 @@ async def ensure(
     intent: Any,
     wallet: bt.Wallet,
     *,
-    attempts: int = ATTEMPTS,
+    attempts: int,
 ) -> None:
     """Submit ``intent`` unless ``done()`` already holds, retrying failed submissions.
 
@@ -255,10 +255,11 @@ async def setup(
     alice: bt.Wallet,
     wallets: dict[str, bt.Wallet],
     permit_timeout_s: float,
+    attempts: int,
 ) -> dict[str, Any]:
     async with bt.Subtensor(endpoint, fallback_endpoints=[]) as client:
         for role in ROLES:
-            await fund(client, alice, wallets[role.wallet], role)
+            await fund(client, alice, wallets[role.wallet], role, attempts)
 
         owner = wallets["owner"]
         owner_cold = owner.coldkeypub.ss58_address
@@ -272,6 +273,7 @@ async def setup(
             subnet_registered,
             bt.RegisterSubnet(hotkey_ss58=owner.hotkey.ss58_address),
             owner,
+            attempts=attempts,
         )
         netuid = await find_owned_subnet(client, owner_cold)
         assert netuid is not None
@@ -284,6 +286,7 @@ async def setup(
             functools.partial(subnet_started, client, netuid),
             bt.StartCall(netuid=netuid),
             owner,
+            attempts=attempts,
         )
 
         for name in ("validator", "miner_py", "miner_ts", "miner_go", "miner_rs"):
@@ -298,6 +301,7 @@ async def setup(
                     netuid=netuid, hotkey_ss58=wallet.hotkey.ss58_address
                 ),
                 wallet,
+                attempts=attempts,
             )
 
         validator = wallets["validator"]
@@ -323,6 +327,7 @@ async def setup(
                 slippage_protection=False,
             ),
             validator,
+            attempts=attempts,
         )
 
         mg = await wait_for_permit(
@@ -333,7 +338,9 @@ async def setup(
         return info
 
 
-async def fund(client: Any, alice: bt.Wallet, wallet: bt.Wallet, role: Role) -> None:
+async def fund(
+    client: Any, alice: bt.Wallet, wallet: bt.Wallet, role: Role, attempts: int
+) -> None:
     coldkey = wallet.coldkeypub.ss58_address
 
     async def funded() -> bool:
@@ -348,6 +355,7 @@ async def fund(client: Any, alice: bt.Wallet, wallet: bt.Wallet, role: Role) -> 
         funded,
         bt.Transfer(dest_ss58=coldkey, amount_tao=role.fund_tao),
         alice,
+        attempts=attempts,
     )
 
 
@@ -428,7 +436,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--endpoint", default="ws://127.0.0.1:9944")
     parser.add_argument("--chain-timeout", type=float, default=120.0)
     parser.add_argument("--permit-timeout", type=float, default=300.0)
+    parser.add_argument(
+        "--attempts",
+        type=int,
+        default=ATTEMPTS,
+        help="submissions per step before giving up on transient errors",
+    )
     args = parser.parse_args(argv)
+    if args.attempts < 1:
+        parser.error("--attempts must be at least 1")
     if not args.endpoint.startswith(LOCAL_ENDPOINTS):
         parser.error("refusing to run against a non-local endpoint")
     state_dir = args.state_dir.expanduser().resolve()
@@ -441,7 +457,9 @@ def main(argv: list[str] | None = None) -> int:
     asyncio.run(wait_for_chain(args.endpoint, args.chain_timeout))
     alice, wallets = prepare_wallets(state_dir)
     try:
-        info = asyncio.run(setup(args.endpoint, alice, wallets, args.permit_timeout))
+        info = asyncio.run(
+            setup(args.endpoint, alice, wallets, args.permit_timeout, args.attempts)
+        )
     except TransientFailure as e:
         log(f"giving up on transient errors: {e}")
         return EXIT_TRANSIENT

@@ -16,6 +16,9 @@
 #                        blocks keeps failing on transient errors (forks, expired
 #                        eras), restart the chain with 12 s blocks and set up again.
 #                        0 = fail instead.
+#   LOCALNET_FAST_ATTEMPTS default 10: submissions per setup step on fast blocks
+#                        before giving up (and falling back); 1 forces the fallback
+#                        path quickly, for testing it.
 #   LOCALNET_CONTAINER   default local_chain
 #   LOCALNET_DIR         default ~/.tensorwire/localnet (never ~/.bittensor)
 #   LOCALNET_PYTHON      Python with bittensor 11.x; default: uv run in ./python
@@ -25,6 +28,7 @@ LOCALNET_IMAGE="${LOCALNET_IMAGE:-ghcr.io/raofoundation/subtensor-localnet}"
 LOCALNET_TAG="${LOCALNET_TAG:-devnet}"
 LOCALNET_FAST_BLOCKS="${LOCALNET_FAST_BLOCKS:-1}"
 LOCALNET_FALLBACK="${LOCALNET_FALLBACK:-1}"
+LOCALNET_FAST_ATTEMPTS="${LOCALNET_FAST_ATTEMPTS:-10}"
 LOCALNET_CONTAINER="${LOCALNET_CONTAINER:-local_chain}"
 LOCALNET_DIR="${LOCALNET_DIR:-$HOME/.tensorwire/localnet}"
 
@@ -64,9 +68,9 @@ start_chain() {  # $1 = 1 for fast blocks, 0 for 12 s blocks
     "$LOCALNET_IMAGE:$LOCALNET_TAG" "${args[@]}" >/dev/null
 }
 
-run_setup() {
+run_setup() {  # $1 = submissions per step
   "${python_cmd[@]}" -I "$repo_root/scripts/localnet_setup.py" \
-    --state-dir "$LOCALNET_DIR" --endpoint ws://127.0.0.1:9944
+    --state-dir "$LOCALNET_DIR" --endpoint ws://127.0.0.1:9944 --attempts "$1"
 }
 
 started_here=0
@@ -89,8 +93,13 @@ else
   started_here=1
 fi
 
+[[ "$LOCALNET_FAST_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] ||
+  die "LOCALNET_FAST_ATTEMPTS must be a positive integer"
+first_attempts=10
+[[ "$LOCALNET_FAST_BLOCKS" == 1 ]] && first_attempts="$LOCALNET_FAST_ATTEMPTS"
+
 status=0
-run_setup || status=$?
+run_setup "$first_attempts" || status=$?
 if [[ "$status" == "$EXIT_TRANSIENT" && "$started_here" == 1 &&
       "$LOCALNET_FAST_BLOCKS" == 1 && "$LOCALNET_FALLBACK" == 1 ]]; then
   # The chain was created by this run, so nothing on it is worth keeping.
@@ -99,7 +108,7 @@ if [[ "$status" == "$EXIT_TRANSIENT" && "$started_here" == 1 &&
   until ! (exec 3<>"/dev/tcp/127.0.0.1/9944") 2>/dev/null; do sleep 1; done
   start_chain 0
   status=0
-  run_setup || status=$?
+  run_setup 10 || status=$?
 fi
 [[ "$status" == 0 ]] || die "setup failed (exit $status)"
 

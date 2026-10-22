@@ -128,6 +128,8 @@ class World:
     weights_rate_limit: int = 100
     blocks_since: int | None = 7
     serving: int | None = 50
+    planned: list[Any] = field(default_factory=list)
+    violations: list[str] = field(default_factory=list)
     faults: dict[str, list[Any]] = field(default_factory=lambda: defaultdict(list))
     results: list[ExtrinsicResult | BaseException | object] = field(
         default_factory=list
@@ -209,6 +211,15 @@ class FakeSdkClient:
     async def _blocks_since_last_update(self, *, netuid: int, uid: int) -> int | None:
         value = self.world.blocks_since if netuid in self.world.subnets else None
         return await self.world.run("blocks_since", value)  # type: ignore[no-any-return]
+
+    async def plan(self, intent: Any, signer: Any) -> Any:
+        self.world.planned.append(intent)
+        return await self.world.run(
+            "plan",
+            SimpleNamespace(
+                ok=not self.world.violations, violations=self.world.violations
+            ),
+        )
 
     async def execute(self, intent: Any, signer: Any, **kwargs: Any) -> Any:
         self.world.executed.append((intent, signer, kwargs))
@@ -721,12 +732,12 @@ async def test_policy_error(world: World, sleeps: list[float]) -> None:
 async def test_write_when_chain_unreachable(world: World, sleeps: list[float]) -> None:
     gw = await _connected(world, sleeps)
     world.fail("metagraph", bt.ConnectionNotReady("x"))  # drops the client
-    world.fail("connect", *[OSError("down")] * 10)
+    world.fail("connect", *[OSError("down")] * 100)
     with pytest.raises(ChainUnavailable):
         await gw.metagraph(NETUID)
     outcome = await gw.set_weights(NETUID, {1: 1.0}, mechid=0, version_key=0)
     assert outcome.code == "unknown"
-    assert "chain unavailable" in (outcome.remediation or "")
+    assert "nothing was submitted" in (outcome.remediation or "")
     assert world.executed == []
 
 
@@ -810,3 +821,66 @@ async def test_policy_error_without_violations(
     gw = await _connected(world, sleeps)
     outcome = await gw.set_weights(NETUID, {1: 1.0}, mechid=0, version_key=0)
     assert outcome.code == "policy_violation"
+
+
+# -- planning before submission ---------------------------------------------------
+
+
+async def test_failed_preflight_is_definite_and_not_submitted(
+    world: World, sleeps: list[float]
+) -> None:
+    error = bt.ChainError(
+        "Weights on netuid 2 were last set 30 blocks ago; retry in ~70 blocks",
+        code=bt.ErrorCode.RATE_LIMITED,
+    )
+    world.fail("plan", error)
+    gw = await _connected(world, sleeps)
+    outcome = await gw.set_weights(NETUID, {1: 1.0}, mechid=0, version_key=0)
+    assert (outcome.ok, outcome.code) == (False, "rate_limited")
+    assert "retry in ~70 blocks" in (outcome.remediation or "")
+    assert world.executed == []
+    assert len(world.planned) == 1
+
+
+@pytest.mark.parametrize(
+    "error", [bt.ChainError("node hiccup"), bt.RpcConnectionError("drop"), HANG]
+)
+async def test_plan_failure_without_a_code_is_retried(
+    world: World, sleeps: list[float], error: Any
+) -> None:
+    world.fail("plan", error)
+    gw = await _connected(world, sleeps, timeout_s=0.05)
+    outcome = await gw.set_weights(NETUID, {1: 1.0}, mechid=0, version_key=0)
+    assert outcome.ok
+    assert len(world.planned) == 2
+    assert len(world.executed) == 1
+
+
+async def test_plan_keeps_failing_nothing_submitted(
+    world: World, sleeps: list[float]
+) -> None:
+    world.fail("plan", *[bt.ChainError("down")] * 3)
+    gw = await _connected(world, sleeps, write_attempts=3)
+    outcome = await gw.set_weights(NETUID, {1: 1.0}, mechid=0, version_key=0)
+    assert outcome.code == "unknown"
+    assert "nothing was submitted" in (outcome.remediation or "")
+    assert world.executed == []
+
+
+async def test_plan_violations(world: World, sleeps: list[float]) -> None:
+    world.violations = ["fee above max_fee_tao"]
+    gw = await _connected(world, sleeps)
+    outcome = await gw.set_weights(NETUID, {1: 1.0}, mechid=0, version_key=0)
+    assert (outcome.code, outcome.remediation) == (
+        "policy_violation",
+        "fee above max_fee_tao",
+    )
+    assert world.executed == []
+
+
+async def test_plan_policy_error(world: World, sleeps: list[float]) -> None:
+    world.fail("plan", bt.PolicyError(["blocked"]))
+    gw = await _connected(world, sleeps)
+    outcome = await gw.set_weights(NETUID, {1: 1.0}, mechid=0, version_key=0)
+    assert (outcome.code, outcome.remediation) == ("policy_violation", "blocked")
+    assert world.executed == []

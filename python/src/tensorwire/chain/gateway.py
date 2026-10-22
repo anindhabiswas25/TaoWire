@@ -234,6 +234,10 @@ including ``Retracted`` and ``FinalityTimeout`` (it may still be on chain),
 is returned to the caller.
 """
 
+_NOT_SUBMITTED = (
+    "the chain could not be reached to prepare the transaction; nothing was submitted"
+)
+
 _UNKNOWN_FATE = (
     "the chain connection failed or timed out after submission; the transaction "
     "may still be included. Read the chain state before submitting again"
@@ -339,7 +343,10 @@ class BittensorGateway:
     after a connection failure. When the attempts run out, reads raise
     :class:`ChainUnavailable`.
 
-    Writes are never resent blindly. A submission rejected or dropped before
+    Writes are planned first (``client.plan``: a dry run, nothing signed).
+    A failed SDK preflight, such as the weights rate-limit check, is returned
+    with its own code without submitting. Writes are never resent blindly. A
+    submission rejected or dropped before
     inclusion (:data:`RESIGN_ERROR_NAMES`, e.g. "signature does not match" or
     an expired era on a short fork) is retried as a new extrinsic signed after
     the next finalized block, up to ``write_attempts`` times. A timeout or
@@ -468,15 +475,12 @@ class BittensorGateway:
         self,
         what: str,
         op: Callable[[], Awaitable[_T]],
-        *,
-        timeout_s: float | None = None,
     ) -> _T:
         """Run a read with per-attempt timeout, retries and backoff."""
-        limit = self._timeout_s if timeout_s is None else timeout_s
         last: BaseException | None = None
         for attempt in range(1, self._read_attempts + 1):
             try:
-                return await asyncio.wait_for(op(), limit)
+                return await asyncio.wait_for(op(), self._timeout_s)
             except _TRANSIENT_READ_ERRORS as e:
                 last = e
                 connection_lost = isinstance(
@@ -488,7 +492,7 @@ class BittensorGateway:
                         "op": what,
                         "attempt": attempt,
                         "error": type(e).__name__,
-                        "endpoint": self.endpoint,
+                        # no endpoint: private node URLs can carry API tokens
                     },
                 )
                 if connection_lost:
@@ -501,9 +505,9 @@ class BittensorGateway:
         ) from last
 
     def _backoff(self, attempt: int) -> float:
-        """Full-range jitter around 0.5 s doubling to 8 s: base x [0.5, 1.5)."""
-        base = min(BACKOFF_MAX_S, BACKOFF_BASE_S * 2 ** (attempt - 1))
-        return float(base * (0.5 + self._jitter()))
+        """0.5 s doubling per attempt, jittered by x[0.5, 1.5), capped at 8 s."""
+        base = BACKOFF_BASE_S * 2 ** (attempt - 1)
+        return float(min(BACKOFF_MAX_S, base * (0.5 + self._jitter())))
 
     # -- reads -----------------------------------------------------------------
 
@@ -664,12 +668,17 @@ class BittensorGateway:
     async def _write(self, intent: Any, summary: dict[str, Any]) -> TxOutcome:
         if self._hotkey is None:
             raise RuntimeError("this gateway has no hotkey; writes need one")
-        outcome = _rejected("unknown", _UNKNOWN_FATE)
+        outcome = _rejected("unknown", _NOT_SUBMITTED)
         for attempt in range(1, self._write_attempts + 1):
             if attempt > 1:
                 await self._wait_for_new_finalized()
+            rejected, client = await self._plan(intent, summary, attempt)
+            if rejected is not None:
+                outcome = rejected
+                if rejected.code == "unknown":
+                    continue  # nothing was submitted: safe to try again
+                break
             try:
-                client = await self._call("connect", self._ensure_client)
                 result = await asyncio.wait_for(
                     client.execute(
                         intent,
@@ -679,13 +688,8 @@ class BittensorGateway:
                     ),
                     self._write_timeout_s,
                 )
-            except ChainUnavailable as e:
-                # The client could not be opened: nothing was submitted.
-                outcome = _rejected("unknown", f"chain unavailable: {e}")
-                break
             except _sdk_error("PolicyError") as e:
-                violations = getattr(e, "violations", None) or [str(e)]
-                outcome = _rejected("policy_violation", "; ".join(violations))
+                outcome = _policy_outcome(e)
                 break
             except _TRANSIENT_READ_ERRORS as e:
                 if isinstance(e, _CONNECTION_ERRORS):
@@ -714,6 +718,49 @@ class BittensorGateway:
             if not resign:
                 break
         return outcome
+
+    async def _plan(
+        self, intent: Any, summary: dict[str, Any], attempt: int
+    ) -> tuple[TxOutcome | None, Any]:
+        """Dry-run ``intent`` (``client.plan``); nothing is signed or submitted.
+
+        Returns ``(rejection, None)`` when the write must not be submitted:
+        a chain-side check failed (e.g. the SDK's weights rate-limit
+        preflight, with its own code), the plan violates a policy, or the
+        chain could not be reached (``code="unknown"``, nothing submitted).
+        Otherwise ``(None, client)``.
+        """
+        try:
+            client = await self._call("connect", self._ensure_client)
+            plan = await asyncio.wait_for(
+                client.plan(intent, self._hotkey), self._timeout_s
+            )
+        except ChainUnavailable as e:
+            return _rejected("unknown", f"{_NOT_SUBMITTED} ({e})"), None
+        except _sdk_error("PolicyError") as e:
+            return _policy_outcome(e), None
+        except _TRANSIENT_READ_ERRORS as e:
+            code = getattr(getattr(e, "code", None), "value", None)
+            if isinstance(e, _sdk_error("ChainError")) and code not in (
+                None,
+                "unknown",
+            ):
+                rejection = _rejected(str(code), str(e))
+                _log.info(
+                    "chain write",
+                    extra={**summary, "attempt": attempt, "ok": False, "code": code},
+                )
+                return rejection, None
+            if isinstance(e, (*_CONNECTION_ERRORS, TimeoutError, asyncio.TimeoutError)):
+                await self._drop_client(rotate=True)
+            _log.warning(
+                "chain write plan failed",
+                extra={**summary, "attempt": attempt, "error": type(e).__name__},
+            )
+            return _rejected("unknown", _NOT_SUBMITTED), None
+        if not plan.ok:
+            return _rejected("policy_violation", "; ".join(plan.violations)), None
+        return None, client
 
     async def _wait_for_new_finalized(self) -> None:
         """Wait (bounded by the read timeout) until a new block is finalized.
@@ -823,6 +870,11 @@ def _missing_message(missing: list[str]) -> str:
         + ", ".join(missing)
         + "; TensorWire supports bittensor>=11.3.0,<12 (see the compatibility matrix)"
     )
+
+
+def _policy_outcome(error: BaseException) -> TxOutcome:
+    violations = getattr(error, "violations", None) or [str(error)]
+    return _rejected("policy_violation", "; ".join(violations))
 
 
 def _rejected(code: str, remediation: str) -> TxOutcome:
