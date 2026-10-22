@@ -34,6 +34,7 @@ from tensorwire.chain.gateway import BittensorGateway, ChainGateway, GatewayErro
 from tensorwire.config import CommonSettings, MinerSettings, ValidatorSettings
 from tensorwire.crypto import HotkeySigner
 from tensorwire.errors import ConfigError, StartupError
+from tensorwire.observability.logging import configure_logging
 from tensorwire.validator.lock import HotkeyLock
 
 __all__ = ["Check", "Doctor", "doctor"]
@@ -349,6 +350,7 @@ def doctor(
     if role not in ("miner", "validator"):
         raise typer.BadParameter("use miner or validator", param_hint="--role")
     chosen: Role = "miner" if role == "miner" else "validator"
+    configure_logging("ERROR", stream=sys.stderr)  # the report is the output
     doc = Doctor(chosen, env_file=env_file, probe_url=probe_url)
     checks = anyio.run(doc.run)
     if as_json:

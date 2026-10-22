@@ -546,6 +546,8 @@ class ValidatorRunner:
         configure_logging(self.settings.log_level)
         try:
             asyncio.run(self._serve())
+        except KeyboardInterrupt:
+            sys.exit(130)
         except StartupError as exc:
             _log.critical("startup_refused", reason=str(exc))
             sys.exit(exc.exit_code)

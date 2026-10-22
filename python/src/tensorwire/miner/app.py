@@ -310,6 +310,10 @@ class Miner:
                 self._run_workers(app_import)
             else:
                 asyncio.run(self._serve())
+        except KeyboardInterrupt:
+            # Ctrl-C: uvicorn drained and the lifecycle stopped ("miner_stopped");
+            # it re-raises SIGINT afterwards. Exit like a shell does, no traceback.
+            sys.exit(130)
         except StartupError as exc:
             _log.critical("startup_refused", reason=str(exc))
             sys.exit(exc.exit_code)
