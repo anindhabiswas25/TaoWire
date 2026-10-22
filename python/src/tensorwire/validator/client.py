@@ -50,7 +50,7 @@ from pydantic import BaseModel, ValidationError
 
 from tensorwire.auth.signer import RequestSigner
 from tensorwire.chain.gateway import NeuronView
-from tensorwire.errors import ERROR_CODES, client_http_code
+from tensorwire.errors import ERROR_CODES, StartupError, client_http_code
 from tensorwire.extensions.response_sig import (
     HEADER_SIGNATURE,
     ResponseSignatureError,
@@ -67,6 +67,7 @@ __all__ = [
     "ProtocolSelectorLike",
     "ValidatorClient",
     "WireProtocol",
+    "check_scheme_policy",
 ]
 
 WireProtocol = Literal["btauth/1", "v10"]
@@ -76,6 +77,24 @@ SchemePolicy = Literal["http", "https", "https-if-tls-published"]
 RETRY_STATUSES = frozenset({502, 503, 504})
 
 _log = structlog.stdlib.get_logger("tensorwire.validator")
+
+
+def check_scheme_policy(policy: str) -> None:
+    """Refuse a ``TW_SCHEME_POLICY`` this build cannot honour (spec 8.6, D13).
+
+    ``https-if-tls-published`` needs TLS key pinning, which ships in Phase 4.
+    Until then it raises :class:`StartupError` instead of running on plain
+    HTTP: a validator that asked for pinned TLS must know it is not getting it.
+    """
+    if policy == "https-if-tls-published":
+        raise StartupError(
+            "TW_SCHEME_POLICY=https-if-tls-published is not supported yet: "
+            "pinning a miner's published TLS key ships with TLS support. Use "
+            "TW_SCHEME_POLICY=http (requests and responses are signed) or "
+            "TW_SCHEME_POLICY=https (miners behind TLS)"
+        )
+    if policy not in ("http", "https"):
+        raise ValueError(f"unknown scheme policy {policy!r}")
 
 
 @dataclass(frozen=True)
@@ -223,6 +242,7 @@ class ValidatorClient:
             raise ValueError("max_response_bytes must be at least 1")
         if (legacy is None) != (selector is None):
             raise ValueError("pass both legacy and selector, or neither")
+        check_scheme_policy(scheme_policy)
         self.signer = signer
         self.timeout_s = float(timeout_s)
         self.max_attempts = max_attempts

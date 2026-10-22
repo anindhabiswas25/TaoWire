@@ -1,10 +1,11 @@
 """``tensorwire doctor``: check a miner's or validator's setup (spec 8.14).
 
 Reads the same ``TW_*`` settings as the process and checks, in order:
-Python and SDK versions, settings, the hotkey file, coldkey absence, chain
-reachability, registration, the published axon (miner) or the validator
-permit (validator), reachability of the miner's port, the clock offset,
-Redis, multi-worker safety and (validator) another process signing with the
+Python and SDK versions, settings, the scheme policy (validator), the
+hotkey file, coldkey absence, chain reachability, registration, the
+published axon (miner) or the validator permit (validator), reachability of
+the miner's port, the clock offset, Redis, multi-worker safety and
+(validator) another process signing with the
 same hotkey. Each check is ``ok``, ``warn``, ``fail`` or ``skip``; the exit
 status is 1 when any check fails.
 
@@ -35,6 +36,7 @@ from tensorwire.config import CommonSettings, MinerSettings, ValidatorSettings
 from tensorwire.crypto import HotkeySigner
 from tensorwire.errors import ConfigError, StartupError
 from tensorwire.observability.logging import configure_logging
+from tensorwire.validator.client import check_scheme_policy
 from tensorwire.validator.lock import HotkeyLock
 
 __all__ = ["Check", "Doctor", "doctor"]
@@ -95,6 +97,8 @@ class Doctor:
         settings = self._settings()
         if settings is None:
             return self.checks
+        if isinstance(settings, ValidatorSettings):
+            self._scheme(settings)
         signer = self._hotkey(settings)
         self._coldkey(settings)
         gateway = await self._chain(settings, signer)
@@ -154,6 +158,14 @@ class Doctor:
                 "settings", "ok", f"netuid {settings.netuid} on {settings.network}"
             )
         return settings
+
+    def _scheme(self, s: ValidatorSettings) -> None:
+        try:
+            check_scheme_policy(s.scheme_policy)
+        except StartupError as exc:
+            self.add("scheme", "fail", str(exc))
+            return
+        self.add("scheme", "ok", s.scheme_policy)
 
     def _hotkey(self, s: CommonSettings) -> HotkeySigner | None:
         try:

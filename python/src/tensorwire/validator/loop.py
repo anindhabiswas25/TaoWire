@@ -76,6 +76,7 @@ from tensorwire.validator.client import (
     MinerResult,
     ProtocolSelectorLike,
     ValidatorClient,
+    check_scheme_policy,
 )
 from tensorwire.validator.lock import HotkeyLock, HotkeyLockHeld
 from tensorwire.validator.scores import RoundRecord, ScoreStore
@@ -225,6 +226,7 @@ class ValidatorRunner:
     async def start(self) -> None:
         """Load the hotkey, connect, check registration, open the store."""
         s = self.settings
+        check_scheme_policy(s.scheme_policy)
         if self._check_sdk:
             report = check_sdk()
             if not report.tested:
