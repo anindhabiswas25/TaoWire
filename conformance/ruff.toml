@@ -1,0 +1,8 @@
+# Lint conformance/ (generator, Phase 5 runners) with the package's rules.
+extend = "../python/pyproject.toml"
+src = ["."]
+
+[lint]
+extend-ignore = [
+  "T201",  # print: the generator is a command-line tool
+]
