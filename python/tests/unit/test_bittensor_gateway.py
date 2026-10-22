@@ -308,6 +308,8 @@ def test_from_settings() -> None:
     assert gw._timeout_s == 12.0
     assert gw._write_timeout_s == 48.0
     assert gw._allow_private is True
+    # the miner lifecycle passes the hotkey by position
+    assert BittensorGateway.from_settings(settings, HOTKEY)._hotkey is HOTKEY
 
 
 def test_default_client_is_async_sdk_client() -> None:

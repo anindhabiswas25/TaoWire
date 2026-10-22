@@ -398,11 +398,12 @@ class BittensorGateway:
         self._lock = asyncio.Lock()
 
     @classmethod
-    def from_settings(cls, settings: Any, *, hotkey: Any = None) -> BittensorGateway:
+    def from_settings(cls, settings: Any, hotkey: Any = None) -> BittensorGateway:
         """Build a gateway from ``tensorwire.config.CommonSettings`` (or a subclass).
 
         Uses ``network``, ``chain_fallbacks``, ``chain_timeout_s`` and
-        ``allow_private_axons``.
+        ``allow_private_axons``. ``hotkey`` may be passed by position (the
+        miner's lifecycle does) or by name.
         """
         return cls(
             settings.network,

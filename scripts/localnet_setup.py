@@ -15,6 +15,11 @@ block is finalized, and attempts are spaced by blocks, not seconds. When the
 retries run out on transient errors only, the script exits with
 ``EXIT_TRANSIENT`` so ``localnet_up.sh`` can restart the chain with 12 s blocks.
 
+A new subnet's tempo is 360 blocks without fast blocks (72 minutes at 12 s),
+and validator permits only change once per tempo. Alice, the localnet sudo
+key, therefore sets the subnet's tempo to ``LOCALNET_TEMPO``, the fast-block
+default, so the validator gets its permit within minutes on either chain.
+
 LOCALNET ONLY. Every key below is derived from a public seed printed in
 this file. Anyone can recompute them. Never fund them on a real network.
 Wallets are written to ``<state-dir>/wallets``, never ``~/.bittensor``.
@@ -67,6 +72,9 @@ ROLES = (
     Role("miner_rs", 50.0),
 )
 VALIDATOR_STAKE_TAO = 500.0
+
+LOCALNET_TEMPO = 10
+"""Subnet tempo in blocks; the fast-block localnet's default."""
 
 ATTEMPTS = 10
 """Submissions per step before giving up."""
@@ -149,6 +157,9 @@ async def ensure(
 ) -> None:
     """Submit ``intent`` unless ``done()`` already holds, retrying failed submissions.
 
+    ``intent`` is a ``bt.Intent`` or a raw call builder from ``bt.calls``
+    (submitted with ``submit_call``, for root-only calls).
+
     ``done()`` is re-checked before every attempt, so a submission whose outcome
     was unknown is never applied twice. Each attempt is a new extrinsic (fresh
     nonce, fresh era) signed right after a new block is finalized, which gives
@@ -163,9 +174,7 @@ async def ensure(
             return
         try:
             await wait_for_new_finalized(client, block_time)
-            result = await client.execute(
-                intent, wallet, wait_for_inclusion=True, wait_for_finalization=True
-            )
+            result = await submit(client, intent, wallet)
         except (BittensorError, OSError, TimeoutError) as e:
             # Raised instead of returned: RPC drops, a missing MEV-shield key.
             code, message = "error", f"{type(e).__name__}: {e}"
@@ -190,6 +199,16 @@ async def ensure(
         log(f"{what}: done")
         return
     raise TransientFailure(f"{what}: failed after {attempts} attempts")
+
+
+async def submit(client: Any, intent: Any, wallet: bt.Wallet) -> Any:
+    if isinstance(intent, bt.Intent):
+        return await client.execute(
+            intent, wallet, wait_for_inclusion=True, wait_for_finalization=True
+        )
+    return await client.submit_call(
+        intent, wallet, wait_for_inclusion=True, wait_for_finalization=True
+    )
 
 
 async def wait_for_new_finalized(client: Any, block_time: float) -> None:
@@ -289,6 +308,26 @@ async def setup(
             attempts=attempts,
         )
 
+        async def tempo_set() -> bool:
+            return await subnet_tempo(client, netuid) <= LOCALNET_TEMPO
+
+        await ensure(
+            client,
+            f"set tempo of subnet {netuid} to {LOCALNET_TEMPO} (sudo)",
+            tempo_set,
+            # Sudo.sudo is "ok" even when the inner call fails; ensure() reads
+            # the tempo back, so a refused change still fails the step.
+            bt.calls.Sudo.sudo(
+                call=await client.compose(
+                    bt.calls.AdminUtils.sudo_set_tempo(
+                        netuid=netuid, tempo=LOCALNET_TEMPO
+                    )
+                )
+            ),
+            alice,
+            attempts=attempts,
+        )
+
         for name in ("validator", "miner_py", "miner_ts", "miner_go", "miner_rs"):
             wallet = wallets[name]
             await ensure(
@@ -361,6 +400,13 @@ async def fund(
 
 async def registered(client: Any, netuid: int, hotkey: str) -> bool:
     return await client.neurons.uid(hotkey_ss58=hotkey, netuid=netuid) is not None
+
+
+async def subnet_tempo(client: Any, netuid: int) -> int:
+    mg = await client.subnets.metagraph(netuid, commitments=False)
+    if mg is None:
+        raise SystemExit(f"subnet {netuid} disappeared")
+    return int(mg.tempo)
 
 
 async def subnet_started(client: Any, netuid: int) -> bool:
