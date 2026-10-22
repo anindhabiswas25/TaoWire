@@ -33,16 +33,19 @@ from typing import Any
 
 import anyio
 import anyio.to_thread
+import structlog
 from pydantic import BaseModel
 
 from tensorwire import crypto
 from tensorwire.auth.nonce_store import NonceStore
 from tensorwire.auth.verifier import DEFAULT_VERIFY_THREADS, Caller
 from tensorwire.config import LEGACY_MAX_HORIZON_DAYS
-from tensorwire.errors import LegacyAuthFailed, LegacyDisabled, TWError
+from tensorwire.errors import HandlerError, LegacyAuthFailed, LegacyDisabled, TWError
 from tensorwire.extensions.legacy_v10 import wire
 
 __all__ = ["REPLAY_NAMESPACE", "LegacyRequest", "LegacyServer"]
+
+_log = structlog.stdlib.get_logger("tensorwire.legacy_v10")
 
 #: Prefix of the sender in replay-store keys for v10 requests.
 REPLAY_NAMESPACE = "legacy_v10:"
@@ -329,6 +332,11 @@ class LegacyServer:
         through unchanged). With ``error``, the body is
         ``{"message": error.public_message}`` and the error's own headers
         (``Retry-After``) are added.
+
+        Raises :class:`~tensorwire.errors.HandlerError` (logged with the field
+        name) when a 200 ``synapse`` holds an ``inf`` / ``nan`` the JSON answer
+        would turn into ``null`` (8.11.2); the caller answers it as any other
+        handler error, through this method again.
         """
         # Typed ``object`` so any caller's "verified request" type is accepted;
         # only one this server produced counts as verified (and gets signed).
@@ -337,6 +345,16 @@ class LegacyServer:
         message = error.public_message if error is not None else "Success"
         name = _synapse_name(request_headers, synapse)
         signed = verified is not None
+        if error is None and synapse is not None:
+            field = wire.non_finite_field(synapse)
+            if field is not None:
+                _log.error(
+                    "legacy_non_finite_answer",
+                    synapse=type(synapse).__name__,
+                    field=field,
+                    hint="v10 answers are JSON: inf / nan would become null",
+                )
+                raise HandlerError()
         body, headers = wire.encode_response(
             parsed,
             status=status,

@@ -10,21 +10,27 @@
    ``sha3(concat(sha3(str(v))))``, and survives the encode → decode trip.
 4. A valid request with any one hashed field, the nonce, the uuid or the
    sender hotkey changed is rejected.
+5. A 200 answer is never silently changed (8.11.2): ``encode_response``
+   either refuses it with ``NonFiniteAnswer`` naming a field that holds
+   ``inf`` / ``nan``, or the body parses back to exactly the handler's values.
 """
 
 from __future__ import annotations
 
+import ast
 import datetime as dt
 import hashlib
 import json
+import math
+import re
 from collections.abc import Callable
 from typing import Any, ClassVar
 
 import pytest
 from bittensor import sp_core
-from hypothesis import HealthCheck, assume, given, note, settings
+from hypothesis import HealthCheck, assume, example, given, note, settings
 from hypothesis import strategies as st
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from legacy_v10_models import (
     BOB,
@@ -459,3 +465,86 @@ def test_any_single_change_is_rejected(
     assert accepted.caller.hotkey_ss58 == ALICE
     with pytest.raises(LegacyAuthFailed):
         verify(server(), changed.headers, changed.body, TextOps)
+
+
+class Answer(V10Synapse):
+    """An answer with values under ``Any`` and in typed float fields."""
+
+    dummy_input: int = 0
+    data: Any = None
+    floats: list[float] = Field(default_factory=list)
+    by_uid: dict[int, Any] = Field(default_factory=dict)
+    required_hash_fields: ClassVar[tuple[str, ...]] = ("dummy_input",)
+
+
+def _same(sent: Any, back: Any) -> bool:
+    # JSON has no tuples and only string keys; nan != nan.
+    if isinstance(sent, float) and isinstance(back, float):
+        return sent == back or (math.isnan(sent) and math.isnan(back))
+    if isinstance(sent, bool) or isinstance(back, bool):
+        return sent is back
+    if isinstance(sent, dict) and isinstance(back, dict):
+        return len(sent) == len(back) and all(
+            str(k) in back and _same(v, back[str(k)]) for k, v in sent.items()
+        )
+    if isinstance(sent, (list, tuple)) and isinstance(back, list):
+        return len(sent) == len(back) and all(map(_same, sent, back))
+    return type(sent) is type(back) and sent == back
+
+
+def _holds_non_finite(value: Any, path: str) -> bool:
+    # Follows a printed path ("data.a[1]['x y']") to a non-finite float.
+    steps = re.findall(
+        r"\.([A-Za-z_][A-Za-z0-9_]*)"
+        r"|\[(-?[0-9]+|'(?:[^'\\]|\\.)*'|\"(?:[^\"\\]|\\.)*\")\]",
+        "." + path,
+    )
+    assert "".join(f".{n}" if n else f"[{k}]" for n, k in steps) == "." + path
+    for name, key in steps:
+        if name and isinstance(value, BaseModel):
+            value = getattr(value, name)
+        else:
+            value = value[name if name else ast.literal_eval(key)]
+    return isinstance(value, float) and not math.isfinite(value)
+
+
+@settings(max_examples=400, deadline=None)
+@given(
+    data=json_values,
+    floats=st.lists(st.floats(), max_size=4),
+    by_uid=st.dictionaries(st.integers(0, 255), json_values, max_size=3),
+)
+@example(data={"a]'\"": [1.0, {"": float("-inf")}]}, floats=[], by_uid={})
+@example(data=None, floats=[float("nan")], by_uid={3: {"x": float("nan")}})
+def test_answers_are_refused_or_sent_unchanged(
+    data: Any, floats: list[float], by_uid: dict[int, Any]
+) -> None:
+    answer = Answer(data=data, floats=floats, by_uid=by_uid)
+
+    def encode() -> bytes:
+        body, _ = wire.encode_response(
+            None,
+            status=200,
+            status_message="Success",
+            process_time_s=0.0,
+            axon_ip="203.0.113.7",
+            axon_port=8091,
+            axon_hotkey=BOB,
+            name="Answer",
+            synapse=answer,
+        )
+        return body
+
+    field = wire.non_finite_field(answer)
+    if field is not None:
+        note(f"refused at {field}")
+        with pytest.raises(wire.NonFiniteAnswer) as refused:
+            encode()
+        assert refused.value.field == field
+        assert re.match(r"(data|by_uid)\b", field)
+        assert _holds_non_finite(answer, field)
+        return
+    back = json.loads(encode())
+    assert _same(data, back["data"])
+    assert _same(floats, back["floats"])
+    assert _same(by_uid, back["by_uid"])

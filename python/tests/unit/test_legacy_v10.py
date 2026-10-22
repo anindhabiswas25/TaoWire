@@ -13,6 +13,7 @@ from typing import Any, ClassVar
 
 import httpx
 import pytest
+import structlog
 from pydantic import BaseModel
 
 from legacy_v10_models import BOB, Dummy, LegacyFieldHash, NoHash, PlainDummy, TextOps
@@ -21,6 +22,7 @@ from tensorwire.auth.nonce_store import MemoryNonceStore
 from tensorwire.chain.axon import Endpoint
 from tensorwire.chain.gateway import NeuronView
 from tensorwire.errors import (
+    HandlerError,
     LegacyAuthFailed,
     LegacyDisabled,
     RateLimited,
@@ -369,6 +371,101 @@ def test_non_finite_floats_under_any_keep_their_hash() -> None:
     assert b'"w": [NaN]' in req.body
     ok = verify(server(), req, AnyFloats)
     assert wire.body_hash(ok.synapse) == req.computed_body_hash
+
+
+class Nested(BaseModel):
+    v: Any = None
+
+
+class AnswerFloats(BaseModel):
+    dummy_input: int
+    score: float = 0.0
+    scores: tuple[float, ...] = ()
+    meta: dict[str, Any] = {}
+    by_uid: dict[int, Any] = {}
+    seen: frozenset[float] = frozenset()
+    inner: Nested = Nested()
+    required_hash_fields: ClassVar[tuple[str, ...]] = ("dummy_input",)
+
+
+INF = float("inf")
+NAN = float("nan")
+
+
+@pytest.mark.parametrize(
+    ("update", "field"),
+    [
+        ({}, None),
+        ({"score": INF, "scores": (1.0, NAN)}, None),  # float fields keep the value
+        ({"meta": {"a": 1.0, "b": {"c": [0.0, -INF]}}}, "meta.b.c[1]"),
+        ({"by_uid": {7: NAN}}, "by_uid[7]"),
+        ({"meta": {"a.b": {"": [INF]}}}, "meta['a.b'][''][0]"),
+        ({"seen": frozenset({NAN})}, "seen"),
+        ({"inner": Nested(v=[INF])}, "inner.v[0]"),
+        ({"meta": {"x": INF}, "inner": Nested(v=NAN)}, "meta.x"),  # the first one
+    ],
+)
+def test_non_finite_field(update: dict[str, Any], field: str | None) -> None:
+    synapse = AnswerFloats(dummy_input=1).model_copy(update=update)
+    assert wire.non_finite_field(synapse) == field
+
+
+def test_non_finite_answer_is_refused_never_nulled() -> None:
+    # 8.11.2 (D11): a 200 answer whose JSON would hold null where the handler
+    # put inf / nan is refused; the caller answers 500 tw.handler_error.
+    srv = server()
+    req = request(Dummy(dummy_input=1))
+    verified = verify(srv, req)
+    bad = AnswerFloats(dummy_input=1, meta={"r": INF})
+    with structlog.testing.capture_logs() as logs, pytest.raises(HandlerError):
+        srv.respond(
+            req.headers,
+            request=verified,
+            status=200,
+            synapse=bad,
+            error=None,
+            process_time_s=0.0,
+        )
+    assert [(e["event"], e["field"]) for e in logs] == [
+        ("legacy_non_finite_answer", "meta.r")
+    ]
+    with pytest.raises(wire.NonFiniteAnswer, match=r"'meta\.r'") as info:
+        wire.encode_response(
+            None,
+            status=200,
+            status_message="Success",
+            process_time_s=0.0,
+            axon_ip="203.0.113.7",
+            axon_port=8091,
+            axon_hotkey=BOB,
+            name="AnswerFloats",
+            synapse=bad,
+        )
+    assert info.value.field == "meta.r"
+    # The error answer for it is built normally (no synapse on errors).
+    body, headers = srv.respond(
+        req.headers,
+        request=verified,
+        status=500,
+        synapse=bad,
+        error=HandlerError(),
+        process_time_s=0.0,
+    )
+    assert json.loads(body) == {"message": HandlerError().public_message}
+    assert dict(headers)["bt_header_axon_status_code"] == "500"
+    # Typed floats are sent as Infinity / NaN and parse back unchanged.
+    ok = AnswerFloats(dummy_input=1, score=INF, scores=(NAN,))
+    body, _ = srv.respond(
+        req.headers,
+        request=verified,
+        status=200,
+        synapse=ok,
+        error=None,
+        process_time_s=0.0,
+    )
+    back = json.loads(body)
+    assert back["score"] == INF
+    assert back["scores"][0] != back["scores"][0]  # nan
 
 
 def test_native_body_hash_route_and_plain_model() -> None:

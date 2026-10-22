@@ -26,6 +26,7 @@ from typing import Any, ClassVar
 import httpx
 import pydantic
 import pytest
+import structlog
 
 from legacy_v10_models import BY_ID, body_bytes, nonce_of, request_headers
 
@@ -42,7 +43,7 @@ from tensorwire.auth.nonce_store import MemoryNonceStore
 from tensorwire.chain.gateway import NeuronView
 from tensorwire.compat.synapse import Synapse
 from tensorwire.config import MinerSettings
-from tensorwire.errors import ConfigError, Forbidden
+from tensorwire.errors import ConfigError, Forbidden, HandlerError
 from tensorwire.extensions.legacy_v10 import wire
 from tensorwire.extensions.legacy_v10.client import (
     LegacyClient,
@@ -246,6 +247,89 @@ async def test_12_rejected_after_the_end_date(
     assert r.status_code == 410
     assert r.headers["bt_header_axon_status_code"] == "410"
     assert "bt_header_axon_signature" not in r.headers
+
+
+class Scores(Synapse):
+    dummy_input: int
+    score: float | None = None
+    extra: dict[str, Any] = pydantic.Field(default_factory=dict)
+    required_hash_fields: ClassVar[tuple[str, ...]] = ("dummy_input",)
+
+
+def _scores_miner(kwargs: dict[str, Any], update: dict[str, Any]) -> Miner:
+    kwargs = dict(kwargs)
+    kwargs["settings"] = kwargs["settings"].model_copy(
+        update={"legacy_v10_until": UNTIL}
+    )
+    miner = Miner(**kwargs, legacy_server=LegacyServer)
+
+    @miner.route("/Scores", request=Scores, response=Scores, legacy_synapse=Scores)
+    async def scores(s: Scores, ctx: RouteContext) -> Scores:
+        return s.model_copy(update=update)
+
+    return miner
+
+
+def _scores_request(clock: FakeClock) -> wire.EncodedRequest:
+    return wire.encode_request(
+        Scores(dummy_input=1),
+        signer=crypto.HotkeySigner(dev_key("alice").keypair),
+        axon_hotkey=BOB,
+        axon_ip="44.1.2.3",
+        axon_port=8091,
+        nonce=clock.now_ns(),
+        uuid="0f6e3a1c-0000-4000-8000-000000000002",
+        timeout=12.0,
+    )
+
+
+@pytest.mark.parametrize(
+    ("update", "field"),
+    [
+        ({"extra": {"r": float("inf")}}, "extra.r"),
+        ({"score": 1.0, "extra": {"w": [0.5, float("nan")]}}, "extra.w[1]"),
+    ],
+)
+async def test_12_non_finite_answer_is_a_handler_error(
+    tw_miner_kwargs: dict[str, Any],
+    tw_clock: FakeClock,
+    update: dict[str, Any],
+    field: str,
+) -> None:
+    # 8.11.2 (D11): JSON would turn inf / nan under Any into null; the answer is
+    # never silently changed: 500 tw.handler_error in v10 shape, the log names
+    # the field.
+    miner = _scores_miner(tw_miner_kwargs, update)
+    req = _scores_request(tw_clock)
+    async with miner.running() as app:
+        with structlog.testing.capture_logs() as logs:
+            r = await post(app, req.path, req.headers, req.body)
+    assert r.status_code == 500, r.text
+    assert r.headers["bt_header_axon_status_code"] == "500"
+    assert r.json() == {"message": HandlerError().public_message}
+    assert_signed_by_bob(r, ALICE)  # post-auth error: signed, as other 500s
+    events = [e for e in logs if e["event"] == "legacy_non_finite_answer"]
+    assert [(e["field"], e["synapse"], e["log_level"]) for e in events] == [
+        (field, "Scores", "error")
+    ]
+    text = miner.metrics.render().decode()
+    assert 'direction="inbound",result="tw.handler_error"} 1.0' in text
+
+
+async def test_12_non_finite_typed_float_is_sent_unchanged(
+    tw_miner_kwargs: dict[str, Any], tw_clock: FakeClock
+) -> None:
+    # A float field keeps inf in JSON mode: sent as Infinity, as a v10 Dendrite
+    # sends requests, and parsed back to inf. Nothing changed, so 200.
+    miner = _scores_miner(tw_miner_kwargs, {"score": float("inf")})
+    req = _scores_request(tw_clock)
+    async with miner.running() as app:
+        r = await post(app, req.path, req.headers, req.body)
+    assert r.status_code == 200, r.text
+    assert b'"score":Infinity' in r.content
+    decoded = wire.decode_response(Scores, r.status_code, r.headers.items(), r.content)
+    assert isinstance(decoded.synapse, Scores)
+    assert decoded.synapse.score == float("inf")
 
 
 def test_12_end_date_limits_at_startup(tw_miner_kwargs: dict[str, Any]) -> None:
