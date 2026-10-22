@@ -235,6 +235,15 @@ class ValidatorRunner:
         hotkey = self._load_hotkey()
         nonce = None if self._clock_ns is None else MonotonicNonce(self._clock_ns)
         signer = RequestSigner(hotkey, nonce=nonce)
+        raw = HotkeySigner(hotkey)
+        if s.legacy_v10_client == "auto" and raw.scheme != "sr25519":
+            # Spec 8.11.3: v10 Axons verify sr25519 only.
+            raise StartupError(
+                "TW_LEGACY_V10_CLIENT=auto needs an sr25519 validator hotkey "
+                f"(this one is {raw.scheme}): v10 Axons verify sr25519 "
+                "signatures only. Set TW_LEGACY_V10_CLIENT=off and unset "
+                "TW_LEGACY_V10_CLIENT_UNTIL, or use an sr25519 hotkey"
+            )
         self.hotkey_ss58 = signer.hotkey_ss58
         self._lock = HotkeyLock(s.state_dir, signer.hotkey_ss58)
         try:
@@ -251,7 +260,7 @@ class ValidatorRunner:
                     f"{s.netuid} -w {s.wallet_name} -H {s.wallet_hotkey}",
                     exit_code=3,
                 )
-            self.client = self._build_client(signer, HotkeySigner(hotkey))
+            self.client = self._build_client(signer, raw)
             path = self._store_path or (s.state_dir / "scores.db")
             self.store = ScoreStore(path, s.netuid, alpha=s.score_alpha)
             self.weights = WeightScheduler(
