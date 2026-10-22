@@ -18,20 +18,49 @@ tensors; wrap them in ``numpy.array(...)`` where the code needs arrays.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 from tensorwire.chain.gateway import MetagraphView, NeuronView
 from tensorwire.chain.metagraph_cache import MetagraphSource
 from tensorwire.compat.dendrite import AxonInfo
 
+if TYPE_CHECKING:
+    from tensorwire.miner.app import Miner
+
 __all__ = ["Metagraph"]
+
+
+class _Snapshots(Protocol):
+    def snapshot(self) -> MetagraphView | None: ...
+
+
+class _MinerSnapshots:
+    """The running miner's metagraph cache (available once it has started)."""
+
+    def __init__(self, miner: Miner) -> None:
+        self._miner = miner
+
+    def snapshot(self) -> MetagraphView | None:
+        if not self._miner.lifecycle.ready:
+            return None
+        return self._miner.lifecycle.runtime.metagraph.snapshot()
 
 
 class Metagraph:
     """``bt.metagraph`` attributes over a TensorWire metagraph."""
 
-    def __init__(self, source: MetagraphSource | MetagraphView) -> None:
+    def __init__(self, source: MetagraphSource | MetagraphView | _Snapshots) -> None:
         self._source = source
+
+    @classmethod
+    def of_miner(cls, miner: Miner) -> Metagraph:
+        """The view of a :class:`~tensorwire.Miner`'s own metagraph cache.
+
+        Usable in request handlers (``blacklist_fn``, ``priority_fn``,
+        ``forward_fn``); before the miner has started it raises
+        ``RuntimeError`` on access.
+        """
+        return cls(_MinerSnapshots(miner))
 
     def snapshot(self) -> MetagraphView:
         """The current snapshot. ``RuntimeError`` before the first one."""

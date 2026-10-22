@@ -47,6 +47,8 @@ dev = [
   "ruff>=0.5",
   "pip-audit>=2.7",
   "import-linter>=2.0",
+  "numpy>=1.26",       # the ported v10 template (examples/migrations) uses it in tests
+  "pyyaml>=6.0",       # tests/localnet reads examples/migrations/.../mixed-fleet.yml
 ]
 
 [project.scripts]
@@ -86,6 +88,9 @@ ignore = [
   "S101", "S104", "S105", "S106", "S311", "ARG001", "ARG002", "PLC0415", "PLR0915", "PLR0917",
   "PLW0108", "ARG005", "ASYNC110",
 ]
+
+[tool.ruff.lint.isort]
+known-first-party = ["tensorwire"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
