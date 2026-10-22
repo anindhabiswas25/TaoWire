@@ -310,7 +310,7 @@ class LegacyServer:
         self,
         request_headers: Headers,
         *,
-        request: LegacyRequest | None = None,
+        request: object | None = None,
         status: int,
         synapse: BaseModel | None,
         error: TWError | None,
@@ -320,18 +320,23 @@ class LegacyServer:
         """Build the v10 answer to a v10 request: ``(body, headers)``.
 
         ``request`` is what :meth:`verify` returned, or ``None`` when the
-        request was rejected before or by it. Only answers to verified
-        requests carry the v10 axon signature, so unauthenticated input never
+        request was rejected before or by it (anything that is not a
+        :class:`LegacyRequest` from this module counts as ``None``). Only
+        answers to verified requests carry the v10 axon signature, so
+        unauthenticated input never
         makes the miner sign anything. On 200, ``synapse`` is the handler's
         result (``raw_body`` passes a native route's Synapse-shaped JSON
         through unchanged). With ``error``, the body is
         ``{"message": error.public_message}`` and the error's own headers
         (``Retry-After``) are added.
         """
-        parsed = request.headers if request is not None else _try_parse(request_headers)
+        # Typed ``object`` so any caller's "verified request" type is accepted;
+        # only one this server produced counts as verified (and gets signed).
+        verified = request if isinstance(request, LegacyRequest) else None
+        parsed = verified.headers if verified else _try_parse(request_headers)
         message = error.public_message if error is not None else "Success"
         name = _synapse_name(request_headers, synapse)
-        signed = request is not None
+        signed = verified is not None
         body, headers = wire.encode_response(
             parsed,
             status=status,

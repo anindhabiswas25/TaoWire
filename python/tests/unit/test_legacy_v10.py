@@ -439,6 +439,16 @@ def test_respond_shapes() -> None:
     )
     assert body == raw
     assert dict(headers)["bt_header_axon_signature"].startswith("0x")
+    # A request object this server did not produce is not trusted: no signature.
+    _, foreign = srv.respond(
+        req.headers,
+        request=object(),
+        status=200,
+        synapse=verified.synapse,
+        error=None,
+        process_time_s=0.0,
+    )
+    assert "bt_header_axon_signature" not in dict(foreign)
     # Axon nonces strictly increase across answers.
     _, h2 = srv.respond(
         req.headers,
@@ -560,6 +570,7 @@ def test_selector_rules() -> None:
     assert sel.choose(miner) == "btauth/1"
     assert not sel.after_btauth(miner, status=502, headers=[], verified=False)
     assert sel.known(BOB) is None  # an unmarked failure proves nothing
+    assert not sel.after_btauth(miner, status=None, headers=None, verified=False)
     assert sel.after_btauth(miner, status=500, headers=marker, verified=False)
     assert sel.choose(miner) == sel.known(BOB) == "v10"
     sel.reprobe()

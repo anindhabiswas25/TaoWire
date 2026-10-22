@@ -204,13 +204,19 @@ class ProtocolSelector:
         return "v10" if self.known(neuron.hotkey) == "v10" else "btauth/1"
 
     def after_btauth(
-        self, neuron: NeuronView, *, status: int, headers: Headers, verified: bool
+        self,
+        neuron: NeuronView,
+        *,
+        status: int | None,
+        headers: Headers | None,
+        verified: bool,
     ) -> bool:
         """Record a btauth/1 answer; True = send one v10 attempt now.
 
         ``verified`` (a valid twresp/1 signature, signed errors included)
         makes the hotkey btauth-only until it changes: no downgrade.
-        Unverified answers prove nothing either way and change nothing.
+        Unverified answers prove nothing either way and change nothing;
+        ``status``/``headers`` are ``None`` when no answer arrived.
         """
         if verified:
             self._set(neuron.hotkey, "btauth/1")
@@ -219,6 +225,8 @@ class ProtocolSelector:
             not self.enabled()
             or neuron.axon_protocol == self._tag
             or self.known(neuron.hotkey) == "btauth/1"
+            or status is None
+            or headers is None
             or not wire.is_v10_response(status, headers)
         ):
             return False
