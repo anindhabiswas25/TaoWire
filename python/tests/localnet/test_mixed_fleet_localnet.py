@@ -105,6 +105,8 @@ def evidence_dir() -> Path | None:
 
 
 def stop(proc: subprocess.Popen[bytes]) -> None:
+    if proc.stdin is not None:
+        proc.stdin.close()
     proc.terminate()
     try:
         proc.wait(timeout=30)
@@ -170,7 +172,12 @@ def tw_miner(localnet: Localnet, tmp_path: Path) -> Iterator[dict[str, Any]]:
             "TW_NTP_SERVERS": "",
             "TW_METAGRAPH_REFRESH_S": "10",
             "TW_LEGACY_V10_UNTIL": until(),
-            # 2 validators x 200 sequential requests: above the default 20/s burst 40
+            # Both validators run on this host, so they share one source IP
+            # (127.0.0.1) and the pre-auth per-IP bucket (default 50/s, burst
+            # 100). On a real subnet each validator has its own address.
+            "TW_RATE_IP_PER_S": "1000",
+            "TW_RATE_IP_BURST": "1000",
+            # 200 back-to-back requests per validator: above 20/s, burst 40.
             "TW_RATE_HOTKEY_PER_S": "200",
             "TW_RATE_HOTKEY_BURST": "400",
         }
