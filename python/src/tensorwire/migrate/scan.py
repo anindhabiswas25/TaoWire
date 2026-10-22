@@ -164,7 +164,9 @@ def _synapse_shape(
                 if target == "required_hash_fields":
                     if small.value is not None:
                         hash_fields = _hash_list(small.value)
-                elif "ClassVar" not in module.code_for_node(small.annotation.annotation):
+                elif "ClassVar" not in module.code_for_node(
+                    small.annotation.annotation
+                ):
                     fields.append((target, small.value is not None))
             elif isinstance(small, cst.Assign) and any(
                 isinstance(t.target, cst.Name)

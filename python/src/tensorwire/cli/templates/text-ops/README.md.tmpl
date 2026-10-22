@@ -1,0 +1,40 @@
+# text-ops-subnet
+
+A Bittensor subnet built on [TensorWire](https://github.com/) (scaffolded by
+`tensorwire init`). It starts as the text-ops example: validators send random
+text and an operation (`upper`, `reverse`, `sha256`) to `POST /v1/transform`,
+miners answer, and validators score exact answers weighted by latency.
+
+Replace the task in `text_ops/protocol.py`, the handler in `text_ops/miner.py`
+and the scoring in `text_ops/scoring.py` with your subnet's own.
+
+## Layout
+
+| File | What it is |
+|---|---|
+| `text_ops/protocol.py` | Request / response models and the expected answer |
+| `text_ops/miner.py` | The miner: one protected route |
+| `text_ops/validator.py` | The validator: task + scoring; TensorWire runs the loop and sets weights |
+| `text_ops/scoring.py` | Score of one answer |
+| `tests/` | In-process tests on TensorWire's FakeChain (no network) |
+| `.env.example` | The `TW_*` settings you need |
+| `docker-compose.yml` | Miner + validator + Redis next to a localnet chain |
+
+## Run the tests
+
+```bash
+pip install -e '.[dev]'
+pytest
+```
+
+## Run it
+
+Copy `.env.example` to `.env`, set your wallet names and `TW_EXTERNAL_IP`, then:
+
+```bash
+python -m text_ops.miner        # the miner (hotkey must be registered)
+python -m text_ops.validator    # the validator (needs a validator permit to set weights)
+```
+
+Settings are `TW_*` environment variables; unknown `TW_*` names are refused
+at startup. Neither process ever reads a coldkey.
