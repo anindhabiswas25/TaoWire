@@ -109,6 +109,7 @@ async def test_no_publish_when_not_the_publisher(
 async def test_serve_axon_rate_limited_is_retried_after_the_window(
     tw_miner_kwargs: dict[str, Any], fake_chain: FakeChain
 ) -> None:
+    fake_chain.set_hyperparameters(TEST_NETUID, serving_rate_limit=35)
     fake_chain.reject_next("serve_axon", "rate_limited")
     miner = build(tw_miner_kwargs)
     miner.lifecycle.parts.axon_retry_poll_s = 0.01
@@ -122,7 +123,7 @@ async def test_serve_axon_rate_limited_is_retried_after_the_window(
                     fake_chain.advance(5)
                     await asyncio.sleep(0.01)
             waited = fake_chain.axon_publications()[0].block - start
-            assert waited >= lifecycle_mod.SERVING_RATE_LIMIT_BLOCKS
+            assert 35 <= waited < 50  # the subnet's window, not a fixed one
             assert miner.lifecycle.runtime.axon_in_sync is True
     assert "serve_axon_rate_limited" in events(logs, "warning")
 
@@ -131,7 +132,7 @@ async def test_axon_retry_survives_chain_outage(
     tw_miner_kwargs: dict[str, Any], fake_chain: FakeChain
 ) -> None:
     fake_chain.reject_next("serve_axon", "rate_limited")
-    fake_chain.fail_next("block", times=1)
+    fake_chain.fail_next("serving_rate_limit", times=1)
     with structlog.testing.capture_logs() as logs:
         async with build(tw_miner_kwargs).running():
             await asyncio.sleep(0.05)
@@ -250,16 +251,6 @@ async def test_startup_timeout(tw_miner_kwargs: dict[str, Any]) -> None:
     assert source.stopped
 
 
-async def test_real_chain_not_in_this_build(
-    tw_miner_kwargs: dict[str, Any], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Passes with or without Engineer B's chain classes merged.
-    monkeypatch.delattr(lifecycle_mod.gateway_module, "BittensorGateway", raising=False)
-    monkeypatch.delattr(lifecycle_mod.cache_module, "MetagraphCache", raising=False)
-    with pytest.raises(StartupError, match="real chain gateway is not in this build"):
-        await build(tw_miner_kwargs, gateway=None, metagraph=None).lifecycle.start()
-
-
 async def test_real_chain_factories_are_used_when_present(
     tw_miner_kwargs: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -281,12 +272,8 @@ async def test_real_chain_factories_are_used_when_present(
             on_refresh_failure()
             return FakeMetagraphSource(gateway, settings.netuid)
 
-    monkeypatch.setattr(
-        lifecycle_mod.gateway_module, "BittensorGateway", Gateway, raising=False
-    )
-    monkeypatch.setattr(
-        lifecycle_mod.cache_module, "MetagraphCache", Cache, raising=False
-    )
+    monkeypatch.setattr(lifecycle_mod, "BittensorGateway", Gateway)
+    monkeypatch.setattr(lifecycle_mod, "MetagraphCache", Cache)
     miner = build(tw_miner_kwargs, gateway=None, metagraph=None)
     async with miner.running():
         assert built == {"gateway": (TEST_NETUID, BOB.ss58), "cache": chain}

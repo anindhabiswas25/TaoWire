@@ -16,8 +16,8 @@ Startup, in order:
 6. Check the clock against NTP.
 7. Publish the axon if the on-chain one differs from
    ``TW_EXTERNAL_IP:TW_EXTERNAL_PORT`` (only when ``TW_AUTO_SERVE_AXON=1`` and
-   ``TW_AXON_PUBLISHER=1``). ``rate_limited`` is retried after the serving
-   rate limit.
+   ``TW_AXON_PUBLISHER=1``). ``rate_limited`` is retried after the subnet's
+   ``serving_rate_limit`` blocks, read from the chain.
 8. Start background tasks: clock check (10 min), axon drift check (30 min),
    metagraph gauges.
 9. Mark ready.
@@ -51,22 +51,29 @@ from tensorwire.auth.keys import (
 from tensorwire.auth.nonce_store import MemoryNonceStore, NonceStore, RedisNonceStore
 from tensorwire.auth.sdk_check import check_sdk
 from tensorwire.auth.verifier import RequestVerifier
-from tensorwire.chain import gateway as gateway_module
-from tensorwire.chain import metagraph_cache as cache_module
 from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import ChainGateway, GatewayError
-from tensorwire.chain.metagraph_cache import MetagraphSource, StalenessStage
+from tensorwire.chain.gateway import BittensorGateway, ChainGateway, GatewayError
+from tensorwire.chain.metagraph_cache import (
+    MetagraphCache,
+    MetagraphSource,
+    StalenessStage,
+)
 from tensorwire.config import MinerSettings
 from tensorwire.crypto import HotkeySigner
 from tensorwire.errors import StartupError
 from tensorwire.limits.ratelimit import MemoryRateLimiter, RateLimiter
+from tensorwire.miner.legacy import (
+    LegacyServerFactory,
+    LegacyServerLike,
+    LegacyTraffic,
+    build_legacy_server,
+)
 from tensorwire.observability.metrics import Metrics
 from tensorwire.policy.caller import CallerGate
 
 __all__ = [
     "AXON_DRIFT_INTERVAL_S",
     "DEGRADED_WARN_INTERVAL_S",
-    "SERVING_RATE_LIMIT_BLOCKS",
     "Lifecycle",
     "MinerParts",
     "Readiness",
@@ -75,8 +82,6 @@ __all__ = [
 
 #: Axon drift check period (spec 8.7.3 step 8).
 AXON_DRIFT_INTERVAL_S = 1800.0
-#: Blocks to wait after a ``rate_limited`` ServeAxon (mainnet ``serving_rate_limit``).
-SERVING_RATE_LIMIT_BLOCKS = 50
 #: Seconds between two "metagraph degraded" warnings (spec 8.5.1).
 DEGRADED_WARN_INTERVAL_S = 300.0
 _GAUGE_INTERVAL_S = 5.0
@@ -101,6 +106,8 @@ class MinerParts:
     ntp_query: NtpQuery | None = None
     check_sdk: bool = True
     axon_retry_poll_s: float = 12.0
+    legacy_server: LegacyServerFactory | None = None
+    """Builds the v10 bridge (default: ``legacy_v10.server.LegacyServer``)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,6 +124,7 @@ class Runtime:
     """What the request path needs, available once startup reached step 5."""
 
     hotkey_ss58: str
+    signer: HotkeySigner
     gateway: ChainGateway
     metagraph: MetagraphSource
     store: NonceStore
@@ -125,6 +133,7 @@ class Runtime:
     gate: CallerGate
     hotkey_limiter: RateLimiter
     clock: ClockGuard
+    legacy: LegacyServerLike | None = None
     axon_in_sync: bool | None = None
     tasks: list[asyncio.Task[None]] = field(default_factory=list)
 
@@ -144,18 +153,11 @@ def _real_chain(
 ) -> tuple[ChainGateway, MetagraphSource]:
     """Build the production ``BittensorGateway`` / ``MetagraphCache`` from settings.
 
-    Both classes are Engineer B's (``chain/``); a given ``gateway`` is reused.
+    A given ``gateway`` is reused.
     """
-    gateway_cls: Any = getattr(gateway_module, "BittensorGateway", None)
-    cache_cls: Any = getattr(cache_module, "MetagraphCache", None)
-    if (gateway is None and gateway_cls is None) or cache_cls is None:
-        raise StartupError(
-            "the real chain gateway is not in this build; pass gateway= and "
-            "metagraph= to Miner"
-        )
     if gateway is None:
-        gateway = gateway_cls.from_settings(settings, hotkey)
-    cache: MetagraphSource = cache_cls.from_settings(
+        gateway = BittensorGateway.from_settings(settings, hotkey)
+    cache: MetagraphSource = MetagraphCache.from_settings(
         gateway, settings, on_refresh_failure=metrics.metagraph_refresh_failures.inc
     )
     return gateway, cache
@@ -174,6 +176,13 @@ class Lifecycle:
         self._ready = False
         self._stopping = False
         self._last_degraded_warning: float | None = None
+        #: Inbound legacy v10 calls: counter, logs, days-remaining gauge.
+        self.legacy_traffic = LegacyTraffic(
+            metrics,
+            direction="inbound",
+            monotonic=parts.monotonic,
+            until=settings.legacy_v10_until,
+        )
 
     @property
     def runtime(self) -> Runtime:
@@ -214,7 +223,7 @@ class Lifecycle:
                 exit_code=3,
             )
         try:
-            runtime = self._build_runtime(signer.ss58_address, gateway, metagraph)
+            runtime = self._build_runtime(signer, gateway, metagraph)
         except BaseException:
             await self._close_chain(gateway, metagraph)
             raise
@@ -296,9 +305,10 @@ class Lifecycle:
             await gateway.close()
 
     def _build_runtime(
-        self, hotkey_ss58: str, gateway: ChainGateway, metagraph: MetagraphSource
+        self, signer: HotkeySigner, gateway: ChainGateway, metagraph: MetagraphSource
     ) -> Runtime:
         s = self.settings
+        hotkey_ss58 = signer.ss58_address
         store = self.parts.nonce_store
         if store is None and s.redis_url is not None:
             try:
@@ -341,8 +351,22 @@ class Lifecycle:
             query=self.parts.ntp_query,
             on_reading=self._on_clock_reading,
         )
+        legacy = build_legacy_server(
+            s,
+            signer=signer,
+            store=store,
+            now_ns=self.parts.clock_ns,
+            factory=self.parts.legacy_server,
+        )
+        if legacy is not None:
+            _log.warning(
+                "legacy_v10_inbound_enabled",
+                until=s.legacy_v10_until.isoformat() if s.legacy_v10_until else None,
+                hint="v10 Dendrite requests are accepted until this date",
+            )
         return Runtime(
             hotkey_ss58=hotkey_ss58,
+            signer=signer,
             gateway=gateway,
             metagraph=metagraph,
             store=store,
@@ -357,6 +381,7 @@ class Lifecycle:
                 clock=self.parts.monotonic,
             ),
             clock=clock,
+            legacy=legacy,
         )
 
     def _on_clock_reading(self, reading: ClockReading) -> None:
@@ -423,11 +448,7 @@ class Lifecycle:
             return True
         rt.axon_in_sync = False
         if outcome.code == "rate_limited":
-            _log.warning(
-                "serve_axon_rate_limited",
-                remediation=outcome.remediation,
-                retry_after_blocks=SERVING_RATE_LIMIT_BLOCKS,
-            )
+            _log.warning("serve_axon_rate_limited", remediation=outcome.remediation)
             rt.tasks.append(self._spawn(self._retry_axon_later(), "axon_retry"))
         else:
             _log.error(
@@ -440,7 +461,9 @@ class Lifecycle:
     async def _retry_axon_later(self) -> None:
         rt = self.runtime
         try:
-            target = await rt.gateway.block() + SERVING_RATE_LIMIT_BLOCKS
+            window = await rt.gateway.serving_rate_limit(self.settings.netuid)
+            target = await rt.gateway.block() + window
+            _log.info("serve_axon_retry_scheduled", after_blocks=window)
             # Polls a remote value (the block height); there is no event to wait on.
             while await rt.gateway.block() < target:  # noqa: ASYNC110
                 await anyio.sleep(self.parts.axon_retry_poll_s)

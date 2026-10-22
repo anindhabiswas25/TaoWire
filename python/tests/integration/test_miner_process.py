@@ -150,6 +150,18 @@ def test_run_serves_signed_requests_and_stops_cleanly(setup: dict[str, object]) 
     assert '"event": "miner_stopped"' in out
 
 
+def test_ctrl_c_stops_cleanly_without_a_traceback(setup: dict[str, object]) -> None:
+    proc = start(setup, "registered")
+    try:
+        wait_ready(setup["port"], proc)  # type: ignore[arg-type]
+    finally:
+        proc.send_signal(signal.SIGINT)
+        out, _ = proc.communicate(timeout=20)
+    assert proc.returncode == 130, out
+    assert '"event": "miner_stopped"' in out
+    assert "Traceback" not in out
+
+
 def test_unregistered_hotkey_exits_with_code_3(setup: dict[str, object]) -> None:
     proc = start(setup, "unregistered")
     out, _ = proc.communicate(timeout=30)

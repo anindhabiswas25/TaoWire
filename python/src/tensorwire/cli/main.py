@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import typer
 
+from tensorwire.cli.doctor import doctor
+from tensorwire.cli.init_cmd import init
+from tensorwire.cli.migrate_cmd import migrate_app
 from tensorwire.cli.sign_request import sign_request
 from tensorwire.version import __version__
 
@@ -32,4 +35,7 @@ def main(
     """TensorWire: networking kit for Bittensor v11 subnets."""
 
 
+app.command("doctor")(doctor)
+app.command("init")(init)
 app.command("sign-request")(sign_request)
+app.add_typer(migrate_app, name="migrate")

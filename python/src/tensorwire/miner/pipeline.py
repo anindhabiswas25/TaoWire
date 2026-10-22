@@ -12,11 +12,19 @@ rest for one route:
 [8]   per-hotkey, per-route rate limit (429)
 [9]   parse the verified raw body into the request model (422)
 [10]  the handler, with a timeout (504 / 500)
-[11]  serialize and send
+[11]  serialize, sign the response (``twresp/1``, spec 9.1) and send
 
 Cheap rejects come first; the signature check runs only after the size and
 IP limits, and the replay store is written only after the signature
 verifies (fact A4). Handlers never see bytes that were not verified.
+
+Responses are signed when ``TW_SIGN_RESPONSES=1`` (the default): every 200,
+and every error raised after the caller was authenticated (Appendix A,
+"Response signed?"). Errors before that are never signed.
+
+Legacy v10 requests (spec 8.11.2) take the same path with the bridge's
+verifier at step [6] and are answered in v10 shape; they are not signed
+with ``twresp/1`` (v10 Dendrites do not read it).
 """
 
 from __future__ import annotations
@@ -30,19 +38,24 @@ from urllib.parse import quote
 import anyio
 import anyio.to_thread
 import structlog
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 
+from tensorwire.auth.verifier import Caller
 from tensorwire.errors import (
     HandlerError,
     HandlerTimeout,
+    InvalidRequest,
+    LegacyAuthFailed,
     PayloadTooLarge,
     RateLimited,
     ReplayStoreUnavailable,
     TWError,
 )
-from tensorwire.miner.lifecycle import Lifecycle
+from tensorwire.extensions.response_sig import sign_response
+from tensorwire.miner.legacy import LegacyRequestLike, LegacyServerLike
+from tensorwire.miner.lifecycle import Lifecycle, Runtime
 from tensorwire.miner.routes import Route, RouteContext
 from tensorwire.observability.metrics import Metrics
 from tensorwire.observability.middleware import state_of
@@ -84,6 +97,8 @@ async def _read_body(request: Request, limit: int) -> bytes:
 
 
 def _serialize(route: Route, result: Any) -> tuple[bytes, str]:
+    if route.encode is not None and not isinstance(result, (bytes, bytearray)):
+        return route.encode(result), "application/json"
     if isinstance(result, (bytes, bytearray, memoryview)):
         return bytes(result), "application/octet-stream"
     model = route.response_model
@@ -100,28 +115,83 @@ def _serialize(route: Route, result: Any) -> tuple[bytes, str]:
 
 
 class RouteEndpoint:
-    """Runs steps 2-11 of the request path for one route."""
+    """Runs steps 2-11 of the request path for one route.
 
-    def __init__(self, route: Route, lifecycle: Lifecycle, metrics: Metrics) -> None:
+    ``legacy_only`` marks the extra ``/<SynapseName>`` path mounted for a
+    native route that also accepts v10 requests: btauth/1 requests there are
+    answered 404.
+    """
+
+    def __init__(
+        self,
+        route: Route,
+        lifecycle: Lifecycle,
+        metrics: Metrics,
+        *,
+        legacy_only: bool = False,
+    ) -> None:
         self.route = route
         self._lifecycle = lifecycle
         self._metrics = metrics
+        self._legacy_only = legacy_only
 
     async def endpoint(self, request: Request) -> Response:
         """The Starlette endpoint (a bound method: Starlette passes a ``Request``)."""
         state = state_of(request.scope)
         state["tw_route"] = self.route.path
         request_id: str | None = state.get("request_id")
+        started = time.perf_counter()
+        legacy = self._legacy_server(request)
+        if legacy is None and self._legacy_only:
+            return Response(status_code=404)
         try:
+            if legacy is not None:
+                return await self._handle_legacy(request, state, request_id, legacy)
             return await self._handle(request, state, request_id)
         except TWError as err:
             state["tw_code"] = err.code
+            if legacy is not None:
+                self._lifecycle.legacy_traffic.record(state.get("tw_caller"), err.code)
+                return _legacy_response(
+                    legacy,
+                    request,
+                    verified=state.get("tw_legacy_request"),
+                    status=err.http_status,
+                    error=err,
+                    started=started,
+                )
+            headers = err.response_headers()
+            content = err.response_body(request_id)
+            caller: Caller | None = state.get("tw_caller_obj")
+            if err.signed and caller is not None:
+                headers.update(self._sign(caller, err.http_status, content))
             return Response(
-                content=err.response_body(request_id),
+                content=content,
                 status_code=err.http_status,
-                headers=err.response_headers(),
+                headers=headers,
                 media_type="application/json",
             )
+
+    def _legacy_server(self, request: Request) -> LegacyServerLike | None:
+        """The bridge when this is a v10 request and the bridge is on, else ``None``."""
+        if not self._lifecycle.ready:
+            return None
+        legacy = self._lifecycle.runtime.legacy
+        if legacy is None or not legacy.is_legacy(request.headers):
+            return None
+        return legacy
+
+    def _sign(self, caller: Caller, status: int, content: bytes) -> dict[str, str]:
+        rt = self._lifecycle.runtime
+        if not self._lifecycle.settings.sign_responses:
+            return {}
+        return sign_response(
+            rt.signer,
+            request_nonce=caller.nonce_ns,
+            sender_ss58=caller.hotkey_ss58,
+            status=status,
+            body=content,
+        )
 
     async def _handle(
         self, request: Request, state: MutableMapping[str, Any], request_id: str | None
@@ -143,19 +213,116 @@ class RouteEndpoint:
             raise
         finally:
             self._metrics.auth_verify_duration.observe(time.perf_counter() - started)
+        ctx = await self._admit(rt, state, caller, request_id)  # [7] [8]
+        argument = route.parse(body)  # [9]
+        result = await self._invoke(argument, ctx)  # [10]
+        content, media_type = _serialize(route, result)  # [11]
+        return Response(
+            content=content,
+            status_code=200,
+            media_type=media_type,
+            headers=self._sign(caller, 200, content),
+        )
+
+    async def _admit(
+        self,
+        rt: Runtime,
+        state: MutableMapping[str, Any],
+        caller: Caller,
+        request_id: str | None,
+    ) -> RouteContext:
+        route = self.route
         state["tw_caller"] = caller.hotkey_ss58
+        state["tw_caller_obj"] = caller
         neuron = rt.gate.admit(route.path, route.policy, caller.hotkey_ss58)  # [7]
         decision = await rt.hotkey_limiter.acquire(f"{route.path} {caller.hotkey_ss58}")
         if not decision.allowed:  # [8]
             state["tw_rate_layer"] = "hotkey"
             raise RateLimited(retry_after_s=decision.retry_after_s, layer="hotkey")
-        argument = route.parse(body)  # [9]
-        ctx = RouteContext(
+        return RouteContext(
             caller=caller, caller_neuron=neuron, request_id=request_id, route=route.path
         )
+
+    async def _handle_legacy(
+        self,
+        request: Request,
+        state: MutableMapping[str, Any],
+        request_id: str | None,
+        legacy: LegacyServerLike,
+    ) -> Response:
+        route = self.route
+        started = time.perf_counter()
+        state["tw_protocol"] = "v10"
+        if not route.accepts_legacy:
+            raise LegacyAuthFailed("this route does not accept v10 requests")
+        body = await _read_body(request, route.max_body_bytes)  # [2/3]
+        rt = self._lifecycle.runtime
+        rt.gate.precheck()  # [5]
+        verify_started = time.perf_counter()
+        try:  # [6] v10 signature + the kit's freshness window and replay store
+            verified = await legacy.verify(
+                list(request.headers.items()),
+                body,
+                synapse_cls=route.legacy_synapse,
+                body_hash=route.legacy_body_hash,
+            )
+        except ReplayStoreUnavailable:
+            state["tw_store_backend"] = rt.store_backend
+            raise
+        finally:
+            self._metrics.auth_verify_duration.observe(
+                time.perf_counter() - verify_started
+            )
+        state["tw_legacy_request"] = verified
+        ctx = await self._admit(rt, state, verified.caller, request_id)  # [7] [8]
+        argument = self._legacy_argument(verified, body)  # [9]
         result = await self._invoke(argument, ctx)  # [10]
-        content, media_type = _serialize(route, result)  # [11]
-        return Response(content=content, status_code=200, media_type=media_type)
+        synapse, raw = self._legacy_result(verified, result)  # [11]
+        self._lifecycle.legacy_traffic.record(verified.caller.hotkey_ss58, "ok")
+        return _legacy_response(
+            legacy,
+            request,
+            verified=verified,
+            status=200,
+            synapse=synapse,
+            raw_body=raw,
+            started=started,
+        )
+
+    def _legacy_argument(self, verified: LegacyRequestLike, body: bytes) -> Any:
+        route = self.route
+        synapse = verified.synapse
+        if synapse is None:
+            return route.parse(body)
+        model = route.request_model
+        if model is None or isinstance(synapse, model):
+            return synapse
+        try:
+            return model.model_validate(_user_fields(synapse))
+        except ValidationError:
+            raise InvalidRequest() from None
+
+    def _legacy_result(
+        self, verified: LegacyRequestLike, result: Any
+    ) -> tuple[BaseModel | None, bytes | None]:
+        """The v10 answer: a filled Synapse, or (body-hash routes) raw JSON."""
+        synapse = verified.synapse
+        if synapse is None:
+            if isinstance(result, (bytes, bytearray)):
+                return None, bytes(result)
+            if isinstance(result, BaseModel):
+                return None, result.model_dump_json().encode()
+        elif isinstance(result, type(synapse)):
+            return result, None
+        elif isinstance(result, BaseModel):
+            return synapse.model_copy(update=result.model_dump()), None
+        _log.error(
+            "legacy_bad_return",
+            route=self.route.path,
+            returned=type(result).__name__,
+            hint="a route serving v10 requests must return its Synapse or a model",
+        )
+        raise HandlerError()
 
     async def _invoke(self, argument: Any, ctx: RouteContext) -> Any:
         route = self.route
@@ -183,3 +350,38 @@ class RouteEndpoint:
             )
             raise HandlerTimeout()
         return result
+
+
+def _user_fields(synapse: BaseModel) -> dict[str, Any]:
+    fields = getattr(synapse, "user_fields", None)
+    if callable(fields):
+        values: dict[str, Any] = fields()
+        return values
+    return synapse.model_dump()
+
+
+def _legacy_response(
+    legacy: LegacyServerLike,
+    request: Request,
+    *,
+    verified: LegacyRequestLike | None,
+    status: int,
+    started: float,
+    synapse: BaseModel | None = None,
+    error: TWError | None = None,
+    raw_body: bytes | None = None,
+) -> Response:
+    content, headers = legacy.respond(
+        request.headers,
+        request=verified,
+        status=status,
+        synapse=synapse,
+        error=error,
+        process_time_s=time.perf_counter() - started,
+        raw_body=raw_body,
+    )
+    response = Response(content=content, status_code=status)
+    for name, value in headers:
+        if name.lower() != "content-length":  # Starlette sets it from the content
+            response.headers.append(name, value)
+    return response

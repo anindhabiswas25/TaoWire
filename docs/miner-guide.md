@@ -43,7 +43,7 @@ validators will reach. All settings are listed in `.env.example`.
 
 ## Routes
 
-`@miner.route(path, *, request=None, response=None, method="POST", timeout_s=None, max_body_bytes=None, policy=None)`
+`@miner.route(path, *, request=None, response=None, method="POST", timeout_s=None, max_body_bytes=None, policy=None, legacy_synapse=None, legacy_body_hash=None, encode=None)`
 
 - **Handler**: `async def` or plain `def` (runs in a worker thread), called as
   `handler(request, ctx)`. Return an instance of the response model, or `bytes`.
@@ -55,6 +55,12 @@ validators will reach. All settings are listed in `.env.example`.
 - **`timeout_s`** / **`max_body_bytes`**: default to `TW_HANDLER_TIMEOUT_S`
   (504 `tw.handler_timeout`) and `TW_MAX_BODY_BYTES` (413).
 - **`policy`**: a `CallerPolicy`; default is the strict policy from settings.
+- **`legacy_synapse`** / **`legacy_body_hash`**: also accept requests from
+  unmodified v10 validators while `TW_LEGACY_V10_UNTIL` is set (see
+  "v10 validators" below). Routes declared with `tensorwire.compat.Axon`
+  set this themselves.
+- **`encode`**: turns the handler's result into the response body (default:
+  `model_dump_json` of the response model, or the bytes as returned).
 
 `RouteContext` gives the handler `caller` (`hotkey_ss58`, `nonce_ns`,
 `crypto_type`, `scheme`), `caller_neuron` (the caller's `NeuronView`, or
@@ -99,9 +105,54 @@ routes with their own policy.
 7. Per-hotkey, per-route rate limit (`TW_RATE_HOTKEY_PER_S` / `_BURST`): 429.
 8. Body parsed into the request model: 422.
 9. Handler with its timeout: 504 / 500.
+10. The response is signed (`twresp/1`, below) and sent.
 
 Every response carries `X-TW-Request-Id`; error bodies are
 `{"error": {"code", "message", "request_id"}}`.
+
+## Signed responses (`twresp/1`)
+
+With `TW_SIGN_RESPONSES=1` (the default) the miner signs every 200 and every
+error raised after the caller was authenticated (403, 422, 429 per-hotkey,
+500, 504): headers `X-TW-Resp-Version: 1`, `X-TW-Resp-Hotkey`,
+`X-TW-Resp-Signature` (and `X-TW-Resp-Crypto: ed25519` for ed25519 hotkeys).
+The signature covers the request's nonce and sender, the miner's hotkey, the
+status and the sha256 of the body, so a validator can prove the answer came
+from this miner, unchanged, for its own request. Errors before
+authentication (401, 413, per-IP 429, 503) are never signed. TensorWire
+validators reject unsigned or wrongly signed 200s
+(`tw.bad_response_signature`), so turning this off makes your answers count
+as failures there. Format: ADR-0004 and `tensorwire.extensions.response_sig`.
+
+## v10 validators (legacy bridge)
+
+During a migration some validators still run the v10 SDK. Set
+`TW_LEGACY_V10_UNTIL=<YYYY-MM-DD>` (UTC, at most 180 days ahead; there is no
+"forever") and declare the v10 Synapse on the route:
+
+```python
+from tensorwire.compat import Synapse
+
+class Transform(Synapse):                     # the v10 class, now on compat
+    text: str
+    op: str
+    result: str | None = None
+    required_hash_fields: ClassVar[tuple[str, ...]] = ("text", "op")
+
+@miner.route("/v1/transform", request=TransformRequest, response=TransformResponse,
+             legacy_synapse=Transform)
+async def transform(req: TransformRequest, ctx: RouteContext) -> TransformResponse: ...
+```
+
+v10 requests arrive at `POST /<SynapseName>` (also mounted for you). They go
+through the same pipeline with the v10 signature check at step 5, plus the
+kit's own freshness window and replay store, then the same caller policy and
+rate limits; the answer is in v10 shape (Synapse JSON + `bt_header_axon_*`
+headers). A v10 signature covers only `required_hash_fields`, so list every
+field that matters there (`tensorwire migrate scan` warns otherwise). After
+the end date v10 requests get 410 `tw.legacy_disabled`. Each one is counted
+in `tw_legacy_v10_requests_total{direction="inbound"}`; the days left are in
+`tw_legacy_v10_days_remaining`. Wire details: `docs/protocol/legacy-v10.md`.
 
 ## Chain outages: staged staleness
 
@@ -136,14 +187,17 @@ again; unknown callers are never admitted on stale data. Set at least one
 7. Publish the axon (`TW_EXTERNAL_IP:TW_EXTERNAL_PORT`, protocol
    `TW_PROTOCOL_TAG`) when the chain shows something else and
    `TW_AUTO_SERVE_AXON=1` and `TW_AXON_PUBLISHER=1`. Re-checked every 30 min.
+   If the chain answers `rate_limited`, the miner retries after the subnet's
+   `serving_rate_limit` blocks (read from the chain).
 
 The axon is published before the server starts listening, so a validator
 that reads it from the metagraph can reach the miner a moment before it
 accepts connections. Clients and deployment checks should wait for `/readyz`
 to return 200 rather than for the axon to appear on chain.
 
-On SIGTERM the server stops accepting, gives in-flight requests `TW_DRAIN_S`,
-then closes the chain connection and the replay store.
+On SIGTERM or Ctrl-C the server stops accepting, gives in-flight requests
+`TW_DRAIN_S`, then closes the chain connection and the replay store
+(`miner_stopped` in the log). Ctrl-C exits with status 130.
 
 `TW_EXTERNAL_IP` is never `0.0.0.0`, `::` or `127.0.0.1` (the chain rejects or
 un-serves them). On localnet use `127.0.0.2` (Linux) or the LAN IP with

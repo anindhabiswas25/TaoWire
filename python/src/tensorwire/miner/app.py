@@ -52,6 +52,7 @@ from tensorwire.errors import ConfigError, StartupError
 from tensorwire.limits.body import BodySizeLimit
 from tensorwire.limits.ratelimit import MemoryRateLimiter, PreAuthRateLimit
 from tensorwire.miner.health import health_routes
+from tensorwire.miner.legacy import LegacyServerFactory
 from tensorwire.miner.lifecycle import Lifecycle, MinerParts
 from tensorwire.miner.pipeline import RouteEndpoint
 from tensorwire.miner.routes import Handler, Route, RouteRegistry
@@ -60,7 +61,7 @@ from tensorwire.observability.metrics import Metrics
 from tensorwire.observability.middleware import RequestContext
 from tensorwire.policy.caller import CallerPolicy
 
-__all__ = ["DEFAULT_LIMIT_CONCURRENCY", "MAX_HEADER_BYTES", "Miner"]
+__all__ = ["DEFAULT_LIMIT_CONCURRENCY", "MAX_HEADER_BYTES", "Miner", "NoSignalServer"]
 
 #: uvicorn ``--limit-concurrency``: connections beyond this get 503 at once.
 DEFAULT_LIMIT_CONCURRENCY = 1024
@@ -71,8 +72,8 @@ _KEEP_ALIVE_S = 5
 _H = TypeVar("_H", bound=Handler)
 
 
-class _NoSignalServer(uvicorn.Server):
-    """The metrics listener: stopped by the main server, never by signals."""
+class NoSignalServer(uvicorn.Server):
+    """A uvicorn server that leaves signal handling to its owner (side listeners)."""
 
     @contextlib.contextmanager
     def capture_signals(self) -> Iterator[None]:
@@ -103,6 +104,7 @@ class Miner:
         ntp_query: NtpQuery | None = None,
         metrics: Metrics | None = None,
         check_sdk: bool = True,
+        legacy_server: LegacyServerFactory | None = None,
     ) -> None:
         self.settings = settings
         self.metrics = Metrics() if metrics is None else metrics
@@ -121,6 +123,7 @@ class Miner:
                 monotonic=monotonic,
                 ntp_query=ntp_query,
                 check_sdk=check_sdk,
+                legacy_server=legacy_server,
             ),
         )
         self._app: FastAPI | None = None
@@ -142,12 +145,21 @@ class Miner:
         timeout_s: float | None = None,
         max_body_bytes: int | None = None,
         policy: CallerPolicy | None = None,
+        legacy_synapse: type[BaseModel] | None = None,
+        legacy_body_hash: Callable[[bytes], str] | None = None,
+        encode: Callable[[Any], bytes] | None = None,
     ) -> Callable[[_H], _H]:
         """Register a protected route (decorator).
 
         ``timeout_s`` and ``max_body_bytes`` default to ``TW_HANDLER_TIMEOUT_S``
         and ``TW_MAX_BODY_BYTES``. ``policy`` defaults to the strict policy
         from settings; ``TW_DENY_HOTKEYS`` applies to every route either way.
+
+        While ``TW_LEGACY_V10_UNTIL`` is set, a route with ``legacy_synapse``
+        (a ``tensorwire.compat.Synapse`` subclass) or ``legacy_body_hash``
+        also accepts v10 Dendrite requests (spec 8.11.2). They arrive at
+        ``/<SynapseName>``; that path is mounted for them when it differs
+        from ``path``. ``encode`` replaces the default response encoding.
         """
         chosen = self.default_policy if policy is None else policy
 
@@ -165,6 +177,9 @@ class Miner:
                 if max_body_bytes is None
                 else max_body_bytes,
                 policy=chosen.with_denied(self.settings.deny_hotkeys),
+                legacy_synapse=legacy_synapse,
+                legacy_body_hash=legacy_body_hash,
+                encode=encode,
             )
             return handler
 
@@ -216,6 +231,19 @@ class Miner:
             endpoint.endpoint,
             methods=[route.method],
             include_in_schema=False,
+        )
+        if route.legacy_synapse is None:
+            return
+        alias = "/" + route.legacy_synapse.__name__
+        if alias == route.path:
+            return
+        if self.routes.get(alias) is not None:
+            raise ValueError(
+                f"{alias} is both a route and the v10 path of {route.path}"
+            )
+        legacy = RouteEndpoint(route, self.lifecycle, self.metrics, legacy_only=True)
+        app.router.add_route(
+            alias, legacy.endpoint, methods=["POST"], include_in_schema=False
         )
 
     @contextlib.asynccontextmanager
@@ -282,6 +310,10 @@ class Miner:
                 self._run_workers(app_import)
             else:
                 asyncio.run(self._serve())
+        except KeyboardInterrupt:
+            # Ctrl-C: uvicorn drained and the lifecycle stopped ("miner_stopped");
+            # it re-raises SIGINT afterwards. Exit like a shell does, no traceback.
+            sys.exit(130)
         except StartupError as exc:
             _log.critical("startup_refused", reason=str(exc))
             sys.exit(exc.exit_code)
@@ -300,7 +332,7 @@ class Miner:
             access_log=False,
             server_header=False,
         )
-        return _NoSignalServer(config)
+        return NoSignalServer(config)
 
     async def _serve(self) -> None:
         app = self.app
