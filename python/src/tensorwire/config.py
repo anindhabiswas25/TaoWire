@@ -40,7 +40,6 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from tensorwire.errors import ConfigError
 
 __all__ = [
-    "BLOCK_TIME_S",
     "DEFAULT_PROTOCOL_TAG",
     "CommonSettings",
     "HostPort",
@@ -53,14 +52,11 @@ __all__ = [
 
 ENV_PREFIX = "TW_"
 
-#: Seconds per block on mainnet and testnet (spec 2).
-BLOCK_TIME_S = 12.0
-
 #: Default ``ServeAxon.protocol`` tag. The chain stores this field as a u8
 #: (``serve_axon(..., protocol: u8, ...)`` in bittensor 11.3.0), so the spec's
-#: 0x5457 cannot be published; 0x54 ("T") is used until the PM decides
-#: (spec-question in COORDINATION.md).
-DEFAULT_PROTOCOL_TAG = 0x54
+#: 0x5457 cannot be published; 0x57 ("W", Engineer B's proposal) is used until
+#: the PM decides (spec-question in COORDINATION.md).
+DEFAULT_PROTOCOL_TAG = 0x57
 
 _NETWORK_NAMES = frozenset({"finney", "test", "local"})
 _SS58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -204,7 +200,8 @@ class CommonSettings(BaseSettings):
     chain_timeout_s: float = Field(default=30.0, gt=0, le=600)
     metagraph_refresh_s: float = Field(default=120.0, ge=10, le=3600)
     metagraph_soft_age_s: float = Field(default=900.0, gt=0, le=86_400)
-    #: ``None`` = 2 x the subnet's tempo in seconds (see :meth:`metagraph_max_age_for`).
+    #: ``None`` = 2 x the subnet's tempo in seconds, resolved by
+    #: ``chain.metagraph_cache.StalenessThresholds.for_tempo``.
     metagraph_max_age_s: float | None = Field(default=None, gt=0, le=7 * 86_400)
     metagraph_strict: bool = False
     startup_timeout_s: float = Field(default=120.0, gt=0, le=3600)
@@ -299,14 +296,6 @@ class CommonSettings(BaseSettings):
         return self
 
     # ------------------------------------------------------------ helpers
-
-    def metagraph_max_age_for(self, tempo_blocks: int) -> float:
-        """The known-callers-only threshold (spec 8.5.1) for a subnet's tempo."""
-        if self.metagraph_max_age_s is not None:
-            return self.metagraph_max_age_s
-        if tempo_blocks <= 0:
-            raise ValueError("tempo must be positive")
-        return max(2 * tempo_blocks * BLOCK_TIME_S, self.metagraph_soft_age_s)
 
     def weakened_settings(self) -> tuple[str, ...]:
         """``TW_*`` names of active settings that weaken a secure default (spec 16.2).

@@ -38,7 +38,6 @@ __all__ = [
     "PayloadTooLarge",
     "RateLimited",
     "ReplayStoreUnavailable",
-    "SubnetNotFound",
     "TWError",
     "client_http_code",
 ]
@@ -350,13 +349,3 @@ class ChainError(TWError):
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(chain_code={self.chain_code!r})"
-
-
-class SubnetNotFound(ChainError):
-    """The requested subnet does not exist on the connected chain (spec 8.3)."""
-
-    def __init__(self, netuid: int) -> None:
-        super().__init__(
-            "subnet_not_exists", f"subnet {netuid} does not exist on this chain"
-        )
-        self.netuid = netuid

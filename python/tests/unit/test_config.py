@@ -60,7 +60,6 @@ def test_defaults_match_section_12(env: TWEnv) -> None:
     assert s.metagraph_refresh_s == 120
     assert s.metagraph_soft_age_s == 900
     assert s.metagraph_max_age_s is None
-    assert s.metagraph_max_age_for(360) == 8640
     assert s.metagraph_strict is False
     assert s.startup_timeout_s == 120
     assert s.ntp_servers == ("pool.ntp.org", "time.cloudflare.com")
@@ -217,19 +216,10 @@ def test_max_age_must_exceed_soft_age(
 ) -> None:
     env.set(metagraph_soft_age_s=soft, metagraph_max_age_s=max_age)
     if ok:
-        assert miner().metagraph_max_age_for(360) == max_age
+        assert miner().metagraph_max_age_s == max_age
     else:
         with fails("TW_METAGRAPH_MAX_AGE_S must be greater"):
             miner()
-
-
-def test_max_age_from_tempo(env: TWEnv) -> None:
-    s = miner()
-    assert s.metagraph_max_age_for(100) == 2400
-    env.set(metagraph_soft_age_s=5000)
-    assert miner().metagraph_max_age_for(100) == 5000  # never below the soft age
-    with pytest.raises(ValueError, match="tempo"):
-        s.metagraph_max_age_for(0)
 
 
 def test_nonce_retention_covers_window(env: TWEnv) -> None:

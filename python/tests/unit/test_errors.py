@@ -86,7 +86,6 @@ def test_catalogue_rejects_duplicates() -> None:
         (lambda: e.LegacyDisabled(), "tw.legacy_disabled", 410),
         (lambda: e.ConfigError("bad"), "tw.config_invalid", 500),
         (lambda: e.ChainError("rate_limited", "wait"), "tw.internal", 500),
-        (lambda: e.SubnetNotFound(7), "tw.internal", 500),
     ],
 )
 def test_classes_carry_code_and_status(
@@ -165,10 +164,6 @@ def test_chain_errors_never_leak_detail_publicly() -> None:
     assert err.public_message == "internal error"
     assert b"btcli" not in err.response_body()
     assert repr(err) == "ChainError(chain_code='not_registered')"
-    snf = e.SubnetNotFound(9)
-    assert isinstance(snf, e.ChainError)
-    assert snf.chain_code == "subnet_not_exists"
-    assert snf.netuid == 9
 
 
 def test_config_error_detail_stays_private() -> None:
