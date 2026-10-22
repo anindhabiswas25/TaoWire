@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, ClassVar
@@ -292,22 +293,35 @@ async def test_v10_request_without_the_bridge_is_btauth_malformed(
     assert r.json()["error"]["code"] == "tw.auth_malformed"
 
 
-async def test_until_without_the_bridge_refuses_to_start(
-    tw_miner_kwargs: dict[str, Any],
-) -> None:
+def _with_until(tw_miner_kwargs: dict[str, Any]) -> dict[str, Any]:
     kwargs = dict(tw_miner_kwargs)
     kwargs["settings"] = kwargs["settings"].model_copy(
         update={"legacy_v10_until": UNTIL}
     )
-    miner = Miner(**kwargs)
-    try:
-        import tensorwire.extensions.legacy_v10.server  # noqa: F401
-    except ImportError:
-        with pytest.raises(StartupError, match="not in this build"):
-            async with miner.running():
-                pass
-    else:  # pragma: no cover - once B's bridge is merged it is built for real
-        pytest.skip("the legacy bridge is in this build")
+    return kwargs
+
+
+async def test_until_builds_the_real_bridge_by_default(
+    tw_miner_kwargs: dict[str, Any],
+) -> None:
+    from tensorwire.extensions.legacy_v10.server import LegacyServer
+
+    miner = Miner(**_with_until(tw_miner_kwargs))  # no legacy_server=
+    async with miner.running():
+        bridge = miner.lifecycle.runtime.legacy
+        assert isinstance(bridge, LegacyServer)
+        assert bridge.until == UNTIL
+
+
+async def test_until_without_the_bridge_refuses_to_start(
+    tw_miner_kwargs: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A build without extensions/legacy_v10 (the import fails).
+    monkeypatch.setitem(sys.modules, "tensorwire.extensions.legacy_v10.server", None)
+    miner = Miner(**_with_until(tw_miner_kwargs))
+    with pytest.raises(StartupError, match="not in this build"):
+        async with miner.running():
+            pass
 
 
 def test_route_options_are_checked(tw_miner_kwargs: dict[str, Any]) -> None:

@@ -8,6 +8,8 @@ submits weights when the chain's schedule allows.
 from __future__ import annotations
 
 import contextlib
+import datetime as dt
+import sys
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -273,6 +275,30 @@ async def test_round_before_start_is_an_error(
         _ = bare.metagraph
 
 
+def _auto(r: ValidatorRunner) -> None:
+    until = dt.datetime.now(dt.timezone.utc).date() + dt.timedelta(days=10)
+    r.settings = r.settings.model_copy(
+        update={"legacy_v10_client": "auto", "legacy_v10_client_until": until}
+    )
+
+
+async def test_legacy_auto_builds_the_real_bridge_by_default(
+    router: AppRouter, fake_chain: FakeChain, tw_clock: FakeClock, tmp_path: Path
+) -> None:
+    from tensorwire.extensions.legacy_v10.client import LegacyClient, ProtocolSelector
+
+    r = runner(fake_chain, tw_clock, tmp_path, router)  # no legacy=
+    _auto(r)
+    async with r.running():
+        assert r.client is not None
+        assert r.client.legacy_enabled
+        assert isinstance(r.client._legacy, LegacyClient)
+        assert isinstance(r.client._selector, ProtocolSelector)
+        report = await r.run_round()
+    assert report is not None
+    assert report.n_btauth == 2  # TensorWire miners advertise tag 87: btauth/1
+
+
 async def test_legacy_auto_without_the_bridge(
     router: AppRouter,
     fake_chain: FakeChain,
@@ -280,20 +306,17 @@ async def test_legacy_auto_without_the_bridge(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import datetime as dt
-
-    until = dt.datetime.now(dt.timezone.utc).date() + dt.timedelta(days=10)
+    # A build without extensions/legacy_v10 (the import fails).
+    monkeypatch.setitem(sys.modules, "tensorwire.extensions.legacy_v10.client", None)
     r = runner(fake_chain, tw_clock, tmp_path, router)
-    r.settings = r.settings.model_copy(
-        update={"legacy_v10_client": "auto", "legacy_v10_client_until": until}
-    )
-    try:
-        import tensorwire.extensions.legacy_v10.client  # noqa: F401
-    except ImportError:
-        with pytest.raises(StartupError, match="not in this build"):
-            await r.start()
-    else:  # pragma: no cover - once B's bridge is merged
-        pytest.skip("bridge present")
+    _auto(r)
+    with pytest.raises(StartupError, match="not in this build"):
+        await r.start()
+
+
+async def test_legacy_auto_uses_an_injected_bridge(
+    router: AppRouter, fake_chain: FakeChain, tw_clock: FakeClock, tmp_path: Path
+) -> None:
     built: list[Any] = []
 
     class Sel:
@@ -311,10 +334,10 @@ async def test_legacy_auto_without_the_bridge(
         built.append(signer.ss58_address)
         return object(), Sel()
 
-    r2 = runner(fake_chain, tw_clock, tmp_path, router, legacy=factory)
-    r2.settings = r.settings
-    async with r2.running():
-        report = await r2.run_round()
+    r = runner(fake_chain, tw_clock, tmp_path, router, legacy=factory)
+    _auto(r)
+    async with r.running():
+        report = await r.run_round()
     assert built == [dev_key("alice").ss58]
     assert report is not None
     assert report.n_ok == 2
