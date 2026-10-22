@@ -12,6 +12,11 @@ plain ``def`` (run in a worker thread) and are called as
 A handler returns an instance of the response model, or ``bytes``.
 Routes are ``POST`` by default. ``GET`` routes take no body (a non-empty
 body is rejected) but are signed like any other route.
+
+Legacy v10 (spec 8.11.2): a route that also accepts v10 Dendrite requests
+names the v10 Synapse class (``legacy_synapse``) or a body-hash function
+(``legacy_body_hash``). Routes declared through ``tensorwire.compat.Axon``
+set ``legacy_synapse`` themselves.
 """
 
 from __future__ import annotations
@@ -73,6 +78,18 @@ class Route:
     timeout_s: float
     max_body_bytes: int
     policy: CallerPolicy
+    legacy_synapse: type[BaseModel] | None = None
+    """The v10 Synapse class whose requests this route also accepts."""
+    legacy_body_hash: Callable[[bytes], str] | None = None
+    """For v10 requests without a Synapse class: ``computed_body_hash`` of a body."""
+    encode: Callable[[Any], bytes] | None = None
+    """Turns the handler's result into the JSON response body (default:
+    ``model_dump_json`` of the response model, or the bytes as returned)."""
+
+    @property
+    def accepts_legacy(self) -> bool:
+        """Whether v10 requests can reach this route."""
+        return self.legacy_synapse is not None or self.legacy_body_hash is not None
 
     @property
     def is_async(self) -> bool:
@@ -137,6 +154,9 @@ class RouteRegistry:
         timeout_s: float,
         max_body_bytes: int,
         policy: CallerPolicy,
+        legacy_synapse: type[BaseModel] | None = None,
+        legacy_body_hash: Callable[[bytes], str] | None = None,
+        encode: Callable[[Any], bytes] | None = None,
     ) -> Route:
         """Validate and register a route."""
         if self._frozen:
@@ -154,6 +174,10 @@ class RouteRegistry:
             raise ValueError("max_body_bytes must be at least 1")
         if not callable(handler):
             raise TypeError("handler must be callable")
+        if legacy_synapse is not None and legacy_body_hash is not None:
+            raise ValueError("pass legacy_synapse or legacy_body_hash, not both")
+        if method == "GET" and (legacy_synapse or legacy_body_hash):
+            raise ValueError("v10 requests are POST only")
         route = Route(
             path=path,
             method=method,
@@ -163,6 +187,9 @@ class RouteRegistry:
             timeout_s=float(timeout_s),
             max_body_bytes=max_body_bytes,
             policy=policy,
+            legacy_synapse=legacy_synapse,
+            legacy_body_hash=legacy_body_hash,
+            encode=encode,
         )
         self._routes[path] = route
         return route

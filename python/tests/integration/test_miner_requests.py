@@ -13,6 +13,7 @@ import pytest
 from pydantic import BaseModel
 
 from tensorwire.chain.metagraph_cache import StalenessStage
+from tensorwire.extensions.response_sig import verify_response
 from tensorwire.miner.app import Miner
 from tensorwire.miner.routes import RouteContext
 from tensorwire.testing.client import SignedClient
@@ -58,6 +59,18 @@ def code_of(response: Any) -> str:
     return str(response.json()["error"]["code"])
 
 
+def check_response_signature(response: Any, sender: str = "alice") -> None:
+    """Raise unless ``response`` carries a valid twresp/1 signature from bob."""
+    verify_response(
+        response.headers,
+        expected_responder=dev_key("bob").ss58,
+        request_nonce=int(response.request.headers["x-bittensor-nonce"]),
+        sender_ss58=dev_key(sender).ss58,
+        status=response.status_code,
+        body=response.content,
+    )
+
+
 # 1 ----------------------------------------------------------------------------
 async def test_1_valid_validator_gets_200(signed_client: SignedClient) -> None:
     r = await signed_client.post(ECHO, json={"text": "hi"})
@@ -65,7 +78,9 @@ async def test_1_valid_validator_gets_200(signed_client: SignedClient) -> None:
     body = r.json()
     assert body == {"text": "hi", "caller": dev_key("alice").ss58, "uid": 1}
     assert len(r.headers["x-tw-request-id"]) == 26
-    # twresp/1 response signing (step 11) is response_sig.py, Phase 2.
+    check_response_signature(r)
+    assert r.headers["x-tw-resp-hotkey"] == dev_key("bob").ss58
+    assert "x-tw-resp-crypto" not in r.headers  # sr25519: header omitted
 
 
 # 2 ----------------------------------------------------------------------------
@@ -75,6 +90,7 @@ async def test_2_registered_non_validator_is_forbidden(
     r = await signed_client.as_key("charlie").post(ECHO, json={"text": "hi"})
     assert r.status_code == 403
     assert code_of(r) == "tw.forbidden_not_validator"
+    check_response_signature(r, sender="charlie")  # after auth: signed (Appendix A)
 
 
 # 3 ----------------------------------------------------------------------------
@@ -103,6 +119,7 @@ async def test_5_request_for_another_miner_is_rejected(
     r = await signed_client.post(ECHO, json={"text": "hi"}, receiver_ss58=other_miner)
     assert r.status_code == 401
     assert code_of(r) == "tw.auth_wrong_receiver"
+    assert "x-tw-resp-signature" not in r.headers  # before auth: never signed
 
 
 # 6 ----------------------------------------------------------------------------
@@ -231,3 +248,32 @@ async def test_9_handler_timeout(signed_client: SignedClient) -> None:
     r = await signed_client.post(SLOW, json={"text": "hi"})
     assert r.status_code == 504
     assert code_of(r) == "tw.handler_timeout"
+    check_response_signature(r)
+
+
+# twresp/1 switches -------------------------------------------------------------
+async def test_responses_unsigned_when_sign_responses_off(
+    tw_miner_kwargs: dict[str, Any], tw_clock: FakeClock
+) -> None:
+    kwargs = dict(tw_miner_kwargs)
+    kwargs["settings"] = kwargs["settings"].model_copy(update={"sign_responses": False})
+    miner = Miner(**kwargs)
+
+    @miner.route(ECHO, request=EchoRequest, response=EchoResponse)
+    async def echo(req: EchoRequest, ctx: RouteContext) -> EchoResponse:
+        return EchoResponse(text=req.text, caller=ctx.caller.hotkey_ss58, uid=None)
+
+    async with miner.running() as app:
+        client = SignedClient(
+            app, receiver_ss58=dev_key("bob").ss58, clock_ns=tw_clock.now_ns
+        )
+        r = await client.post(ECHO, json={"text": "hi"})
+        await client.aclose()
+    assert r.status_code == 200
+    assert not any(k.startswith("x-tw-resp-") for k in r.headers)
+
+
+async def test_invalid_request_is_signed(signed_client: SignedClient) -> None:
+    r = await signed_client.post(ECHO, json={"nope": 1})
+    assert r.status_code == 422
+    check_response_signature(r)

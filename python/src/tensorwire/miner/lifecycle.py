@@ -60,6 +60,12 @@ from tensorwire.config import MinerSettings
 from tensorwire.crypto import HotkeySigner
 from tensorwire.errors import StartupError
 from tensorwire.limits.ratelimit import MemoryRateLimiter, RateLimiter
+from tensorwire.miner.legacy import (
+    LegacyServerFactory,
+    LegacyServerLike,
+    LegacyTraffic,
+    build_legacy_server,
+)
 from tensorwire.observability.metrics import Metrics
 from tensorwire.policy.caller import CallerGate
 
@@ -98,6 +104,8 @@ class MinerParts:
     ntp_query: NtpQuery | None = None
     check_sdk: bool = True
     axon_retry_poll_s: float = 12.0
+    legacy_server: LegacyServerFactory | None = None
+    """Builds the v10 bridge (default: ``legacy_v10.server.LegacyServer``)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +122,7 @@ class Runtime:
     """What the request path needs, available once startup reached step 5."""
 
     hotkey_ss58: str
+    signer: HotkeySigner
     gateway: ChainGateway
     metagraph: MetagraphSource
     store: NonceStore
@@ -122,6 +131,7 @@ class Runtime:
     gate: CallerGate
     hotkey_limiter: RateLimiter
     clock: ClockGuard
+    legacy: LegacyServerLike | None = None
     axon_in_sync: bool | None = None
     tasks: list[asyncio.Task[None]] = field(default_factory=list)
 
@@ -171,6 +181,13 @@ class Lifecycle:
         self._ready = False
         self._stopping = False
         self._last_degraded_warning: float | None = None
+        #: Inbound legacy v10 calls: counter, logs, days-remaining gauge.
+        self.legacy_traffic = LegacyTraffic(
+            metrics,
+            direction="inbound",
+            monotonic=parts.monotonic,
+            until=settings.legacy_v10_until,
+        )
 
     @property
     def runtime(self) -> Runtime:
@@ -211,7 +228,7 @@ class Lifecycle:
                 exit_code=3,
             )
         try:
-            runtime = self._build_runtime(signer.ss58_address, gateway, metagraph)
+            runtime = self._build_runtime(signer, gateway, metagraph)
         except BaseException:
             await self._close_chain(gateway, metagraph)
             raise
@@ -293,9 +310,10 @@ class Lifecycle:
             await gateway.close()
 
     def _build_runtime(
-        self, hotkey_ss58: str, gateway: ChainGateway, metagraph: MetagraphSource
+        self, signer: HotkeySigner, gateway: ChainGateway, metagraph: MetagraphSource
     ) -> Runtime:
         s = self.settings
+        hotkey_ss58 = signer.ss58_address
         store = self.parts.nonce_store
         if store is None and s.redis_url is not None:
             try:
@@ -338,8 +356,22 @@ class Lifecycle:
             query=self.parts.ntp_query,
             on_reading=self._on_clock_reading,
         )
+        legacy = build_legacy_server(
+            s,
+            signer=signer,
+            store=store,
+            now_ns=self.parts.clock_ns,
+            factory=self.parts.legacy_server,
+        )
+        if legacy is not None:
+            _log.warning(
+                "legacy_v10_inbound_enabled",
+                until=s.legacy_v10_until.isoformat() if s.legacy_v10_until else None,
+                hint="v10 Dendrite requests are accepted until this date",
+            )
         return Runtime(
             hotkey_ss58=hotkey_ss58,
+            signer=signer,
             gateway=gateway,
             metagraph=metagraph,
             store=store,
@@ -354,6 +386,7 @@ class Lifecycle:
                 clock=self.parts.monotonic,
             ),
             clock=clock,
+            legacy=legacy,
         )
 
     def _on_clock_reading(self, reading: ClockReading) -> None:

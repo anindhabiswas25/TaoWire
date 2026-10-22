@@ -142,12 +142,21 @@ class Miner:
         timeout_s: float | None = None,
         max_body_bytes: int | None = None,
         policy: CallerPolicy | None = None,
+        legacy_synapse: type[BaseModel] | None = None,
+        legacy_body_hash: Callable[[bytes], str] | None = None,
+        encode: Callable[[Any], bytes] | None = None,
     ) -> Callable[[_H], _H]:
         """Register a protected route (decorator).
 
         ``timeout_s`` and ``max_body_bytes`` default to ``TW_HANDLER_TIMEOUT_S``
         and ``TW_MAX_BODY_BYTES``. ``policy`` defaults to the strict policy
         from settings; ``TW_DENY_HOTKEYS`` applies to every route either way.
+
+        While ``TW_LEGACY_V10_UNTIL`` is set, a route with ``legacy_synapse``
+        (a ``tensorwire.compat.Synapse`` subclass) or ``legacy_body_hash``
+        also accepts v10 Dendrite requests (spec 8.11.2). They arrive at
+        ``/<SynapseName>``; that path is mounted for them when it differs
+        from ``path``. ``encode`` replaces the default response encoding.
         """
         chosen = self.default_policy if policy is None else policy
 
@@ -165,6 +174,9 @@ class Miner:
                 if max_body_bytes is None
                 else max_body_bytes,
                 policy=chosen.with_denied(self.settings.deny_hotkeys),
+                legacy_synapse=legacy_synapse,
+                legacy_body_hash=legacy_body_hash,
+                encode=encode,
             )
             return handler
 
@@ -216,6 +228,19 @@ class Miner:
             endpoint.endpoint,
             methods=[route.method],
             include_in_schema=False,
+        )
+        if route.legacy_synapse is None:
+            return
+        alias = "/" + route.legacy_synapse.__name__
+        if alias == route.path:
+            return
+        if self.routes.get(alias) is not None:
+            raise ValueError(
+                f"{alias} is both a route and the v10 path of {route.path}"
+            )
+        legacy = RouteEndpoint(route, self.lifecycle, self.metrics, legacy_only=True)
+        app.router.add_route(
+            alias, legacy.endpoint, methods=["POST"], include_in_schema=False
         )
 
     @contextlib.asynccontextmanager
