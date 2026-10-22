@@ -31,7 +31,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
+import shutil
 import sys
+import tempfile
 import time
 from collections.abc import AsyncIterator, Callable, Iterator
 from pathlib import Path
@@ -50,14 +53,14 @@ from tensorwire.chain.metagraph_cache import MetagraphSource
 from tensorwire.config import MinerSettings
 from tensorwire.errors import ConfigError, StartupError
 from tensorwire.limits.body import BodySizeLimit
-from tensorwire.limits.ratelimit import MemoryRateLimiter, PreAuthRateLimit
+from tensorwire.limits.ratelimit import PreAuthRateLimit, RateDecision, RateLimiter
 from tensorwire.miner.health import health_routes
 from tensorwire.miner.legacy import LegacyServerFactory
 from tensorwire.miner.lifecycle import Lifecycle, MinerParts
 from tensorwire.miner.pipeline import RouteEndpoint
 from tensorwire.miner.routes import Handler, Route, RouteRegistry
 from tensorwire.observability.logging import configure_logging
-from tensorwire.observability.metrics import Metrics
+from tensorwire.observability.metrics import MULTIPROC_ENV, Metrics, serve_multiprocess
 from tensorwire.observability.middleware import RequestContext
 from tensorwire.policy.caller import CallerPolicy
 
@@ -83,6 +86,16 @@ class NoSignalServer(uvicorn.Server):
 _log = structlog.stdlib.get_logger(__name__)
 
 
+class _LifecycleIpLimiter:
+    """The pre-auth limiter the lifecycle builds at startup (memory or Redis)."""
+
+    def __init__(self, lifecycle: Lifecycle) -> None:
+        self._lifecycle = lifecycle
+
+    async def acquire(self, key: str) -> RateDecision:
+        return await self._lifecycle.acquire_ip(key)
+
+
 class Miner:
     """A TensorWire miner: protected routes plus the startup lifecycle.
 
@@ -105,6 +118,8 @@ class Miner:
         metrics: Metrics | None = None,
         check_sdk: bool = True,
         legacy_server: LegacyServerFactory | None = None,
+        ip_limiter: RateLimiter | None = None,
+        hotkey_limiter: RateLimiter | None = None,
     ) -> None:
         self.settings = settings
         self.metrics = Metrics() if metrics is None else metrics
@@ -124,6 +139,8 @@ class Miner:
                 ntp_query=ntp_query,
                 check_sdk=check_sdk,
                 legacy_server=legacy_server,
+                ip_limiter=ip_limiter,
+                hotkey_limiter=hotkey_limiter,
             ),
         )
         self._app: FastAPI | None = None
@@ -212,10 +229,9 @@ class Miner:
         app.add_middleware(BodySizeLimit, max_bytes=largest)
         app.add_middleware(
             PreAuthRateLimit,
-            limiter=MemoryRateLimiter(
-                rate=s.rate_ip_per_s, burst=s.rate_ip_burst, clock=self._monotonic
-            ),
+            limiter=_LifecycleIpLimiter(self.lifecycle),
             trusted_proxies=s.trusted_proxies,
+            passthrough_on_failure=frozenset({"/healthz", "/readyz"}),
         )
         app.add_middleware(
             RequestContext,
@@ -250,10 +266,14 @@ class Miner:
     async def _lifespan(self, _app: FastAPI) -> AsyncIterator[None]:
         # Miner.run() starts the lifecycle before the server opens its port
         # (so a refusal keeps its exit code); an external server
-        # (``uvicorn my_miner:miner.app``) starts it here. Either way it stops
+        # (``uvicorn my_miner:miner.app``) and each TW_WORKERS > 1 worker
+        # start it here. Either way it stops
         # here: uvicorn runs the lifespan shutdown after draining requests and
         # before it re-raises the signal that stopped it.
         if not self.lifecycle.ready:
+            # A TW_WORKERS > 1 worker or an external server: nothing has set up
+            # the kit's JSON logs in this process yet (spec 8.12).
+            configure_logging(self.settings.log_level)
             await self.lifecycle.start()
         try:
             yield
@@ -349,22 +369,42 @@ class Miner:
             await metrics_task
             await self.lifecycle.stop()
 
+    async def _preflight(self) -> None:
+        await self.lifecycle.start()
+        await self.lifecycle.stop()
+        _log.info("startup_checks_passed", workers=self.settings.workers)
+
     def _run_workers(self, app_import: str | None) -> None:
         if app_import is None:
             raise ConfigError(
                 "TW_WORKERS > 1 needs the app's import path: "
                 "miner.run(app_import='my_miner:miner.app')"
             )
-        _log.warning(
-            "multiworker_metrics",
-            hint="each worker keeps its own metrics; /metrics is not served "
-            "with TW_WORKERS > 1",
+        s = self.settings
+        # Run the startup checks once here, so a refusal (exit 3 = not
+        # registered, ...) ends this process with its exit code; a worker
+        # that fails its lifespan only makes uvicorn stop with status 0.
+        asyncio.run(self._preflight())
+        # Workers write their metrics here (prometheus_client multiprocess
+        # mode); this process serves the aggregate on TW_METRICS_BIND.
+        metrics_dir = tempfile.mkdtemp(prefix="tensorwire-metrics-")
+        os.environ[MULTIPROC_ENV] = metrics_dir
+        stop_metrics = serve_multiprocess(
+            metrics_dir,
+            s.metrics_bind.host,
+            s.metrics_bind.port,
+            legacy_until=s.legacy_v10_until,
         )
-        # Every worker runs the full startup. The axon is published by the
-        # first worker that sees the chain differ; the others find it in sync.
-        uvicorn.run(
-            app_import,
-            lifespan="on",
-            workers=self.settings.workers,
-            **self.uvicorn_options(),
-        )
+        try:
+            # Every worker runs the full startup. The axon is published by the
+            # first worker that sees the chain differ; the others find it in sync.
+            uvicorn.run(
+                app_import,
+                lifespan="on",
+                workers=s.workers,
+                **self.uvicorn_options(),
+            )
+        finally:
+            stop_metrics()
+            os.environ.pop(MULTIPROC_ENV, None)
+            shutil.rmtree(metrics_dir, ignore_errors=True)

@@ -1,4 +1,4 @@
-"""Token-bucket rate limiting (spec 8.6.2), memory backend.
+"""Token-bucket rate limiting (spec 8.6.2), memory and Redis backends.
 
 Two layers use this module:
 
@@ -13,13 +13,17 @@ A bucket holds up to ``burst`` tokens and refills at ``rate`` tokens per
 second. Each request takes one token; an empty bucket rejects with 429 and a
 ``Retry-After`` of the seconds until one token is back.
 
-:class:`MemoryRateLimiter` is per process. With more than one worker or
-instance the same fail-closed rule as the nonce store applies: use the Redis
-backend (spec 8.6.2, Phase 3).
+:class:`MemoryRateLimiter` is per process. :class:`RedisRateLimiter` keeps
+the buckets in Redis, updated by one atomic Lua script on Redis's own clock,
+so every worker and instance shares them. With more than one worker or
+instance the same rule as the nonce store applies: the memory backend is
+refused at startup, and a Redis failure fails closed (503
+``tw.replay_store_unavailable``), never open.
 """
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import math
 import threading
@@ -27,16 +31,20 @@ import time
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable, MutableMapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
-from tensorwire.errors import RateLimited
+from tensorwire.errors import RateLimited, ReplayStoreUnavailable, TWError
 from tensorwire.limits.body import send_error
+
+if TYPE_CHECKING:
+    import redis.asyncio
 
 __all__ = [
     "MemoryRateLimiter",
     "PreAuthRateLimit",
     "RateDecision",
     "RateLimiter",
+    "RedisRateLimiter",
     "TokenBucket",
     "client_ip",
 ]
@@ -153,6 +161,157 @@ class MemoryRateLimiter:
         return self.take(key)
 
 
+#: Atomic token-bucket update. KEYS[1] = bucket; ARGV = rate, burst, ttl_ms.
+#: Time comes from Redis (``TIME``), so workers on hosts with different clocks
+#: share one timeline. Returns ``{allowed (0/1), retry_after_s (string)}``.
+_BUCKET_SCRIPT = """
+local rate = tonumber(ARGV[1])
+local burst = tonumber(ARGV[2])
+local t = redis.call('TIME')
+local now = tonumber(t[1]) + tonumber(t[2]) / 1000000
+local state = redis.call('HMGET', KEYS[1], 'tokens', 'ts')
+local tokens = tonumber(state[1])
+local ts = tonumber(state[2])
+if tokens == nil or ts == nil then
+  tokens = burst
+  ts = now
+end
+local elapsed = now - ts
+if elapsed < 0 then elapsed = 0 end
+tokens = math.min(burst, tokens + elapsed * rate)
+if now > ts then ts = now end
+local allowed = 0
+local retry = 0
+if tokens >= 1 then
+  tokens = tokens - 1
+  allowed = 1
+else
+  retry = (1 - tokens) / rate
+end
+redis.call('HSET', KEYS[1], 'tokens', string.format('%.17g', tokens),
+           'ts', string.format('%.17g', ts))
+redis.call('PEXPIRE', KEYS[1], tonumber(ARGV[3]))
+return {allowed, string.format('%.17g', retry)}
+"""
+
+#: Keys longer than this are hashed (an unparseable X-Forwarded-For hop is
+#: kept verbatim and can be up to the header limit).
+_MAX_RAW_KEY = 128
+
+
+class RedisRateLimiter:
+    """Keyed token buckets shared through Redis (spec 8.6.2).
+
+    One ``EVALSHA`` per request updates the bucket atomically. A bucket
+    expires once it would be full again, so Redis memory stays bounded.
+
+    A denied key is also remembered locally until its ``Retry-After`` has
+    passed: nobody can add tokens to a bucket before that, so the local
+    answer is the one Redis would give, and a flood from one key costs one
+    Redis call per refill instead of one per request. The local table is
+    bounded (``max_local_keys``, least recently used dropped).
+
+    Any Redis error raises :class:`ReplayStoreUnavailable` (503): the
+    limiter fails closed, as the nonce store does.
+    """
+
+    def __init__(
+        self,
+        url: str | None = None,
+        *,
+        rate: float,
+        burst: int,
+        prefix: str = "tw:rl:",
+        client: redis.asyncio.Redis | None = None,
+        max_connections: int = 64,
+        max_local_keys: int = 100_000,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        try:
+            import redis  # noqa: PLC0415 - optional extra
+            import redis.asyncio  # noqa: PLC0415
+        except ImportError:
+            raise RuntimeError(
+                "RedisRateLimiter needs the redis extra: "
+                "pip install 'tensorwire[redis]'"
+            ) from None
+        _check_rate(rate, burst)
+        self.rate = rate
+        self.burst = burst
+        self._prefix = prefix
+        # Expire once the bucket would be full again (plus a second).
+        self._ttl_ms = math.ceil(burst / rate * 1000) + 1000
+        self._redis_error = redis.RedisError
+        if client is None:
+            if url is None:
+                raise ValueError("pass a Redis url or a client")
+            pool = redis.asyncio.BlockingConnectionPool.from_url(
+                url,
+                max_connections=max_connections,
+                timeout=0.25,
+                socket_timeout=0.25,
+                socket_connect_timeout=0.5,
+            )
+            client = redis.asyncio.Redis.from_pool(pool)  # closes the pool too
+        self._r = client
+        self._script = client.register_script(_BUCKET_SCRIPT)
+        self._clock = clock
+        self._max_local = max_local_keys
+        self._denied_until: OrderedDict[str, float] = OrderedDict()
+
+    def _key(self, key: str) -> str:
+        if len(key) > _MAX_RAW_KEY:
+            key = "h:" + hashlib.sha256(key.encode()).hexdigest()
+        return self._prefix + key
+
+    def _locally_denied(self, key: str, now: float) -> float | None:
+        until = self._denied_until.get(key)
+        if until is None:
+            return None
+        if now >= until:
+            del self._denied_until[key]
+            return None
+        return until - now
+
+    def _remember_denial(self, key: str, until: float) -> None:
+        self._denied_until[key] = until
+        self._denied_until.move_to_end(key)
+        while len(self._denied_until) > self._max_local:
+            self._denied_until.popitem(last=False)
+
+    async def acquire(self, key: str) -> RateDecision:
+        """Take one token from ``key``'s bucket.
+
+        Raises :class:`ReplayStoreUnavailable` if Redis cannot be reached.
+        """
+        now = self._clock()
+        wait = self._locally_denied(key, now)
+        if wait is not None:
+            return RateDecision(allowed=False, retry_after_s=wait)
+        try:
+            allowed, retry = await self._script(
+                keys=[self._key(key)], args=[self.rate, self.burst, self._ttl_ms]
+            )
+        except self._redis_error as exc:
+            raise ReplayStoreUnavailable() from exc
+        if int(allowed) == 1:
+            return RateDecision(allowed=True, retry_after_s=0.0)
+        retry_after = float(retry)
+        self._remember_denial(key, now + retry_after)
+        return RateDecision(allowed=False, retry_after_s=retry_after)
+
+    async def ping(self) -> bool:
+        """Readiness probe: True when Redis answers."""
+        try:
+            return bool(await self._r.ping())
+        except self._redis_error:
+            return False
+
+    async def aclose(self) -> None:
+        """Close the connection pool."""
+        await self._r.aclose()
+
+
 def _parse_ip(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
     try:
         return ipaddress.ip_address(value.strip())
@@ -218,6 +377,9 @@ class PreAuthRateLimit:
 
     Rejections are 429 ``tw.rate_limited`` with ``Retry-After``, unsigned
     (spec Appendix A). ``scope["state"]["tw_rate_layer"]`` is set to ``ip``.
+    A shared (Redis) limiter that cannot be reached answers 503
+    ``tw.replay_store_unavailable``, except on ``passthrough_on_failure``
+    paths (the health endpoints: a Redis outage must not fail liveness).
     """
 
     def __init__(
@@ -226,20 +388,35 @@ class PreAuthRateLimit:
         *,
         limiter: RateLimiter,
         trusted_proxies: Sequence[IPNetwork] = (),
+        passthrough_on_failure: frozenset[str] = frozenset(),
     ) -> None:
         self.app = app
         self._limiter = limiter
         self._proxies = tuple(trusted_proxies)
+        self._passthrough = passthrough_on_failure
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        decision = await self._limiter.acquire(_scope_client_ip(scope, self._proxies))
-        if not decision.allowed:
+        error: TWError | None = None
+        try:
+            decision = await self._limiter.acquire(
+                _scope_client_ip(scope, self._proxies)
+            )
+        except ReplayStoreUnavailable as exc:  # shared limiter down: fail closed
+            if scope.get("path") in self._passthrough:
+                await self.app(scope, receive, send)
+                return
             state = scope.setdefault("state", {})
-            state["tw_rate_layer"] = "ip"
-            error = RateLimited(retry_after_s=decision.retry_after_s, layer="ip")
+            state["tw_store_backend"] = "redis"
+            error = exc
+        else:
+            if not decision.allowed:
+                state = scope.setdefault("state", {})
+                state["tw_rate_layer"] = "ip"
+                error = RateLimited(retry_after_s=decision.retry_after_s, layer="ip")
+        if error is not None:
             await send_error(
                 send, error, request_id=state.get("request_id"), scope=scope
             )

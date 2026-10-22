@@ -144,10 +144,17 @@ class ClockGuard:
         return await anyio.to_thread.run_sync(self.check)
 
     async def run(self, interval_s: float = CHECK_INTERVAL_S) -> None:
-        """Check every ``interval_s`` seconds until cancelled."""
+        """Check every ``interval_s`` seconds until cancelled.
+
+        A check that fails unexpectedly is logged and the schedule goes on:
+        the guard must not stop watching the clock because of one bad reading.
+        """
         while True:
             await anyio.sleep(interval_s)
-            await self.check_async()
+            try:
+                await self.check_async()
+            except Exception:  # noqa: BLE001 - keep the schedule alive
+                _log.exception("clock_check_failed")
 
     def _record(self, reading: ClockReading) -> None:
         self._last = reading

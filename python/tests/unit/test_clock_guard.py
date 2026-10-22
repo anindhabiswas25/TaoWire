@@ -120,3 +120,20 @@ def test_log_levels() -> None:
     levels = [e["log_level"] for e in logs if e["log_level"] != "debug"]
     assert levels == ["error", "warning", "info"]
     assert [e["event"] for e in logs if e["log_level"] == "error"] == ["clock_skew"]
+
+
+async def test_schedule_survives_a_failing_check() -> None:
+    calls: list[int] = []
+
+    def flaky(reading: ClockReading) -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("gauge exploded")
+
+    guard = ClockGuard(
+        ["a"], allowed_skew_s=2.0, query=lambda s, t: 0.1, on_reading=flaky
+    )
+    with structlog.testing.capture_logs() as logs, anyio.move_on_after(0.3):
+        await guard.run(interval_s=0.02)
+    assert len(calls) >= 3  # kept checking after the first failure
+    assert "clock_check_failed" in [e["event"] for e in logs]
