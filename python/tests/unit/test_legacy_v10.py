@@ -354,6 +354,23 @@ def test_body_checks() -> None:
         )
 
 
+class AnyFloats(BaseModel):
+    meta: dict[str, Any]
+    required_hash_fields: ClassVar[tuple[str, ...]] = ("meta",)
+
+
+def test_non_finite_floats_under_any_keep_their_hash() -> None:
+    # Regression (Phase 2 gate, G2-1): JSON-mode dumping sent an inf / nan held
+    # in an ``Any``-typed value as null, so the miner hashed "None" where the
+    # sender hashed "inf" and answered 401. A v10 Dendrite sends Infinity / NaN.
+    synapse = AnyFloats(meta={"r": float("inf"), "w": [float("nan")]})
+    req = request(synapse)
+    assert b'"r": Infinity' in req.body
+    assert b'"w": [NaN]' in req.body
+    ok = verify(server(), req, AnyFloats)
+    assert wire.body_hash(ok.synapse) == req.computed_body_hash
+
+
 def test_native_body_hash_route_and_plain_model() -> None:
     srv = server()
     req = request(Dummy(dummy_input=1))
