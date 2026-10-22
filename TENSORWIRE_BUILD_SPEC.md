@@ -5,11 +5,12 @@ Python core · btauth/1 native · v10 → v11 migration (compat layer, two-way b
 
 | Field | Value |
 |---|---|
-| Document version | 1.3 |
+| Document version | 1.4 |
 | Changes in 1.1 | Migration of existing v10 subnets is a first-class goal: new Section 10b, two-way legacy bridge (8.11), `tensorwire migrate` CLI, migration rollout runbook, success criterion S6, phase plan updated |
 | Changes in 1.2 | SDK version range instead of an exact pin (3, 18); staged metagraph staleness instead of a 15-minute hard stop (8.5.1); product metrics (1.6); relationship with the core team (1.7); sustainability and maintenance (Section 20) |
 | Changes in 1.3 | Phase 0–1 findings: protocol tag is a u8, default 87 (D1); stake units and `total_stake_tao` (D2, 2, 8.3); v10 marker (D3, 8.11.3); write retries and `set_weights` meaning (8.3); stricter shape rules (4.3); localnet facts (14.2, 14.5); 8.11.1 rewritten from captured vectors (by Engineer B) |
-| Date | 22 October 2026 |
+| Changes in 1.4 | Phase 2 findings: component dependencies without a cycle (5.2); one time budget per query incl. the v10 fallback (8.8); v10 end-date wording, axon-signature scope, non-finite floats in v10 answers (8.11.2-8.11.3); `https-if-tls-published` refused until TLS ships (8.6); days-remaining gauge kept current (8.11); compat additions (10b.2); how S6 is counted (1.5, 13.8); `tw.legacy_auth_failed` covers unparseable bodies (Appendix A) |
+| Date | 23 October 2026 |
 | Target SDK | `bittensor>=11.3.0,<12` (baseline verified against 11.3.0, stable, released 7 Oct 2026; see Section 18.3) |
 | Target protocol | `btauth/1` (hotkey-signed HTTP, defined by the Bittensor v11 docs) |
 | Audience | Backend engineers and blockchain engineers building the kit |
@@ -136,7 +137,7 @@ The kit has two audiences with equal priority: **new subnet teams** (goals 1–5
 | S3 | No high or critical findings open from the security review | Review report |
 | S4 | Quickstart works on a clean Ubuntu 24.04 and macOS machine | Timed walkthrough under 60 minutes |
 | S5 | Miner sustains ≥ 500 verified requests/second on 4 vCPU with p99 auth overhead ≤ 5 ms | `just bench` report (Section 13.7) |
-| S6 | A template-derived v10 subnet migrates with ≤ 50 changed lines (excluding import lines and `# TW-MIGRATE` items resolved by `migrate apply`), and a mixed fleet runs on localnet | Migration case studies (Section 13.8): lines changed, hours spent, mixed-fleet matrix green |
+| S6 | A template-derived v10 subnet migrates with ≤ 50 changed lines (excluding import lines and every change `migrate apply` makes on its own, e.g. `bt.logging` → `logging` and the `template/base` → `TemplateValidatorAdapter` swap), and a mixed fleet runs on localnet. Counted as `git diff --stat` between `migrate apply` output and the final port, subnet code only | Migration case studies (Section 13.8): lines changed, hours spent, mixed-fleet matrix green |
 | S7 | At least 2 real v10 subnets (design partners) ported, plus the archived template | Case-study reports in `docs/migrations/` |
 
 S1–S7 decide when 1.0 is **done**. They do not say whether the product **works for users**; Section 1.6 does.
@@ -498,8 +499,8 @@ See Appendix C. The ed25519 vector has a fixed expected signature. sr25519 signa
 | `extensions.response_sig` | `twresp/1` response signing and verification | `crypto` |
 | `extensions.streaming` | SSE streaming with signed trailer | `response_sig` |
 | `extensions.timelock` | Sealed challenges/responses, drand cache | `bittensor.timelock` |
-| `extensions.legacy_v10` | Two-way v10 wire format: verify v10 Dendrite requests and answer in v10 shape (miner); send v10-format requests to v10 Axons (validator). Time-boxed | `crypto`, `compat` |
-| `compat` | v10-shaped API (`Synapse`, `Axon`, `Dendrite`, `AxonInfo`, `weights`) over the kit | miner, validator client, `legacy_v10` |
+| `extensions.legacy_v10` | Two-way v10 wire format: verify v10 Dendrite requests and answer in v10 shape (miner); send v10-format requests to v10 Axons (validator). Time-boxed. `wire` depends only on `crypto`; `server` and `client` plug into the miner and validator client through the interfaces in `miner.legacy` and `validator.client` | `crypto` |
+| `compat` | v10-shaped API (`Synapse`, `Axon`, `Dendrite`, `AxonInfo`, `Metagraph`, `weights`, `TemplateValidatorAdapter`) over the kit | miner, validator client, `legacy_v10.wire` (one body-hash implementation) |
 | `migrate` | Repo scanner and codemods for v10 → v11 | `libcst` (optional extra) |
 | `observability` | structlog JSON logs, Prometheus metrics, request IDs | `structlog`, `prometheus_client` |
 | `sidecar` | Localhost HTTP API: metagraph snapshot, serve-axon, health | gateway |
@@ -1232,7 +1233,7 @@ def parse_axon(s: str | None) -> Endpoint | None: ...
 #   private/loopback ranges unless TW_ALLOW_PRIVATE_AXONS=1 (needed on localnet).
 ```
 
-Scheme selection: the subnet declares `TW_SCHEME_POLICY` = `http` | `https` | `https-if-tls-published`. In the third mode the validator uses HTTPS for miners that published with `ServeAxonTls`, after checking the published key (Section 16.3).
+Scheme selection: the subnet declares `TW_SCHEME_POLICY` = `http` | `https` | `https-if-tls-published`. In the third mode the validator uses HTTPS for miners that published with `ServeAxonTls`, after checking the published key (Section 16.3). Until TLS support ships (Phase 4), `https-if-tls-published` is **refused at startup** with a `StartupError` naming the setting: a validator that asked for pinned TLS must never run on plain HTTP without knowing it.
 
 **Protocol tag.** `ServeAxon.protocol` is a subnet-defined number stored on chain (default 4). TensorWire publishes `protocol=TW_PROTOCOL_TAG` (default `87`, 0x57 "W"). The on-chain field is a **u8** (0–255; larger values fail to encode), so collisions with other subnets' values are possible; it only weakens the M1 count and the 8.11.3 hint, never security (decision D1). Validators may filter to miners advertising it. Document this; it is advisory, not security.
 
@@ -1309,6 +1310,8 @@ Rules:
 - Stream-read the response with a byte cap (`max_response_bytes`); abort → `tw.response_too_large`.
 - If `verify_responses`, check `twresp/1` (Section 9.1). Failed check → `ok=False`, `error_code="tw.bad_response_signature"`. **Scoring code must treat this as a failed response.**
 - Never send a request to a neuron whose axon is `None` or fails `parse_axon`.
+- **One time budget per query:** all attempts for one miner, including the v10 fallback attempt (8.11.3), finish within `max_attempts × timeout_s` (or the per-call `timeout_s` override × `max_attempts`). The v10 attempt gets the time left; if none is left the result is `tw.timeout`. A round's length is therefore bounded no matter how miners answer.
+- `query(..., timeout_s=)` overrides the per-attempt deadline for one call (used by `compat.Dendrite(timeout=)`).
 
 ### 8.9 Validator loop (`validator/loop.py`, `scores.py`, `weights.py`)
 
@@ -1417,15 +1420,17 @@ Confirmed byte for byte against a real `bittensor==10.5.0` Dendrite and Axon (`c
 
 #### 8.11.2 Server side: v10 validators → TensorWire miner (`server.py`)
 
-- Enabled with `TW_LEGACY_V10_UNTIL=<ISO date>`. The miner refuses to start if the date is in the past. There is no "forever" option.
+- Enabled with `TW_LEGACY_V10_UNTIL=<ISO date>`. v10 requests are accepted **through the day before `<date>` (UTC)**; from `<date>` on they get 410 `tw.legacy_disabled`, in a running process and after a restart alike. The miner refuses to start if `<date>` is today or earlier, or more than 180 days away. There is no "forever" option.
 - Mounted automatically for routes declared through `compat.Synapse` (Section 10b.2): the kit has the Synapse class, so it computes `computed_body_hash` itself from `required_hash_fields`. Native routes may still supply `legacy_synapse=MySynapse` or `legacy_body_hash(raw_body) -> str`; without either, legacy calls to that route are rejected.
 - Same pipeline as Section 5.3, with the legacy verifier at step [6]: IP limit → size cap → v10 signature check → the kit's own freshness window (default 10 s) and replay store on `(sender, nonce)` → caller policy → hotkey rate limit → handler.
-- Answers in v10 shape (Synapse JSON + `bt_header_axon_*` headers, including an axon signature over the v10 response message), so an unmodified v10 Dendrite parses it.
+- Answers in v10 shape (Synapse JSON + `bt_header_axon_*` headers), so an unmodified v10 Dendrite parses it. Answers to **verified** requests (200 and the post-auth 403/429/422/500/504) carry an axon signature over the v10 response message, made with the miner's own hotkey; 401, 410 and pre-auth 503 answers are unsigned, so the miner never signs for unauthenticated input. (v10 Dendrites check neither; the signature is for parity and audit.)
+- Non-finite floats (`inf`, `nan`) in an answer are **not** silently changed: if the handler's Synapse holds one in a field the JSON encoder would turn into `null`, the answer is 500 `tw.handler_error` and the log names the field. (A real v10 Axon also fails here.) Requests keep them as `Infinity`/`NaN`, as a v10 Dendrite sends them, so the body hash matches.
 - Every legacy call is counted (`tw_legacy_v10_requests_total{direction="inbound"}`) and logged at INFO with the sender prefix; at WARNING once per sender per hour.
+- `tw_legacy_v10_days_remaining{direction}` is **current at every scrape** (computed from the end date, not set once at startup), for both directions; alert at < 14 days.
 
 #### 8.11.3 Client side: TensorWire validator → v10 miners (`client.py`)
 
-- Enabled with `TW_LEGACY_V10_CLIENT=auto|off` (default `off`) and `TW_LEGACY_V10_CLIENT_UNTIL=<ISO date>` (required when `auto`).
+- Enabled with `TW_LEGACY_V10_CLIENT=auto|off` (default `off`) and `TW_LEGACY_V10_CLIENT_UNTIL=<ISO date>` (required when `auto`; same end-date rule as 8.11.2). v10 Axons verify sr25519 only: `auto` with an ed25519 validator hotkey is refused at startup with a `StartupError` naming both settings.
 - **Protocol choice per miner** (`auto`):
   1. If the on-chain axon `protocol` field is readable through the gateway and equals `TW_PROTOCOL_TAG`, use btauth/1. (Confirmed in Phase 0: the field is readable through `Metagraph.raw["axons"][uid]["protocol"]` and exposed as `NeuronView.axon_protocol`.)
   2. Otherwise try btauth/1 first. If the answer has the v10 shape (an HTTP 500 carrying a `bt_header_axon_status_code` header, which every v10 Axon response has; vector N7), retry once immediately with a fresh v10 request and remember `v10` for that hotkey.
@@ -1613,6 +1618,7 @@ responses = await dendrite(axons=axons, synapse=Dummy(dummy_input=step),
 - Underneath it is `ValidatorClient.query_many`: fresh nonce per attempt, no transport retries, response size cap, twresp/1 checks, and the v10 fallback when `TW_LEGACY_V10_CLIENT=auto` (8.11.3).
 - Failures do not raise. As in v10, the item comes back with `dendrite.status_code` set (408 for timeout, 503 for connect error, 401/403 passed through) and `dendrite.status_message` set to the `tw.*` code.
 - `AxonInfo` is a small dataclass (`ip`, `port`, `hotkey`, `is_serving`) built from `NeuronView`, so code that filters on `axon.is_serving` keeps working.
+- `compat.Metagraph` is a read-only view over the kit's `MetagraphView` with the v10 attribute names template code reads (`uids`, `hotkeys`, `axons`, `S`, `validator_permit`, `n`, `block`; `Metagraph.of_miner(...)` for miner code). No `sync()`: the kit's cache refreshes it.
 
 #### 10b.2.4 Validator loop
 
@@ -2526,7 +2532,7 @@ Announce it at least 3 months ahead; mark the packages as "maintenance ended" on
 | `tw.replay_store_unavailable` | 503 | Redis unreachable | no |
 | `tw.handler_timeout` | 504 | Handler exceeded timeout | yes |
 | `tw.forbidden_blacklisted` | 403 | `compat` `blacklist_fn` returned `True` | yes (v10 shape on the legacy path) |
-| `tw.legacy_auth_failed` | 401 | v10 signature, hash, freshness or replay check failed | no |
+| `tw.legacy_auth_failed` | 401 | v10 signature, hash, freshness or replay check failed, or the body does not parse into the route's Synapse | no |
 | `tw.legacy_disabled` | 410 | v10 request after `TW_LEGACY_V10_UNTIL` | no |
 
 Client-side only (in `MinerResult.error_code`): `tw.timeout`, `tw.connect_error`, `tw.http_<status>`, `tw.bad_response_signature`, `tw.response_too_large`, `tw.invalid_response`, `tw.no_axon`.
