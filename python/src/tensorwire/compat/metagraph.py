@@ -11,7 +11,8 @@ background) or a fixed ``MetagraphView``::
     stake = float(metagraph.S[uid])
 
 Every attribute reads the latest snapshot. ``sync()`` is a no-op: the kit's
-cache refreshes itself. Values are plain Python lists (``S`` is the
+cache refreshes itself. ``copy.deepcopy(metagraph)`` freezes the current
+snapshot, so "before / after" comparisons in template code still work. Values are plain Python lists (``S`` is the
 caller's stake in TAO at spot price, ``NeuronView.total_stake_tao``), not
 tensors; wrap them in ``numpy.array(...)`` where the code needs arrays.
 """
@@ -78,6 +79,15 @@ class Metagraph:
 
     def sync(self, *_args: Any, **_kwargs: Any) -> None:
         """No-op: the kit's metagraph cache refreshes in the background."""
+
+    def __copy__(self) -> Metagraph:
+        """A view frozen at the current snapshot (template ``resync_metagraph``
+        code compares ``copy.deepcopy(self.metagraph)`` with the live one)."""
+        return Metagraph(self.snapshot())
+
+    def __deepcopy__(self, _memo: dict[int, Any]) -> Metagraph:
+        """As :meth:`__copy__`: snapshots are immutable."""
+        return self.__copy__()
 
     @property
     def netuid(self) -> int:

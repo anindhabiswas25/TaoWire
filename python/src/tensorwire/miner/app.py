@@ -35,6 +35,7 @@ import os
 import shutil
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import AsyncIterator, Callable, Iterator
 from pathlib import Path
@@ -65,7 +66,13 @@ from tensorwire.observability.metrics import MULTIPROC_ENV, Metrics, serve_multi
 from tensorwire.observability.middleware import RequestContext
 from tensorwire.policy.caller import CallerPolicy
 
-__all__ = ["DEFAULT_LIMIT_CONCURRENCY", "MAX_HEADER_BYTES", "Miner", "NoSignalServer"]
+__all__ = [
+    "DEFAULT_LIMIT_CONCURRENCY",
+    "MAX_HEADER_BYTES",
+    "BackgroundServer",
+    "Miner",
+    "NoSignalServer",
+]
 
 #: uvicorn ``--limit-concurrency``: connections beyond this get 503 at once.
 DEFAULT_LIMIT_CONCURRENCY = 1024
@@ -358,14 +365,41 @@ class Miner:
         )
         return NoSignalServer(config)
 
-    async def _serve(self) -> None:
+    def serve_in_background(
+        self, *, ready_timeout_s: float | None = None
+    ) -> BackgroundServer:
+        """Serve from a daemon thread, without touching signal handlers.
+
+        For v10's ``with Miner() as miner:`` form (compat): returns once the
+        miner is ready, or raises what startup raised (``StartupError``, ...).
+        Single worker only. Stop it with :meth:`BackgroundServer.stop`.
+        """
+        if self.settings.workers > 1:
+            raise ConfigError("serve_in_background() runs one worker (TW_WORKERS=1)")
+        handle = BackgroundServer(self)
+        handle.start(
+            self.settings.startup_timeout_s + 30
+            if ready_timeout_s is None
+            else ready_timeout_s
+        )
+        return handle
+
+    async def _serve(
+        self,
+        *,
+        signals: bool = True,
+        on_server: Callable[[uvicorn.Server], None] | None = None,
+    ) -> None:
         app = self.app
         await self.lifecycle.start()
         metrics_server = self._metrics_server()
         metrics_task = asyncio.get_running_loop().create_task(metrics_server.serve())
-        server = uvicorn.Server(
+        server_cls = uvicorn.Server if signals else NoSignalServer
+        server = server_cls(
             uvicorn.Config(app, lifespan="on", **self.uvicorn_options())
         )
+        if on_server is not None:
+            on_server(server)
         try:
             await server.serve()
         finally:
@@ -412,3 +446,52 @@ class Miner:
             stop_metrics()
             os.environ.pop(MULTIPROC_ENV, None)
             shutil.rmtree(metrics_dir, ignore_errors=True)
+
+
+class BackgroundServer:
+    """A :class:`Miner` served from a daemon thread (``Miner.serve_in_background``)."""
+
+    def __init__(self, miner: Miner) -> None:
+        self._miner = miner
+        self._server: uvicorn.Server | None = None
+        self._error: BaseException | None = None
+        self._thread = threading.Thread(
+            target=self._main, name="tensorwire-miner", daemon=True
+        )
+
+    def _main(self) -> None:
+        try:
+            asyncio.run(self._miner._serve(signals=False, on_server=self._keep))
+        except BaseException as exc:  # noqa: BLE001 - reported to the owner thread
+            self._error = exc
+
+    def _keep(self, server: uvicorn.Server) -> None:
+        self._server = server
+
+    def start(self, timeout_s: float) -> None:
+        """Start the thread; return once the miner is ready (or raise)."""
+        self._thread.start()
+        deadline = time.monotonic() + timeout_s
+        while not (self._miner.lifecycle.ready and self.started):
+            if not self._thread.is_alive():
+                raise self._error or RuntimeError("the miner stopped during startup")
+            if time.monotonic() > deadline:
+                self.stop()
+                raise StartupError("the miner did not become ready in time")
+            time.sleep(0.05)
+
+    @property
+    def started(self) -> bool:
+        """Whether the HTTP server is listening."""
+        return self._server is not None and self._server.started
+
+    @property
+    def running(self) -> bool:
+        """Whether the serving thread is alive."""
+        return self._thread.is_alive()
+
+    def stop(self, timeout_s: float = 60.0) -> None:
+        """Ask the server to drain and stop, and wait for the thread."""
+        if self._server is not None:
+            self._server.should_exit = True
+        self._thread.join(timeout=timeout_s)
