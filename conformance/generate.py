@@ -836,14 +836,6 @@ def negative() -> dict[str, Any]:
     signed_post = good
     ed_pub_ss58 = KEYS["alice_ed25519"]["ss58"]
     sender_wrong_len = _b58encode(b"\x2a" + pk_alice + b"\x00")  # 34 bytes
-    py_lax_hex = {
-        "valid": True,
-        "code": None,
-        "note": "known divergence: bittensor.http_auth decodes the signature with "
-        "bytes.fromhex, which skips ASCII whitespace. Normative answer (spec 4.3 "
-        "step 1, 'signature is hex') is tw.auth_malformed; reported to Engineer A "
-        "(auth/verifier.py) in COORDINATION.md.",
-    }
     py_wrapped = {
         "valid": True,
         "code": None,
@@ -852,10 +844,10 @@ def negative() -> dict[str, Any]:
         "implementations (TypeScript, Go, Rust) reject them.",
     }
     universal_note = [
-        "Weak key: the identity point has a signature that verifies for every "
-        "payload. Every implementation accepts it, matching the SDK (schnorrkel, "
-        "ed25519 RFC 8032 cofactorless). Caller policy (registered hotkey) is the "
-        "protection; spec finding filed for the PM."
+        "Weak key: the identity point has a signature (R = identity, S = 0) "
+        "that verifies for every payload. bittensor.http_auth accepts it; kit "
+        "verifiers in every language reject it as a bad signature, checked after "
+        "the signature and before the replay store."
     ]
     v = _verify_case
     cases = [
@@ -969,11 +961,10 @@ def negative() -> dict[str, Any]:
           code="tw.auth_malformed"),
         v("N45", "signature hex with an inner space",
           with_headers(_set(gh, H_SIG, sig[:10] + " " + sig[10:])),
-          code="tw.auth_malformed", python_reference=py_lax_hex),
+          code="tw.auth_malformed"),
         v("N46", "signature hex with a trailing space (a server that keeps "
           "trailing whitespace passes it on)",
-          with_headers(_set(gh, H_SIG, sig + " ")), code="tw.auth_malformed",
-          python_reference=py_lax_hex),
+          with_headers(_set(gh, H_SIG, sig + " ")), code="tw.auth_malformed",),
         v("N47", "receiver header is the literal unbound marker '-'",
           with_headers(_set(gh, H_RECEIVER, "-")), code="tw.auth_wrong_receiver"),
         v("N48", "empty receiver", with_headers(_set(gh, H_RECEIVER, "")),
@@ -1044,11 +1035,12 @@ def negative() -> dict[str, Any]:
           with_headers([*gh, ["Accept", "a/b"], ["Accept", "c/d"]]), code=None),
         v("A12", "reserved X-Bittensor-Drand-Round header is ignored (spec 4.4)",
           with_headers([*gh, ["X-Bittensor-Drand-Round", "1"]]), code=None),
-        v("A13", "weak ed25519 key (identity point) with the universal signature",
-          _universal("ed25519"), code=None, notes=universal_note),
-        v("A14", "weak sr25519 key (ristretto identity) with the universal "
-          "signature", _universal("sr25519"), code=None, notes=universal_note),
-        v("A15", "ed25519 sender header for the golden ed25519 address",
+        v("N63", "weak ed25519 key (identity point) with the universal signature",
+          _universal("ed25519"), code="tw.auth_bad_signature", notes=universal_note),
+        v("N64", "weak sr25519 key (ristretto identity) with the universal "
+          "signature", _universal("sr25519"), code="tw.auth_bad_signature",
+          notes=universal_note),
+        v("A13", "ed25519 sender header for the golden ed25519 address",
           with_headers(_set(good_ed["headers"], H_HOTKEY, ed_pub_ss58), good_ed),
           code=None),
     ]  # fmt: skip

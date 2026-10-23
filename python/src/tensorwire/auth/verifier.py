@@ -19,6 +19,14 @@ step 1 of the normative order (spec 4.3) and fail as ``tw.auth_malformed``:
   Go and Rust verifiers do not.
 - **``X-Bittensor-Crypto`` is exactly ``ed25519`` or ``sr25519``** (spec 4.1:
   values are exact). The SDK also takes ``0``/``1``, any case and padding.
+- **The signature is hex digits only** (an optional ``0x``). The SDK decodes
+  with ``bytes.fromhex``, which skips whitespace (vectors N45, N46).
+
+One check belongs to step 4 and fails as ``tw.auth_bad_signature``: a **weak
+public key** (the sr25519 identity, an ed25519 point of small order) has a
+signature that verifies for every payload, which the SDK accepts (vectors
+N63, N64). It runs after the SDK's signature check and before the nonce is
+stored, so it never touches the replay store.
 
 ``require_receiver`` is always ``True``; there is no way to turn it off.
 """
@@ -36,7 +44,12 @@ import anyio.to_thread
 from bittensor import http_auth
 
 from tensorwire.auth.nonce_store import NonceStore
-from tensorwire.crypto import public_key_from_ss58, scheme_name
+from tensorwire.crypto import (
+    crypto_type_from_scheme,
+    is_weak_public_key,
+    public_key_from_ss58,
+    scheme_name,
+)
 from tensorwire.errors import AuthFailed
 
 __all__ = ["DEFAULT_VERIFY_THREADS", "Caller", "RequestVerifier"]
@@ -58,6 +71,8 @@ _NONCE = http_auth.HEADER_NONCE.lower()
 _CRYPTO = http_auth.HEADER_CRYPTO.lower()
 _SCHEMES = frozenset({"ed25519", "sr25519"})
 _NONCE_RE = re.compile(r"[0-9]{1,20}")
+_SIGNATURE = http_auth.HEADER_SIGNATURE.lower()
+_SIGNATURE_RE = re.compile(r"(?:0x)?[0-9a-fA-F]*")
 
 Headers = Mapping[str, str] | Iterable[tuple[str, str]]
 
@@ -112,6 +127,31 @@ def _check_shape(headers: Mapping[str, str]) -> None:
     crypto = headers.get(_CRYPTO)
     if crypto is not None and crypto not in _SCHEMES:
         raise _malformed(f"unsupported {http_auth.HEADER_CRYPTO}")
+    signature = headers.get(_SIGNATURE)
+    if signature is not None and not _SIGNATURE_RE.fullmatch(signature):
+        raise _malformed(f"{http_auth.HEADER_SIGNATURE} is not hex")
+
+
+class _WeakKey(Exception):
+    """Raised from inside the SDK's ``verify`` when the signer's key is weak."""
+
+
+class _WeakKeyGuard:
+    """Wraps the nonce store: refuses weak keys before the store is written.
+
+    ``http_auth.verify`` consults the store only after the signature verified,
+    so this runs exactly at the end of step 4.
+    """
+
+    def __init__(self, store: NonceStore, crypto_type: int) -> None:
+        self._store = store
+        self._crypto_type = crypto_type
+        self.retention = getattr(store, "retention", None)
+
+    def check_and_store(self, hotkey_ss58: str, nonce_ns: int) -> bool:
+        if is_weak_public_key(public_key_from_ss58(hotkey_ss58), self._crypto_type):
+            raise _WeakKey
+        return self._store.check_and_store(hotkey_ss58, nonce_ns)
 
 
 class RequestVerifier:
@@ -184,6 +224,8 @@ class RequestVerifier:
         lowered = _auth_headers(headers)
         _check_shape(lowered)
         now = None if self._now_ns is None else self._now_ns()
+        # Shape is checked, so the header is exactly one of the two scheme names.
+        crypto_type = crypto_type_from_scheme(lowered.get(_CRYPTO, "sr25519"))
         try:
             caller = http_auth.verify(
                 lowered,
@@ -194,9 +236,14 @@ class RequestVerifier:
                 max_age=self._max_age,
                 allowed_skew=self._skew,
                 require_receiver=True,
-                nonce_store=self._store,
+                nonce_store=_WeakKeyGuard(self._store, crypto_type),
                 now_ns=now,
             )
+        except _WeakKey:
+            raise AuthFailed(
+                "signature does not verify against the claimed hotkey",
+                code="tw.auth_bad_signature",
+            ) from None
         except http_auth.AuthError as exc:
             # SDK messages never echo the signature or payload (spec 3.2).
             raise AuthFailed(

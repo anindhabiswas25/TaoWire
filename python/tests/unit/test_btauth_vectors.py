@@ -48,6 +48,20 @@ APPENDIX_C_ED25519 = (
     "a56a26918fdf871b6cf09437e6588023a4ce423cf622621b2a7feee17612f704"
 )
 B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+#: The canonical encodings of the eight ed25519 points of small order.
+ED25519_TORSION = {
+    bytes.fromhex(h)
+    for h in (
+        "0100000000000000000000000000000000000000000000000000000000000000",
+        "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000080",
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+    )
+}
 
 
 def b64(value: str) -> bytes:
@@ -123,7 +137,7 @@ NONCE_RE = re.compile(r"[0-9]{1,20}")
 SIG_RE = re.compile(r"(?:0x)?((?:[0-9a-fA-F]{2})*)")
 
 
-def spec_verify(
+def spec_verify(  # noqa: PLR0912 - the five steps of spec 4.3, in order
     i: dict[str, Any], r: dict[str, Any], seen: set[tuple[str, int]]
 ) -> str:
     """Spec 4.3 with the kit's stricter step 1, from the text. Returns the sender."""
@@ -175,6 +189,10 @@ def spec_verify(
         headers["x-bittensor-receiver"],
     )
     if not raw_only_verify(text.encode(), signature, sender, SCHEME_TYPES[scheme]):
+        raise Refused("tw.auth_bad_signature")
+    key = ss58_decode(sender)
+    weak = key == bytes(32) if scheme == "sr25519" else key in ED25519_TORSION
+    if weak:  # the kit's weak-key rule: universal signatures are refused
         raise Refused("tw.auth_bad_signature")
     # 5. replay, only after the signature
     if (sender, nonce) in seen:
@@ -385,6 +403,9 @@ def test_negative_covers_spec_11_7() -> None:
         "N23": "tw.auth_malformed", "N27": "tw.auth_malformed",
         "N29": "tw.auth_malformed", "N30": "tw.auth_malformed",
         "N34": "tw.auth_malformed",
+        # weak keys and lax hex (kit rules, every language)
+        "N45": "tw.auth_malformed", "N46": "tw.auth_malformed",
+        "N63": "tw.auth_bad_signature", "N64": "tw.auth_bad_signature",
     }  # fmt: skip
     for vid, code in required.items():
         assert by_id[vid] == code, vid
@@ -405,9 +426,9 @@ def test_python_reference_agrees(vector: dict[str, Any]) -> None:
 
 
 def test_divergences_are_only_the_documented_ones() -> None:
-    """The Python reference differs only on <Bytes> wrapping and lax hex."""
+    """The Python reference differs only on <Bytes> wrapping (spec 11.7)."""
     divergent = {v["id"] for v in VERIFY if "python_reference" in v}
-    assert divergent == {"N19", "N20", "N45", "N46"}
+    assert divergent == {"N19", "N20"}
     for v in VERIFY:
         if v["id"] in divergent:
             assert v["python_reference"]["note"]
@@ -421,3 +442,20 @@ def test_signed_payload_of_negative_cases_is_the_spec_payload() -> None:
         if text is not None:
             assert text.startswith("btauth/1\n")
             assert len(text.split("\n")) == 8
+
+
+@pytest.mark.parametrize("key", sorted(ED25519_TORSION), ids=lambda k: k.hex()[:8])
+def test_crypto_finds_every_small_order_ed25519_key(key: bytes) -> None:
+    assert crypto.is_weak_public_key(key, crypto.CRYPTO_ED25519)
+
+
+def test_real_keys_are_not_weak() -> None:
+    for name, key in KEYS.items():
+        ctype = SCHEME_TYPES[key["scheme"]]
+        assert not crypto.is_weak_public_key(
+            bytes.fromhex(key["public_key_hex"]), ctype
+        ), name
+    assert crypto.is_weak_public_key(bytes(32), crypto.CRYPTO_SR25519)
+    assert not crypto.is_weak_public_key(b"\xff" * 32, crypto.CRYPTO_ED25519)
+    with pytest.raises(ValueError, match="32 bytes"):
+        crypto.is_weak_public_key(b"\x01", crypto.CRYPTO_SR25519)

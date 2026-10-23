@@ -50,7 +50,7 @@ def test_every_committed_vector_passes() -> None:
     assert out.strip().splitlines()[-1].startswith("PASS:")
     for name in REQUIRED_FILES:
         assert f"ok   {name}" in out
-    assert "4 known divergence(s)" in out
+    assert "2 known divergence(s)" in out
     assert "divergence N19" in out
 
 

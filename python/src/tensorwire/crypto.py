@@ -28,6 +28,7 @@ __all__ = [
     "Keypair",
     "btauth_payload",
     "crypto_type_from_scheme",
+    "is_weak_public_key",
     "keypair_from_seed",
     "keypair_from_uri",
     "public_key_from_ss58",
@@ -228,3 +229,45 @@ def keypair_from_seed(seed: bytes, *, crypto_type: int = CRYPTO_SR25519) -> Keyp
     if len(seed) != 32:
         raise ValueError("a secret seed is 32 bytes")
     return Keypair.create_from_seed(seed, crypto_type=crypto_type)
+
+
+# ed25519 curve constants (RFC 8032 5.1): -x^2 + y^2 = 1 + d x^2 y^2 mod p.
+_P = 2**255 - 19
+_D = -121665 * pow(121666, -1, _P) % _P
+_SQRT_M1 = pow(2, (_P - 1) // 4, _P)
+
+
+def _ed_add(a: tuple[int, int], b: tuple[int, int]) -> tuple[int, int]:
+    (x1, y1), (x2, y2) = a, b
+    t = _D * x1 * x2 * y1 * y2 % _P
+    x3 = (x1 * y2 + y1 * x2) * pow(1 + t, -1, _P) % _P
+    y3 = (y1 * y2 + x1 * x2) * pow(1 - t, -1, _P) % _P
+    return x3, y3
+
+
+def is_weak_public_key(public_key: bytes, crypto_type: int) -> bool:
+    """Whether a public key has a signature that verifies for every message.
+
+    sr25519: the ristretto identity (32 zero bytes; ristretto has no other
+    small-order element). ed25519: a point of order 1, 2, 4 or 8, where the
+    signature R = that point, S = 0 fits any payload under cofactorless
+    RFC 8032 verification. The SDK accepts such signatures; kit verifiers in
+    every language reject them as a bad signature (``negative.json`` N63, N64).
+    Keys that are not curve points at all are not weak (they never verify).
+    """
+    scheme_name(crypto_type)
+    if len(public_key) != 32:
+        raise ValueError("a public key is 32 bytes")
+    if crypto_type == CRYPTO_SR25519:
+        return public_key == bytes(32)
+    y = int.from_bytes(public_key, "little") & ((1 << 255) - 1)
+    u = (y * y - 1) * pow(_D * y * y + 1, -1, _P) % _P
+    x = pow(u, (_P + 3) // 8, _P)
+    if x * x % _P != u:
+        x = x * _SQRT_M1 % _P
+        if x * x % _P != u:
+            return False  # not on the curve
+    point = (x, y % _P)
+    for _ in range(3):  # multiply by the cofactor 8
+        point = _ed_add(point, point)
+    return point == (0, 1)

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import typer
 
+from tensorwire.cli.conformance_cmd import conformance
 from tensorwire.cli.doctor import doctor
 from tensorwire.cli.init_cmd import init
 from tensorwire.cli.migrate_cmd import migrate_app
@@ -35,6 +36,7 @@ def main(
     """TensorWire: networking kit for Bittensor v11 subnets."""
 
 
+app.command("conformance")(conformance)
 app.command("doctor")(doctor)
 app.command("init")(init)
 app.command("sign-request")(sign_request)

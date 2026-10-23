@@ -263,6 +263,90 @@ def test_non_canonical_nonce_is_malformed(
     assert code(verifier, headers) == "tw.auth_malformed"
 
 
+@pytest.mark.parametrize(
+    "mangle",
+    [
+        lambda sig: sig[:10] + " " + sig[10:],
+        lambda sig: sig + " ",
+        lambda sig: sig[:10] + "\t" + sig[10:],
+        lambda sig: "0X" + sig[2:],
+    ],
+    ids=["inner-space", "trailing-space", "tab", "0X"],
+)
+def test_signature_must_be_hex_digits_only(
+    verifier: RequestVerifier, clock: FakeClock, mangle: Any
+) -> None:
+    """``bytes.fromhex`` in the SDK skips whitespace; the kit does not (N45, N46)."""
+    headers = signed(clock)
+    headers[http_auth.HEADER_SIGNATURE] = mangle(headers[http_auth.HEADER_SIGNATURE])
+    with pytest.raises(AuthFailed, match="not hex") as info:
+        verify(verifier, headers)
+    assert info.value.code == "tw.auth_malformed"
+
+
+def test_upper_case_hex_and_no_prefix_are_accepted(
+    verifier: RequestVerifier, clock: FakeClock
+) -> None:
+    headers = signed(clock)
+    headers[http_auth.HEADER_SIGNATURE] = headers[http_auth.HEADER_SIGNATURE][
+        2:
+    ].upper()
+    assert verify(verifier, headers).hotkey_ss58 == ALICE.ss58
+
+
+class _CountingStore(MemoryNonceStore):
+    def __init__(self) -> None:
+        super().__init__(60)
+        self.calls = 0
+
+    def check_and_store(self, hotkey_ss58: str, nonce_ns: int) -> bool:
+        self.calls += 1
+        return super().check_and_store(hotkey_ss58, nonce_ns)
+
+
+@pytest.mark.parametrize(
+    ("scheme", "public_key", "signature"),
+    [
+        ("sr25519", bytes(32), bytes(63) + b"\x80"),
+        ("ed25519", b"\x01" + bytes(31), b"\x01" + bytes(63)),
+    ],
+)
+def test_weak_key_universal_signature_is_refused_before_the_store(
+    clock: FakeClock, scheme: str, public_key: bytes, signature: bytes
+) -> None:
+    """The SDK accepts these; the kit refuses them as a bad signature (N63, N64)."""
+    store = _CountingStore()
+    verifier = RequestVerifier(BOB.ss58, store, now_ns=clock.now_ns)
+    sender = str(sp_core.ss58_encode(public_key, 42))
+    headers = {
+        http_auth.HEADER_VERSION: "1",
+        http_auth.HEADER_HOTKEY: sender,
+        http_auth.HEADER_RECEIVER: BOB.ss58,
+        http_auth.HEADER_NONCE: str(clock.now_ns()),
+        http_auth.HEADER_SIGNATURE: "0x" + signature.hex(),
+    }
+    if scheme == "ed25519":
+        headers[http_auth.HEADER_CRYPTO] = "ed25519"
+    assert http_auth.verify(  # the SDK alone accepts it
+        headers,
+        BODY,
+        method="POST",
+        path=TARGET,
+        self_hotkey_ss58=BOB.ss58,
+        nonce_store=MemoryNonceStore(60),
+        now_ns=clock.now_ns(),
+    )
+    assert code(verifier, headers) == "tw.auth_bad_signature"
+    assert store.calls == 0
+
+
+def test_real_keys_still_reach_the_store(clock: FakeClock) -> None:
+    store = _CountingStore()
+    verifier = RequestVerifier(BOB.ss58, store, now_ns=clock.now_ns)
+    verify(verifier, signed(clock))
+    assert store.calls == 1
+
+
 # ---------------------------------------------------------------- construction
 
 
