@@ -7,6 +7,7 @@ import io
 import json
 import logging
 import re
+import sys
 from typing import Any
 
 import pytest
@@ -49,6 +50,22 @@ def test_configure_logging_emits_json_for_structlog_and_stdlib() -> None:
     assert first["logger"] == "tensorwire.x"
     assert first["ts"].endswith("Z")
     assert lines[1]["level"] == "warning"
+
+
+@pytest.mark.usefixtures("restore_logging")
+def test_configure_logging_replaces_an_implicit_basic_config() -> None:
+    root = logging.getLogger()
+    root.handlers[:] = []
+    logging.basicConfig()  # what a module-level logging.info() does first
+    mine = logging.StreamHandler(io.StringIO())  # a handler someone added on purpose
+    root.addHandler(mine)
+    configure_logging("INFO", stream=io.StringIO())
+    assert mine in root.handlers
+    assert not any(
+        type(h) is logging.StreamHandler and h.stream is sys.stderr
+        for h in root.handlers
+    )
+    assert len(root.handlers) == 2
 
 
 def test_short_hotkey() -> None:

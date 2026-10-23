@@ -23,7 +23,7 @@ did not parse) and ``dendrite.status_message`` set to the ``tw.*`` code.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, TypeVar, overload
 
@@ -101,9 +101,14 @@ class Dendrite:
         signer: RequestSigner | None = None,
         *,
         client: ValidatorClient | None = None,
+        on_results: Callable[[dict[int, MinerResult]], None] | None = None,
         **client_options: Any,
     ) -> None:
-        """Pass a ``signer`` (plus ``ValidatorClient`` options) or a ``client``."""
+        """Pass a ``signer`` (plus ``ValidatorClient`` options) or a ``client``.
+
+        ``on_results`` is called with every query's raw ``{uid: MinerResult}``
+        (``TemplateValidatorAdapter`` uses it for the round report).
+        """
         if client is None:
             if signer is None:
                 raise TypeError("Dendrite needs signer= or client=")
@@ -111,6 +116,7 @@ class Dendrite:
         elif signer is not None or client_options:
             raise TypeError("pass signer/options or client, not both")
         self.client = client
+        self._on_results = on_results
 
     @property
     def hotkey(self) -> str:
@@ -184,6 +190,8 @@ class Dendrite:
             legacy_synapse=synapse,
             timeout_s=timeout,
         )
+        if self._on_results is not None:
+            self._on_results(results)
         items = [
             self._item(
                 axon,

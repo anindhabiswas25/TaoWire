@@ -18,12 +18,13 @@
 # DEALINGS IN THE SOFTWARE.
 
 
+import time
 
 # Bittensor
 import logging
 
 # import base validator class which takes care of most of the boilerplate
-from template.base.validator import BaseValidatorNeuron
+from tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron
 
 # Bittensor Validator Template:
 from template.validator import forward
@@ -61,4 +62,7 @@ class Validator(BaseValidatorNeuron):
 
 # The main function parses the configuration and runs the validator.
 if __name__ == "__main__":
-    Validator().run()
+    with Validator() as validator:
+        while True:
+            logging.info(f"Validator running... {time.time()}")
+            time.sleep(5)

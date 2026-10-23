@@ -52,6 +52,7 @@ Reason = Literal[
     "no_scores",
     "stopped",
     "failed",
+    "disabled",
 ]
 
 _BLOCKS_RE = re.compile(r"(\d+)\s*blocks?\b", re.IGNORECASE)

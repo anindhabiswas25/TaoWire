@@ -386,20 +386,13 @@ class ValidatorRunner:
 
     async def run_round(self, round_id: int | None = None) -> RoundReport | None:
         """Run one round. Returns ``None`` when there is no metagraph yet."""
-        client, store, weights = self.client, self.store, self.weights
-        if client is None or store is None or weights is None:
-            raise RuntimeError("the validator has not started")
+        client, store = self._parts()[:2]
         mg = self.metagraph.snapshot()
         if mg is None:
             _log.warning("round_skipped", reason="no metagraph snapshot")
             return None
         started = time.perf_counter()
-        hotkeys = {n.uid: n.hotkey for n in mg.neurons}
-        for old in (
-            await anyio.to_thread.run_sync(store.sync_hotkeys, hotkeys)
-        ).values():
-            client.forget(old)
-        self._maybe_reprobe(mg)
+        hotkeys = await self.begin_round(mg)
         rid = (
             round_id
             if round_id is not None
@@ -423,6 +416,45 @@ class ValidatorRunner:
             if uid in hotkeys and math.isfinite(float(v))
         }
         await anyio.to_thread.run_sync(store.update, scores, hotkeys, mg.block)
+        return await self.end_round(rid, mg, results, scores, started)
+
+    def _parts(self) -> tuple[ValidatorClient, ScoreStore, WeightScheduler]:
+        client, store, weights = self.client, self.store, self.weights
+        if client is None or store is None or weights is None:
+            raise RuntimeError("the validator has not started")
+        return client, store, weights
+
+    async def begin_round(self, mg: MetagraphView) -> dict[int, str]:
+        """Round start: reset replaced hotkeys' scores, re-probe once per tempo.
+
+        Returns the snapshot's ``uid -> hotkey`` map. :meth:`run_round` calls
+        it; custom loops (``compat.TemplateValidatorAdapter``) call it too.
+        """
+        client, store = self._parts()[:2]
+        hotkeys = {n.uid: n.hotkey for n in mg.neurons}
+        for old in (
+            await anyio.to_thread.run_sync(store.sync_hotkeys, hotkeys)
+        ).values():
+            client.forget(old)
+        self._maybe_reprobe(mg)
+        return hotkeys
+
+    async def end_round(
+        self,
+        rid: int,
+        mg: MetagraphView,
+        results: dict[int, MinerResult],
+        scores: dict[int, float],
+        started: float,
+        *,
+        submit_weights: bool = True,
+    ) -> RoundReport:
+        """Round end (scores already in the store): record the round, let the
+        weight scheduler submit if due, update metrics, log ``round ok``.
+
+        ``started`` is the round's ``time.perf_counter()`` start.
+        """
+        _client, store, weights = self._parts()
         report = self._report(rid, results, scores)
         await anyio.to_thread.run_sync(
             store.record_round,
@@ -430,7 +462,11 @@ class ValidatorRunner:
                 time.time(), report.n_queried, report.n_ok, report.p50_ms, report.p95_ms
             ),
         )
-        decision = await weights.maybe_submit(store.scores(), mg)
+        decision = (
+            await weights.maybe_submit(store.scores(), mg)
+            if submit_weights
+            else WeightDecision("disabled")
+        )
         self.metrics.validator_round_duration.observe(time.perf_counter() - started)
         self.metrics.validator_miners_by_protocol.labels(protocol="btauth/1").set(
             report.n_btauth

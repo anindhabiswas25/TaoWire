@@ -31,10 +31,24 @@ _SHARED: list[Any] = [
 ]
 
 
+def _from_basic_config(handler: logging.Handler) -> bool:
+    """The stderr handler ``logging.basicConfig()`` adds with its defaults."""
+    formatter = handler.formatter
+    return (
+        type(handler) is logging.StreamHandler
+        and getattr(handler, "stream", None) is sys.stderr
+        and formatter is not None
+        and formatter._fmt == logging.BASIC_FORMAT
+    )
+
+
 def configure_logging(level: str = "INFO", *, stream: IO[str] | None = None) -> None:
     """Route structlog and stdlib logging to ``stream`` (stdout) as JSON lines.
 
-    Safe to call more than once; the last call wins.
+    Safe to call more than once; the last call wins. Also removes the
+    handler ``logging.basicConfig()`` adds, which a module-level
+    ``logging.info(...)`` before this call creates silently (common in
+    ported v10 code); it would print every line a second time, unformatted.
     """
     handler = logging.StreamHandler(sys.stdout if stream is None else stream)
     handler.setFormatter(
@@ -49,7 +63,7 @@ def configure_logging(level: str = "INFO", *, stream: IO[str] | None = None) -> 
     )
     root = logging.getLogger()
     for old in list(root.handlers):
-        if getattr(old, "_tensorwire", False):
+        if getattr(old, "_tensorwire", False) or _from_basic_config(old):
             root.removeHandler(old)
     handler._tensorwire = True  # type: ignore[attr-defined]
     root.addHandler(handler)
