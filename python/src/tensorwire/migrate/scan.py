@@ -498,9 +498,11 @@ class _Visitor(cst.CSTVisitor):
     def v10_config_call(self, node: cst.Attribute, attr: str, full: str) -> bool:
         """``bt.<group>.add_args(p)``, ``bt.config(p)``, or a bare
         ``bt.<group>.check_config(c)`` statement: what ``apply`` rewrites (TWM031)."""
+        parts = full.split(".")
+        if self._annotation_depth and len(parts) == 2 and attr in ("config", "Config"):
+            return True  # ``config: bt.Config``: compat ``Config``
         if not self.is_called(node):
             return False
-        parts = full.split(".")
         if len(parts) == 2 and attr in ("config", "Config"):
             return True
         if len(parts) != 3 or attr not in CONFIG_GROUPS:

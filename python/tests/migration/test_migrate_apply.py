@@ -95,13 +95,15 @@ REWRITES: dict[str, tuple[str, str]] = {
         "    parser = argparse.ArgumentParser()\n    bt.wallet.add_args(parser)\n"
         "    bt.Subtensor.add_args(parser)\n    bt.logging.add_args(parser)\n"
         "    bt.Axon.add_args(parser)\n    return bt.config(parser)\n"
-        "def only(config):\n    bt.logging.check_config(config)\n",
+        "def only(config: bt.Config) -> bt.config:\n"
+        "    bt.logging.check_config(config)\n",
         "import argparse\n"
-        "from tensorwire.compat import add_v10_args, config as tw_config\n"
+        "from tensorwire.compat import Config, add_v10_args, config as tw_config\n"
         "def config(cls):\n    parser = argparse.ArgumentParser()\n"
         '    add_v10_args(parser, "wallet")\n    add_v10_args(parser, "subtensor")\n'
         '    add_v10_args(parser, "logging")\n    add_v10_args(parser, "axon")\n'
-        "    return tw_config(parser)\ndef only(config):\n    pass\n",
+        "    return tw_config(parser)\ndef only(config: Config) -> Config:\n"
+        "    pass\n",
     ),
     "TWM026": (
         "import copy\nimport bittensor as bt\nfrom sub.base.neuron import BaseNeuron\n"

@@ -371,7 +371,7 @@ Neither a known v10 symbol nor part of the v11 public API: check it by hand (rem
 <a id="twm031"></a>
 ### TWM031: v10 config calls (`auto`)
 
-bt.<group>.add_args(parser) -> add_v10_args(parser, "<group>"), bt.config(parser) -> tensorwire.compat.config(parser), bt.logging.check_config(...) removed: defaults come from TW_* settings.
+bt.<group>.add_args(parser) -> add_v10_args(parser, "<group>"), bt.config(parser) -> tensorwire.compat.config(parser), a bt.Config annotation -> Config, bt.logging.check_config(...) removed: defaults come from TW_* settings.
 
 See [v10 config calls](#v10-config-calls-twm031). Other shapes (extra arguments, `bt.config` used as a value) stay TWM006.
 

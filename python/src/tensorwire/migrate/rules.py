@@ -259,8 +259,9 @@ RULES: Mapping[str, Rule] = _table(
         "v10 config calls",
         "auto",
         'bt.<group>.add_args(parser) -> add_v10_args(parser, "<group>"), '
-        "bt.config(parser) -> tensorwire.compat.config(parser), "
-        "bt.logging.check_config(...) removed: defaults come from TW_* settings",
+        "bt.config(parser) -> tensorwire.compat.config(parser), a bt.Config "
+        "annotation -> Config, bt.logging.check_config(...) removed: defaults "
+        "come from TW_* settings",
     ),
     Rule(
         "TWM032",

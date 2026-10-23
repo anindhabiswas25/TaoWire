@@ -356,6 +356,9 @@ class _Rewriter(cst.CSTTransformer):
         if not self._is_bt(original_node.value):
             return updated_node
         attr = original_node.attr.value
+        if self._annotation_depth and attr in ("Config", "config"):
+            self.rewrites["TWM031"] += 1  # ``config: bt.Config`` -> compat ``Config``
+            return cst.Name(self._compat("Config"))
         compat = _COMPAT_NAMES.get(attr)
         if compat is None:
             return updated_node

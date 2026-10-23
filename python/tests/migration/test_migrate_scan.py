@@ -300,6 +300,7 @@ def test_negative_fixture(rule: str) -> None:
         ("import bittensor_wallet\n", "TWM014"),
         ("import bittensor as bt\ndef f(c: 'bt.Config' = None): ...\n", "TWM028"),
         ("import bittensor as bt\nc = bt.config\n", "TWM006"),
+        ("import bittensor as bt\ndef f(c: bt.Config): ...\n", "TWM031"),
         ("import bittensor as bt\nt = bt.TerminalInfo(status_code=200)\n", "TWM001"),
         ("from bittensor import Epistula\n", "TWM030"),
         ("import bittensor as bt\noriginal = bt.logging.trace\n", "TWM025"),
