@@ -78,6 +78,10 @@ localnet-test:
 interop:
     cd conformance/interop && uv run python run_matrix.py --network local
 
+# spec 8.10: one real seal + open through the public drand API (not part of `just test`)
+drand-test: setup
+    cd python && uv run pytest -m drand tests/drand
+
 migration-test:
     cd python && uv run pytest tests/migration
 

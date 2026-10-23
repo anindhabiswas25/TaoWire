@@ -69,6 +69,7 @@ from tensorwire.config import ValidatorSettings
 from tensorwire.crypto import HotkeySigner
 from tensorwire.errors import ConfigError, StartupError
 from tensorwire.extensions.streaming import StreamLimits
+from tensorwire.extensions.timelock import SealedResponse, Timelock
 from tensorwire.miner.app import NoSignalServer
 from tensorwire.observability.logging import configure_logging
 from tensorwire.observability.metrics import Metrics
@@ -102,6 +103,16 @@ class Task:
     idempotent: bool = True
     expected: Any = None
     """Anything ``score`` needs to judge the answers (the right result)."""
+    sealed: bool = False
+    """The miners answer a ``SealedResponse`` (spec 8.10) that opens to
+    ``response_model``: the runner opens them before ``score`` (failures are
+    ``tw.timelock_unavailable`` / ``tw.invalid_response``)."""
+
+    def __post_init__(self) -> None:
+        if self.sealed and self.response_model is None:
+            raise ValueError(
+                "a sealed Task needs the response_model its answers open to"
+            )
 
 
 class SubnetValidator(ABC):
@@ -112,6 +123,9 @@ class SubnetValidator(ABC):
     query_validators: bool = False
     #: This validator's hotkey (never queried). Set by the runner.
     own_hotkey: str | None = None
+    #: The process's timelock (spec 8.10), for sealed challenges. Set by the runner
+    #: (``TW_TIMELOCK_*``) unless the subclass sets its own.
+    timelock: Timelock | None = None
 
     @abstractmethod
     async def make_task(self, round_id: int) -> Task:
@@ -186,6 +200,7 @@ class ValidatorRunner:
         self.settings = settings
         self.metrics = Metrics() if metrics is None else metrics
         self._gateway = gateway
+        self._timelock: Timelock | None = None
         self._metagraph = metagraph
         self._hotkey = hotkey
         self._transport = transport
@@ -224,6 +239,15 @@ class ValidatorRunner:
         if self._gateway is None:
             raise RuntimeError("the validator has not started")
         return self._gateway
+
+    @property
+    def timelock(self) -> Timelock:
+        """The process's :class:`Timelock` (``TW_TIMELOCK_*``; after :meth:`start`)."""
+        if self._timelock is None:
+            self._timelock = Timelock.from_settings(
+                self.settings, self.gateway, metrics=self.metrics
+            )
+        return self._timelock
 
     @property
     def metagraph(self) -> MetagraphSource:
@@ -292,6 +316,8 @@ class ValidatorRunner:
         v.sample_size = s.sample_size
         v.query_validators = s.query_validators
         v.own_hotkey = signer.hotkey_ss58
+        if v.timelock is None:
+            v.timelock = self.timelock
         self._started = True
         _log.info("validator_ready", netuid=s.netuid, hotkey=signer.hotkey_ss58)
 
@@ -411,15 +437,21 @@ class ValidatorRunner:
         )
         miners = list(self.validator.select_miners(mg))
         task = await self.validator.make_task(rid)
+        sent_at = time.time()
         results = await client.query_many(
             miners,
             task.route,
             task.body,
             method="GET" if task.method == "GET" else "POST",
             idempotent=task.idempotent,
-            response_model=task.response_model,
+            response_model=SealedResponse if task.sealed else task.response_model,
             legacy_synapse=task.legacy_synapse,
         )
+        if task.sealed and task.response_model is not None:
+            timelock = self.validator.timelock or self.timelock  # one per process
+            results = await timelock.open_results(
+                results, task.response_model, not_before=sent_at
+            )
         raw_scores = await self.validator.score(task, results) if results else {}
         scores = {
             uid: float(v)

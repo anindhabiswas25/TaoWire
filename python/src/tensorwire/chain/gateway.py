@@ -21,7 +21,10 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
+import anyio
+import anyio.to_thread
 import bittensor as bt
+import bittensor_core as _core  # type: ignore[import-untyped]  # the SDK's compiled core
 
 from tensorwire.chain.axon import Endpoint, parse_axon
 
@@ -34,7 +37,11 @@ __all__ = [
     "MetagraphView",
     "NeuronView",
     "SdkSurfaceError",
+    "Sealed",
     "SubnetNotFound",
+    "TimelockMalformed",
+    "TimelockNotReady",
+    "TimelockUnavailable",
     "TxOutcome",
     "check_sdk_surface",
 ]
@@ -54,6 +61,36 @@ class SubnetNotFound(GatewayError):
 
 class SdkSurfaceError(GatewayError):
     """The installed ``bittensor`` lacks a symbol the gateway uses (spec 8.7.3)."""
+
+
+class TimelockMalformed(GatewayError):
+    """The data is not a timelock ciphertext (spec 8.10); no drand call was made."""
+
+
+class TimelockNotReady(GatewayError):
+    """The reveal round is not published yet; ``remaining_s`` until it is."""
+
+    def __init__(self, remaining_s: float) -> None:
+        super().__init__(f"not revealed yet ({remaining_s:.1f} s left)")
+        self.remaining_s = max(0.0, float(remaining_s))
+
+
+class TimelockUnavailable(GatewayError):
+    """The round signature could not be fetched (drand unreachable, 429, 5xx,
+    timeout) or the ciphertext did not open with it: the SDK cannot tell the
+    two apart once the envelope parses."""
+
+
+@dataclass(frozen=True, slots=True)
+class Sealed:
+    """A timelock ciphertext (spec 3.7, 8.10)."""
+
+    hex: str
+    """The portable envelope, hex (what goes on the wire)."""
+    reveal_round: int
+    """The drand quicknet round that opens it."""
+    reveal_at_s: float
+    """Unix time of that round (decryption works from then on)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +246,30 @@ class ChainGateway(Protocol):
         """
         ...
 
+    async def timelock_seal(self, data: bytes, *, reveal_in_s: float) -> Sealed:
+        """Timelock-encrypt ``data`` to open ``reveal_in_s`` from now (local, D30)."""
+        ...
+
+    def timelock_parse(self, sealed_hex: str) -> Sealed:
+        """A ciphertext's reveal round and time (local); else TimelockMalformed."""
+        ...
+
+    async def timelock_signature(self, reveal_round: int, *, timeout_s: float) -> str:
+        """The drand signature of a published round (one fetch, checked before use).
+
+        :class:`TimelockNotReady` before the round, :class:`TimelockUnavailable`
+        when drand cannot give a good one within ``timeout_s``.
+        """
+        ...
+
+    def timelock_decrypt(self, sealed_hex: str, signature_hex: str) -> bytes:
+        """Open a ciphertext with its round's signature (local, no network).
+
+        With a checked signature, a failure can only be the ciphertext:
+        :class:`TimelockMalformed`.
+        """
+        ...
+
 
 # ---------------------------------------------------------------------------
 # BittensorGateway: the real gateway on the v11 SDK.
@@ -284,8 +345,11 @@ REQUIRED_SDK_SYMBOLS = (
     "PolicyError",
     "RpcConnectionError",
     "ConnectionNotReady",
+    "timelock",
+    "TimelockNotReady",
+    "TimelockError",
 )
-"""Top-level ``bittensor`` names the gateway uses (spec 3.3, 3.5)."""
+"""Top-level ``bittensor`` names the gateway uses (spec 3.3, 3.5, 3.7)."""
 
 REQUIRED_CLIENT_READS = (
     "subnets.metagraph",
@@ -690,6 +754,70 @@ class BittensorGateway:
         }
         return await self._write(intent, summary)
 
+    # -------------------------------------------------- timelock (spec 3.7, 8.10, D30)
+
+    async def timelock_seal(self, data: bytes, *, reveal_in_s: float) -> Sealed:
+        """``bt.timelock.encrypt``: local cryptography, no network."""
+        if not math.isfinite(reveal_in_s) or reveal_in_s <= 0:
+            raise ValueError("reveal_in_s must be a positive number of seconds")
+        sealed = bt.timelock.encrypt(bytes(data), reveal_in=float(reveal_in_s))
+        return Sealed(
+            hex=sealed.hex(),
+            reveal_round=int(sealed.reveal_round),
+            reveal_at_s=sealed.reveal_at.timestamp(),
+        )
+
+    def timelock_parse(self, sealed_hex: str) -> Sealed:
+        """``bt.Timelocked.parse``; a round too large for a date is junk too."""
+        sealed = _parse_sealed(sealed_hex)
+        try:
+            reveal_at = float(sealed.reveal_at.timestamp())
+        except (OverflowError, ValueError, OSError):
+            raise TimelockMalformed("reveal round out of range") from None
+        return Sealed(sealed_hex, int(sealed.reveal_round), reveal_at)
+
+    async def timelock_signature(self, reveal_round: int, *, timeout_s: float) -> str:
+        """``bittensor_core.get_signature_for_round`` in a worker thread, checked.
+
+        The signature is checked by opening a probe sealed locally to the same
+        round, so a bad answer from a drand relay is never used. Live drand
+        threads are bounded (:data:`_TIMELOCK_THREADS`) even when one hangs
+        past ``timeout_s`` and is abandoned.
+        """
+        if bt.timelock.current_round() < reveal_round:
+            remaining = bt.timelock.reveal_time(reveal_round).timestamp() - time.time()
+            raise TimelockNotReady(remaining)
+
+        def fetch() -> str:
+            signature = str(_core.get_signature_for_round(reveal_round))
+            probe, _ = _core.encrypt_at_round(_PROBE, reveal_round)
+            if bytes(_core.decrypt_with_signature(probe, signature)) != _PROBE:
+                raise ValueError("the drand signature does not open its round")
+            return signature
+
+        try:
+            with anyio.fail_after(timeout_s):
+                return await anyio.to_thread.run_sync(
+                    fetch, abandon_on_cancel=True, limiter=_timelock_threads()
+                )
+        except TimeoutError:
+            raise TimelockUnavailable("drand timeout") from None
+        except (
+            ValueError,
+            OSError,
+        ) as e:  # the core reports drand errors as ValueError
+            raise TimelockUnavailable(type(e).__name__) from None
+
+    def timelock_decrypt(self, sealed_hex: str, signature_hex: str) -> bytes:
+        """``bittensor_core.decrypt_with_signature``: local."""
+        sealed = _parse_sealed(sealed_hex)
+        try:
+            return bytes(_core.decrypt_with_signature(sealed.ciphertext, signature_hex))
+        except (ValueError, TypeError):
+            raise TimelockMalformed(
+                "does not open with its round's signature"
+            ) from None
+
     async def _write(self, intent: Any, summary: dict[str, Any]) -> TxOutcome:
         if self._hotkey is None:
             raise RuntimeError("this gateway has no hotkey; writes need one")
@@ -891,6 +1019,28 @@ def _outcome(result: Any) -> TxOutcome:
         block_hash=result.block_hash,
         error_name=None if name is None else str(name),
     )
+
+
+_PROBE = b"tensorwire drand signature check"
+#: Live drand worker threads at most (also abandoned ones that still run).
+_TIMELOCK_THREADS = 64
+_threads: anyio.CapacityLimiter | None = None
+
+
+def _timelock_threads() -> anyio.CapacityLimiter:
+    global _threads  # noqa: PLW0603 - one process-wide cap, made lazily (needs a loop)
+    if _threads is None:
+        _threads = anyio.CapacityLimiter(_TIMELOCK_THREADS)
+    return _threads
+
+
+def _parse_sealed(sealed_hex: str) -> Any:
+    if not isinstance(sealed_hex, str):
+        raise TimelockMalformed("expected hex text")
+    try:
+        return bt.timelock.Timelocked.parse(sealed_hex)
+    except bt.TimelockError:
+        raise TimelockMalformed("not a timelock ciphertext") from None
 
 
 def _missing_message(missing: list[str]) -> str:

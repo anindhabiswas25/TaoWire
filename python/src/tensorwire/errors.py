@@ -149,6 +149,7 @@ CLIENT_ERROR_CODES: frozenset[str] = frozenset(
         "tw.response_too_large",
         "tw.invalid_response",
         "tw.no_axon",
+        "tw.timelock_unavailable",
     }
 )
 

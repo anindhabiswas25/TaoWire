@@ -1,8 +1,10 @@
 """ADR-0001: which kit modules may import which parts of bittensor.
 
 import-linter (``just lint``) enforces that only ``chain.gateway``, ``crypto``
-and ``auth/*`` import ``bittensor`` at all. It cannot see submodules of an
-external package, so this test adds the finer rule:
+and ``auth/*`` import ``bittensor`` at all, and only ``chain.gateway``
+imports ``bittensor_core`` (the SDK's compiled core, used for the drand round
+signatures, D30). It cannot see submodules of an external package, so this
+test adds the finer rule:
 
 - ``auth/*`` may only use ``http_auth``, ``signing`` and ``sp_core``;
 - ``crypto.py`` may also use ``keyfiles`` (``Keypair``) and ``wallet``
@@ -25,6 +27,8 @@ PACKAGE = Path(tensorwire.__file__).parent
 GATEWAY = Path("chain/gateway.py")
 AUTH_ALLOWED = frozenset({"http_auth", "signing", "sp_core"})
 CRYPTO_ALLOWED = AUTH_ALLOWED | {"keyfiles", "wallet"}
+#: ``bittensor_core`` has no allowed submodules outside the gateway.
+_SDK_ROOTS = frozenset({"bittensor", "bittensor_core"})
 
 
 def _allowed_submodules(rel: Path) -> frozenset[str]:
@@ -40,13 +44,13 @@ def bittensor_imports(tree: ast.AST) -> Iterator[tuple[int, str]]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                if alias.name.split(".")[0] == "bittensor":
+                if alias.name.split(".")[0] in _SDK_ROOTS:
                     yield node.lineno, alias.name
         elif (
             isinstance(node, ast.ImportFrom)
             and node.module
             and node.level == 0
-            and node.module.split(".")[0] == "bittensor"
+            and node.module.split(".")[0] in _SDK_ROOTS
         ):
             for alias in node.names:
                 yield node.lineno, f"{node.module}.{alias.name}"
@@ -89,6 +93,9 @@ def test_package_respects_adr_0001() -> None:
         ("auth/signer.py", "from bittensor.wallets import CRYPTO_TYPE_NAMES", True),
         ("policy/caller.py", "from bittensor import http_auth", True),
         ("miner/app.py", "def f():\n    import bittensor\n", True),
+        ("chain/gateway.py", "import bittensor_core as _core", False),
+        ("extensions/timelock.py", "import bittensor_core", True),
+        ("crypto.py", "from bittensor_core import decrypt", True),
         ("miner/app.py", "import bittensorx", False),
         ("miner/app.py", "from . import bittensor", False),
     ],

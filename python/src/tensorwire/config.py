@@ -498,6 +498,10 @@ class ValidatorSettings(CommonSettings):
     min_weight_interval_blocks: int = Field(default=100, ge=0, le=1_000_000)
     weights_version_key: int = Field(default=0, ge=0, le=2**64 - 1)
     mechid: int = Field(default=0, ge=0, le=255)
+    #: Timelock (spec 8.10, 12.3): concurrent drand fetches, retries, deadline.
+    timelock_concurrency: int = Field(default=8, ge=1, le=64)
+    timelock_retries: int = Field(default=3, ge=0, le=10)
+    timelock_timeout_s: float = Field(default=30.0, ge=1, le=300)
     query_validators: bool = False
     legacy_v10_client: Literal["auto", "off"] = "off"
     legacy_v10_client_until: dt.date | None = None

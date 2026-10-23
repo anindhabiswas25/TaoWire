@@ -54,6 +54,7 @@ from tensorwire.chain.metagraph_cache import MetagraphSource
 from tensorwire.config import MinerSettings
 from tensorwire.errors import ConfigError, StartupError
 from tensorwire.extensions.streaming import StreamLimits
+from tensorwire.extensions.timelock import Timelock
 from tensorwire.limits.body import BodySizeLimit
 from tensorwire.limits.ratelimit import PreAuthRateLimit, RateDecision, RateLimiter
 from tensorwire.miner.health import health_routes
@@ -153,6 +154,7 @@ class Miner:
         )
         self._app: FastAPI | None = None
         self._stream_slots = StreamSlots()  # open streams per caller, all routes
+        self._timelock: Timelock | None = None
 
     @classmethod
     def from_env(cls, env_file: str | Path | None = None, **kwargs: Any) -> Miner:
@@ -230,6 +232,19 @@ class Miner:
             return handler
 
         return register
+
+    @property
+    def timelock(self) -> Timelock:
+        """This miner's :class:`~tensorwire.extensions.timelock.Timelock` (spec 8.10).
+
+        For sealed challenges and sealed responses in route handlers; built
+        on first use, after startup, with the kit's defaults.
+        """
+        if self._timelock is None:
+            self._timelock = Timelock(
+                self.lifecycle.runtime.gateway, metrics=self.metrics
+            )
+        return self._timelock
 
     # ------------------------------------------------------------ app
 

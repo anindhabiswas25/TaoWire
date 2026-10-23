@@ -179,6 +179,12 @@ class Metrics:
             registry=r,
             **recent,
         )
+        self.timelock_open = Counter(
+            "tw_timelock_open_total",
+            "Timelock opens (spec 8.10).",
+            ["result"],
+            registry=r,
+        )
         self.stream_aborted = Counter(
             "tw_stream_aborted_total",
             "Streams ended without a valid tw-end (spec 9.2).",

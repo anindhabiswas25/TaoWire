@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from types import SimpleNamespace
@@ -28,6 +29,9 @@ from tensorwire.chain.gateway import (
     ChainUnavailable,
     SdkSurfaceError,
     SubnetNotFound,
+    TimelockMalformed,
+    TimelockNotReady,
+    TimelockUnavailable,
     check_sdk_surface,
     metagraph_view,
 )
@@ -921,3 +925,128 @@ async def test_plan_policy_error(world: World, sleeps: list[float]) -> None:
     outcome = await gw.set_weights(NETUID, {1: 1.0}, mechid=0, version_key=0)
     assert (outcome.code, outcome.remediation) == ("policy_violation", "blocked")
     assert world.executed == []
+
+
+# -- timelock (spec 3.7, 8.10, D30) -----------------------------------------------
+
+
+def _envelope(round_: int) -> str:
+    """A parseable envelope naming ``round_`` (decryption is patched)."""
+    import struct
+
+    return (b"\x00" * 16 + b"AES_GCM_" + struct.pack("<Q", round_)).hex()
+
+
+async def test_timelock_seal_is_local_and_parseable() -> None:
+    gw = BittensorGateway("local")  # no connection needed
+    sealed = await gw.timelock_seal(b"answer", reveal_in_s=30)
+    assert gw.timelock_parse(sealed.hex) == sealed
+    assert sealed.reveal_at_s >= time.time() + 29
+    with pytest.raises(ValueError, match="positive"):
+        await gw.timelock_seal(b"x", reveal_in_s=0)
+
+
+@pytest.mark.parametrize(
+    "junk", ["", "zz", "00" * 4, "ab" * 40, _envelope(2**63), _envelope(2**64 - 1)]
+)
+def test_timelock_junk_is_malformed(junk: str) -> None:
+    gw = BittensorGateway("local")
+    with pytest.raises(TimelockMalformed):  # incl. a round too large for a date
+        gw.timelock_parse(junk)
+    with pytest.raises(TimelockMalformed):
+        gw.timelock_decrypt(junk, "00" * 48)
+
+
+async def test_timelock_signature_before_the_round_makes_no_fetch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[Any] = []
+    monkeypatch.setattr(gateway_module._core, "get_signature_for_round", calls.append)
+    future = bt.timelock.current_round() + 20
+    with pytest.raises(TimelockNotReady) as early:
+        await BittensorGateway("local").timelock_signature(future, timeout_s=5)
+    assert 55 < early.value.remaining_s <= 63
+    assert calls == []
+
+
+async def test_timelock_signature_is_fetched_in_a_thread_and_checked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import threading
+
+    core = gateway_module._core
+    past = bt.timelock.current_round() - 5
+    seen: dict[str, Any] = {}
+
+    def fetch(round_: int) -> str:
+        seen.update(round=round_, thread=threading.current_thread())
+        return "ab" * 48
+
+    monkeypatch.setattr(core, "get_signature_for_round", fetch)
+    plaintext = gateway_module._PROBE
+    monkeypatch.setattr(core, "decrypt_with_signature", lambda ct, sig: plaintext)
+    gw = BittensorGateway("local")
+    assert await gw.timelock_signature(past, timeout_s=5) == "ab" * 48
+    assert seen["round"] == past
+    assert seen["thread"] is not threading.main_thread()
+    # a relay answer that does not open its own round is never used
+    monkeypatch.setattr(core, "decrypt_with_signature", lambda probe, sig: b"other")
+    with pytest.raises(TimelockUnavailable):
+        await gw.timelock_signature(past, timeout_s=5)
+
+
+@pytest.mark.parametrize(
+    "error", [ValueError("Failed to get Drand round: connection error"), OSError("x")]
+)
+async def test_timelock_drand_failures_are_unavailable(
+    monkeypatch: pytest.MonkeyPatch, error: BaseException
+) -> None:
+    def fetch(_round: int) -> str:
+        raise error
+
+    monkeypatch.setattr(gateway_module._core, "get_signature_for_round", fetch)
+    past = bt.timelock.current_round() - 5
+    with pytest.raises(TimelockUnavailable):
+        await BittensorGateway("local").timelock_signature(past, timeout_s=1)
+
+
+async def test_timelock_a_hanging_fetch_is_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fetch(_round: int) -> str:
+        time.sleep(2)  # a drand call that hangs; the thread is abandoned
+        return "ab" * 48
+
+    monkeypatch.setattr(gateway_module._core, "get_signature_for_round", fetch)
+    started = time.monotonic()
+    with pytest.raises(TimelockUnavailable):
+        await BittensorGateway("local").timelock_signature(
+            bt.timelock.current_round() - 5, timeout_s=0.3
+        )
+    assert time.monotonic() - started < 1.5
+
+
+def test_timelock_decrypt_maps_core_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    def refuse(_data: bytes, _sig: str) -> bytes:
+        raise ValueError("Error decrypting ciphertext: InvalidSignature")
+
+    monkeypatch.setattr(gateway_module._core, "decrypt_with_signature", refuse)
+    with pytest.raises(TimelockMalformed):
+        BittensorGateway("local").timelock_decrypt(_envelope(5), "ab" * 48)
+    monkeypatch.setattr(
+        gateway_module._core, "decrypt_with_signature", lambda d, s: b"ok"
+    )
+    assert BittensorGateway("local").timelock_decrypt(_envelope(5), "ab" * 48) == b"ok"
+
+
+def test_timelock_round_trip_locally() -> None:
+    """Real crypto, no network: seal at a past round, open with its signature."""
+    core = gateway_module._core
+    ciphertext, round_ = core.encrypt_at_round(b"secret", 1000)
+    sealed_hex = bt.timelock.Timelocked(
+        ciphertext=ciphertext, reveal_round=round_
+    ).hex()
+    gw = BittensorGateway("local")
+    assert gw.timelock_parse(sealed_hex).reveal_round == 1000
+    with pytest.raises(TimelockMalformed):  # a signature of no round at all
+        gw.timelock_decrypt(sealed_hex, "ab" * 48)

@@ -133,6 +133,7 @@ markers = [
   "mixed_fleet: v10 + v11 fleet on localnet (just mixed-fleet)",
   "redis: needs a real Redis at TENSORWIRE_TEST_REDIS_URL",
   "abuse: attacks a real miner process (spec 13.6); a few seconds each",
+  "drand: calls the public drand API (spec 8.10); not in just test, keep runs short",
 ]
 
 [tool.coverage.run]
@@ -153,9 +154,10 @@ include_external_packages = true
 name = "ADR-0001: only chain.gateway, crypto and auth import bittensor"
 type = "forbidden"
 source_modules = ["tensorwire"]
-forbidden_modules = ["bittensor"]
+forbidden_modules = ["bittensor", "bittensor_core"]
 ignore_imports = [
   "tensorwire.chain.gateway -> bittensor",
+  "tensorwire.chain.gateway -> bittensor_core",
   "tensorwire.crypto -> bittensor",
   "tensorwire.auth.** -> bittensor",
 ]

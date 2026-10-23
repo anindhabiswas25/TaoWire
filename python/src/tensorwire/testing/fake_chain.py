@@ -10,6 +10,12 @@ Several gateways can share one chain: :meth:`FakeChain.with_signer` returns a
 gateway signing as another hotkey (for example a miner and a validator in
 the same test).
 
+Timelock (spec 8.10, D30): ``timelock_seal`` / ``_parse`` / ``_signature`` /
+``_decrypt`` use a fake round clock (``wall_clock``, the quicknet schedule of
+one round every 3 s), a plain, unencrypted "ciphertext" and a fake round
+signature; drand failures are injected with
+``fail_next("timelock_signature", error=...)``.
+
 Example::
 
     chain = FakeChain(signer_hotkey=miner_hotkey)
@@ -22,6 +28,7 @@ Example::
 
 from __future__ import annotations
 
+import struct
 import time
 from collections import Counter
 from collections.abc import Callable
@@ -32,7 +39,10 @@ from tensorwire.chain.gateway import (
     ChainUnavailable,
     MetagraphView,
     NeuronView,
+    Sealed,
     SubnetNotFound,
+    TimelockMalformed,
+    TimelockNotReady,
     TxOutcome,
 )
 
@@ -54,9 +64,16 @@ OPERATIONS = frozenset(
         "serving_rate_limit",
         "serve_axon",
         "set_weights",
+        "timelock_seal",
+        "timelock_signature",
     }
 )
 """Gateway operations that accept injected failures and are counted in ``calls``."""
+
+#: drand quicknet: round 1 at this Unix time, one round every 3 s (as the SDK).
+QUICKNET_GENESIS = 1_692_803_367
+QUICKNET_PERIOD = 3
+_FAKE_SEAL = b"TWFAKETL"
 
 _WRITES = frozenset({"serve_axon", "set_weights"})
 
@@ -161,10 +178,12 @@ class FakeChain:
         block: int = 1,
         monotonic: Callable[[], float] = time.monotonic,
         allow_private_axons: bool = True,
+        wall_clock: Callable[[], float] = time.time,
     ) -> None:
         self._state = _State(block=block)
         self._signer = signer_hotkey
         self._monotonic = monotonic
+        self._wall_clock = wall_clock
         self._allow_private = allow_private_axons
         self._connected = False
 
@@ -179,6 +198,7 @@ class FakeChain:
             signer_hotkey=hotkey,
             monotonic=self._monotonic,
             allow_private_axons=self._allow_private,
+            wall_clock=self._wall_clock,
         )
         other._state = self._state
         return other
@@ -553,6 +573,44 @@ class FakeChain:
         )
         return self._succeeded()
 
+    # -- timelock (fake round clock) ------------------------------------------
+
+    def current_round(self) -> int:
+        """The latest fake drand round at ``wall_clock``."""
+        elapsed = self._wall_clock() - QUICKNET_GENESIS
+        return max(1, int(elapsed // QUICKNET_PERIOD) + 1)
+
+    async def timelock_seal(self, data: bytes, *, reveal_in_s: float) -> Sealed:
+        """A fake ciphertext for the first round at least ``reveal_in_s`` away."""
+        self._enter("timelock_seal", needs_connection=False)
+        if not reveal_in_s > 0:
+            raise ValueError("reveal_in_s must be a positive number of seconds")
+        # Millisecond precision, as the SDK: never a round before now + reveal_in_s.
+        elapsed_ms = int((self._wall_clock() + reveal_in_s - QUICKNET_GENESIS) * 1000)
+        first_after = -(-elapsed_ms // (QUICKNET_PERIOD * 1000)) + 1
+        reveal_round = max(self.current_round() + 1, first_after)
+        blob = _FAKE_SEAL + struct.pack("<Q", reveal_round) + bytes(data)
+        return Sealed(blob.hex(), reveal_round, _reveal_time(reveal_round))
+
+    def timelock_parse(self, sealed_hex: str) -> Sealed:
+        """A fake ciphertext's round and time; :class:`TimelockMalformed` otherwise."""
+        reveal_round, _ = _fake_sealed(sealed_hex)
+        return Sealed(sealed_hex, reveal_round, _reveal_time(reveal_round))
+
+    async def timelock_signature(self, reveal_round: int, *, timeout_s: float) -> str:  # noqa: ARG002 - a fake answers at once
+        """The fake round signature, once the round is reached (failures injectable)."""
+        self._enter("timelock_signature", needs_connection=False)
+        if self.current_round() < reveal_round:
+            raise TimelockNotReady(_reveal_time(reveal_round) - self._wall_clock())
+        return _fake_signature(reveal_round)
+
+    def timelock_decrypt(self, sealed_hex: str, signature_hex: str) -> bytes:
+        """Open a fake ciphertext with its round's fake signature."""
+        reveal_round, data = _fake_sealed(sealed_hex)
+        if signature_hex != _fake_signature(reveal_round):
+            raise TimelockMalformed("does not open with that signature")
+        return data
+
     # -- internals -------------------------------------------------------------
 
     def _add_fault(self, operation: str, times: int, fault: _Fault) -> None:
@@ -633,6 +691,25 @@ class FakeChain:
             remediation=None,
             block_hash=f"0x{self._state.block:064x}",
         )
+
+
+def _reveal_time(reveal_round: int) -> float:
+    return float(QUICKNET_GENESIS + (reveal_round - 1) * QUICKNET_PERIOD)
+
+
+def _fake_signature(reveal_round: int) -> str:
+    return f"{reveal_round:096x}"
+
+
+def _fake_sealed(sealed_hex: str) -> tuple[int, bytes]:
+    try:
+        blob = bytes.fromhex(sealed_hex)
+    except (TypeError, ValueError):
+        raise TimelockMalformed("expected hex text") from None
+    head = len(_FAKE_SEAL)
+    if len(blob) < head + 8 or not blob.startswith(_FAKE_SEAL):
+        raise TimelockMalformed("not a (fake) timelock ciphertext")
+    return struct.unpack("<Q", blob[head : head + 8])[0], blob[head + 8 :]
 
 
 def _failed(code: str) -> TxOutcome:
