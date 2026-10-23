@@ -55,6 +55,7 @@ from tensorwire.migrate.rules import RULES
 from tensorwire.migrate.scan import (
     LOG_LEVELS,
     is_axons_list,
+    is_metagraph_tensor_call,
     python_files,
     resolve_module,
     scan_source,
@@ -214,6 +215,40 @@ def _arg(call: cst.Call, keyword: str, position: int) -> cst.BaseExpression | No
     return positional[position].value if len(positional) > position else None
 
 
+def _logging_args(call: cst.Call) -> Sequence[cst.Arg]:
+    """``bt.logging`` arguments for the standard ``logging`` functions.
+
+    v10 logs ``prefix - msg - suffix`` (``bt.logging.info(msg, prefix,
+    suffix)``); the standard functions would take those as %-format
+    arguments. ``logging.info("%s - %s", prefix, msg)`` keeps the text (v10
+    also dropped empty parts).
+    """
+    named = {a.keyword.value: a for a in call.args if a.keyword is not None}
+    positional = [a for a in call.args if a.keyword is None and not a.star]
+    if len(positional) > 3 or any(a.star for a in call.args):
+        return call.args  # rare; the extra arguments already were %-format args
+    parts: dict[str, cst.BaseExpression] = {}
+    for index, name in enumerate(("msg", "prefix", "suffix")):
+        if index < len(positional):
+            parts[name] = positional[index].value
+        elif name in named:
+            parts[name] = named.pop(name).value
+    if set(parts) <= {"msg"}:
+        return call.args
+    order = [n for n in ("prefix", "msg", "suffix") if n in parts]
+    fmt = cst.SimpleString('"' + " - ".join(["%s"] * len(order)) + '"')
+    rest = [a.with_changes(comma=cst.MaybeSentinel.DEFAULT) for a in named.values()]
+    args = [cst.Arg(value=fmt), *(cst.Arg(value=parts[n]) for n in order), *rest]
+    return [
+        a.with_changes(
+            comma=cst.Comma(whitespace_after=cst.SimpleWhitespace(" "))
+            if i < len(args) - 1
+            else cst.MaybeSentinel.DEFAULT
+        )
+        for i, a in enumerate(args)
+    ]
+
+
 class _Names(cst.CSTVisitor):
     """Every ``Name`` used outside import statements."""
 
@@ -332,12 +367,8 @@ class _Rewriter(cst.CSTTransformer):
             return self._dendrite_call(original_node, updated_node)
         if last in _WEIGHT_HELPERS:
             return self._weights_call(updated_node)
-        if (
-            last in ("item", "tolist")
-            and not original_node.args
-            and isinstance(updated_node.func, cst.Attribute)
-            and ".metagraph." in f".{head}."
-            and head.rpartition(".")[2] != "metagraph"
+        if is_metagraph_tensor_call(original_node) and isinstance(
+            updated_node.func, cst.Attribute
         ):
             self.rewrites["TWM023"] += 1
             return updated_node.func.value
@@ -354,7 +385,8 @@ class _Rewriter(cst.CSTTransformer):
         self.need_logging = True
         self.rewrites["TWM007"] += 1
         return call.with_changes(
-            func=cst.Attribute(value=cst.Name("logging"), attr=cst.Name(target))
+            func=cst.Attribute(value=cst.Name("logging"), attr=cst.Name(target)),
+            args=_logging_args(call),
         )
 
     def _axon_call(self) -> cst.BaseExpression:

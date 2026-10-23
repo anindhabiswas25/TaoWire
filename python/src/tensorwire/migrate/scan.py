@@ -39,6 +39,7 @@ __all__ = [
     "Finding",
     "ScanReport",
     "is_axons_list",
+    "is_metagraph_tensor_call",
     "python_files",
     "render",
     "scan_repo",
@@ -280,6 +281,19 @@ def template_bases(root: Path) -> dict[str, list[str]]:
     return found
 
 
+def is_metagraph_tensor_call(node: cst.Call) -> bool:
+    """``<x>.metagraph.<v>.item()`` / ``.tolist()``, also on ``<v>[i]``."""
+    func = node.func
+    if node.args or not (
+        isinstance(func, cst.Attribute) and func.attr.value in ("item", "tolist")
+    ):
+        return False
+    receiver = func.value
+    base = receiver.value if isinstance(receiver, cst.Subscript) else receiver
+    dotted = _dotted(base) or ""
+    return ".metagraph." in f".{dotted}." and not dotted.endswith("metagraph")
+
+
 def is_axons_list(node: cst.ListComp) -> bool:
     """``[<x>.metagraph.axons[uid] for uid in <uids>]`` (one ``for``, no ``if``)."""
     comp = node.for_in
@@ -425,8 +439,8 @@ class _Visitor(cst.CSTVisitor):
             self.add(node, "TWM009", name)
         elif last == "add_argument":
             self.check_add_argument(node)
-        elif last in ("item", "tolist") and ".metagraph." in f".{receiver}":
-            self.add(node, "TWM023", name)
+        elif is_metagraph_tensor_call(node):
+            self.add(node, "TWM023", self.module.code_for_node(node.func))
         self.check_keywords(node, last)
 
     def check_keywords(self, node: cst.Call, last: str) -> None:

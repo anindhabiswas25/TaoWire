@@ -77,8 +77,9 @@ REWRITES: dict[str, tuple[str, str]] = {
     ),
     "TWM023": (
         "for uid in range(self.metagraph.n.item()):\n"
-        "    s = self.metagraph.S.tolist()\n",
-        "for uid in range(self.metagraph.n):\n    s = self.metagraph.S\n",
+        "    s = self.metagraph.S.tolist()\n    t = self.metagraph.S[uid].item()\n",
+        "for uid in range(self.metagraph.n):\n    s = self.metagraph.S\n"
+        "    t = self.metagraph.S[uid]\n",
     ),
     "TWM027": (
         "import time\nimport os\nasync def forward(self):\n    time.sleep(5)\n",
@@ -125,6 +126,27 @@ def test_left_alone(source: str) -> None:
 def test_every_auto_rule_is_rewritten() -> None:
     auto = {rid for rid, rule in RULES.items() if rule.severity == "auto"}
     assert auto == set(REWRITES)
+
+
+def test_logging_prefix_and_suffix_keep_the_v10_text() -> None:
+    out = run(
+        """\
+        import bittensor as bt
+        bt.logging.info("raw_weights", w)
+        bt.logging.debug("m", "p", "s", exc_info=True)
+        bt.logging.warning(msg="m", suffix=s)
+        bt.logging.info("a", "b", "c", d)
+        """
+    )
+    assert out == textwrap.dedent(
+        """\
+        import logging
+        logging.info("%s - %s", w, "raw_weights")
+        logging.debug("%s - %s - %s", "p", "m", "s", exc_info=True)
+        logging.warning("%s - %s", "m", s)
+        logging.info("a", "b", "c", d)
+        """
+    )
 
 
 def test_bittensor_import_stays_while_used_and_markers_are_added() -> None:

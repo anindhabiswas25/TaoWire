@@ -619,7 +619,7 @@ deleted file mode 100644
 index e69de29..0000000
 diff --git a/template/base/utils/weight_utils.py b/template/base/utils/weight_utils.py
 deleted file mode 100644
-index 71c60f5..0000000
+index 26027ba..0000000
 --- a/template/base/utils/weight_utils.py
 +++ /dev/null
 @@ -1,227 +0,0 @@
@@ -776,10 +776,10 @@ index 71c60f5..0000000
 -    tuple[Any, ndarray],
 -]:
 -    logging.debug("process_weights_for_netuid()")
--    logging.debug("weights", weights)
--    logging.debug("netuid", netuid)
--    logging.debug("subtensor", subtensor)
--    logging.debug("metagraph", metagraph)
+-    logging.debug("%s - %s", weights, "weights")
+-    logging.debug("%s - %s", netuid, "netuid")
+-    logging.debug("%s - %s", subtensor, "subtensor")
+-    logging.debug("%s - %s", metagraph, "metagraph")
 -
 -    # Get latest metagraph from chain if metagraph is None.
 -    if metagraph is None:
@@ -794,9 +794,9 @@ index 71c60f5..0000000
 -    quantile = exclude_quantile / U16_MAX
 -    min_allowed_weights = subtensor.min_allowed_weights(netuid=netuid)
 -    max_weight_limit = subtensor.max_weight_limit(netuid=netuid)
--    logging.debug("quantile", quantile)
--    logging.debug("min_allowed_weights", min_allowed_weights)
--    logging.debug("max_weight_limit", max_weight_limit)
+-    logging.debug("%s - %s", quantile, "quantile")
+-    logging.debug("%s - %s", min_allowed_weights, "min_allowed_weights")
+-    logging.debug("%s - %s", max_weight_limit, "max_weight_limit")
 -
 -    # Find all non zero weights.
 -    non_zero_weight_idx = np.argwhere(weights > 0).squeeze()
@@ -806,7 +806,7 @@ index 71c60f5..0000000
 -    if non_zero_weights.size == 0 or metagraph.n < min_allowed_weights:
 -        logging.warning("No non-zero weights returning all ones.")
 -        final_weights = np.ones(metagraph.n) / metagraph.n
--        logging.debug("final_weights", final_weights)
+-        logging.debug("%s - %s", final_weights, "final_weights")
 -        return np.arange(len(final_weights)), final_weights
 -
 -    elif non_zero_weights.size < min_allowed_weights:
@@ -817,13 +817,13 @@ index 71c60f5..0000000
 -            np.ones(metagraph.n) * 1e-5
 -        )  # creating minimum even non-zero weights
 -        weights[non_zero_weight_idx] += non_zero_weights
--        logging.debug("final_weights", weights)
+-        logging.debug("%s - %s", weights, "final_weights")
 -        normalized_weights = normalize_max_weight(
 -            x=weights, limit=max_weight_limit
 -        )
 -        return np.arange(len(normalized_weights)), normalized_weights
 -
--    logging.debug("non_zero_weights", non_zero_weights)
+-    logging.debug("%s - %s", non_zero_weights, "non_zero_weights")
 -
 -    # Compute the exclude quantile and find the weights in the lowest quantile
 -    max_exclude = max(0, len(non_zero_weights) - min_allowed_weights) / len(
@@ -831,28 +831,28 @@ index 71c60f5..0000000
 -    )
 -    exclude_quantile = min([quantile, max_exclude])
 -    lowest_quantile = np.quantile(non_zero_weights, exclude_quantile)
--    logging.debug("max_exclude", max_exclude)
--    logging.debug("exclude_quantile", exclude_quantile)
--    logging.debug("lowest_quantile", lowest_quantile)
+-    logging.debug("%s - %s", max_exclude, "max_exclude")
+-    logging.debug("%s - %s", exclude_quantile, "exclude_quantile")
+-    logging.debug("%s - %s", lowest_quantile, "lowest_quantile")
 -
 -    # Exclude all weights below the allowed quantile.
 -    non_zero_weight_uids = non_zero_weight_uids[
 -        lowest_quantile <= non_zero_weights
 -    ]
 -    non_zero_weights = non_zero_weights[lowest_quantile <= non_zero_weights]
--    logging.debug("non_zero_weight_uids", non_zero_weight_uids)
--    logging.debug("non_zero_weights", non_zero_weights)
+-    logging.debug("%s - %s", non_zero_weight_uids, "non_zero_weight_uids")
+-    logging.debug("%s - %s", non_zero_weights, "non_zero_weights")
 -
 -    # Normalize weights and return.
 -    normalized_weights = normalize_max_weight(
 -        x=non_zero_weights, limit=max_weight_limit
 -    )
--    logging.debug("final_weights", normalized_weights)
+-    logging.debug("%s - %s", normalized_weights, "final_weights")
 -
 -    return non_zero_weight_uids, normalized_weights
 diff --git a/template/base/validator.py b/template/base/validator.py
 deleted file mode 100644
-index 06011f9..0000000
+index 2798dc8..0000000
 --- a/template/base/validator.py
 +++ /dev/null
 @@ -1,379 +0,0 @@
@@ -1099,23 +1099,23 @@ index 06011f9..0000000
 -        # Compute raw_weights safely
 -        raw_weights = self.scores / norm
 -
--        logging.debug("raw_weights", raw_weights)
--        logging.debug("raw_weight_uids", str(self.metagraph.uids))
+-        logging.debug("%s - %s", raw_weights, "raw_weights")
+-        logging.debug("%s - %s", str(self.metagraph.uids), "raw_weight_uids")
 -        # Process the raw weights to final_weights via subtensor limitations.
 -        (
 -            processed_weight_uids,
 -            processed_weights,
 -        ) = (self.metagraph.uids, raw_weights)
--        logging.debug("processed_weights", processed_weights)
--        logging.debug("processed_weight_uids", processed_weight_uids)
+-        logging.debug("%s - %s", processed_weights, "processed_weights")
+-        logging.debug("%s - %s", processed_weight_uids, "processed_weight_uids")
 -
 -        # Convert to uint16 weights and uids.
 -        (
 -            uint_uids,
 -            uint_weights,
 -        ) = (processed_weight_uids, processed_weights)
--        logging.debug("uint_weights", uint_weights)
--        logging.debug("uint_uids", uint_uids)
+-        logging.debug("%s - %s", uint_weights, "uint_weights")
+-        logging.debug("%s - %s", uint_uids, "uint_uids")
 -
 -        # Set the weights on chain via our subtensor connection.
 -        # TW-MIGRATE: TWM010 the kit's weight scheduler (SubnetValidator), or bt.SetWeights
@@ -1131,7 +1131,7 @@ index 06011f9..0000000
 -        if result is True:
 -            logging.info("set_weights on chain successfully!")
 -        else:
--            logging.error("set_weights failed", msg)
+-            logging.error("%s - %s", msg, "set_weights failed")
 -
 -    def resync_metagraph(self):
 -        """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
