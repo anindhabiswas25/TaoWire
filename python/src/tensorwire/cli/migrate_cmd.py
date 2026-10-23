@@ -1,7 +1,8 @@
 """``tensorwire migrate``: help a v10 subnet move to v11 (spec 10b.4).
 
-``scan`` lists every v10 symbol and pattern with its replacement. ``apply``
-(safe rewrites) and ``status`` (live btauth/1 vs v10 share) come later.
+``scan`` lists every v10 symbol and pattern with its replacement.
+``status`` reads the nodes' ``/metrics`` and prints the rollout numbers
+(spec 10b.5). ``apply`` (safe rewrites) comes later.
 """
 
 from __future__ import annotations
@@ -10,6 +11,8 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 import typer
+
+from tensorwire.migrate import status as rollout
 
 __all__ = ["migrate_app"]
 
@@ -49,4 +52,62 @@ def scan(
     chosen: Literal["text", "json", "md"] = fmt  # type: ignore[assignment]
     report = scanner.scan_repo(repo)
     typer.echo(scanner.render(report, chosen), nl=False)
+    raise typer.Exit(report.exit_code)
+
+
+@migrate_app.command("status")
+def status(
+    metrics_url: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--metrics-url",
+            help="A node's /metrics URL (TW_METRICS_BIND). Repeat for several.",
+        ),
+    ] = None,
+    metrics_file: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--metrics-file",
+            help="A saved /metrics text (offline check). Repeat for several.",
+            dir_okay=False,
+        ),
+    ] = None,
+    fmt: Annotated[str, typer.Option("--format", "-f", help="text or json.")] = "text",
+    min_btauth_share: Annotated[
+        float | None,
+        typer.Option(
+            "--min-btauth-share",
+            help="Exit 1 unless this share (0-1) of miners answered over btauth/1.",
+            min=0.0,
+            max=1.0,
+        ),
+    ] = None,
+) -> None:
+    """Print the rollout numbers (spec 10b.5) from validators' and miners' metrics.
+
+    Exit status 0; 1 when --min-btauth-share is given and not met; 2 when a
+    URL or file cannot be read.
+    """
+    if fmt not in ("text", "json"):
+        raise typer.BadParameter("use text or json", param_hint="--format")
+    if not metrics_url and not metrics_file:
+        raise typer.BadParameter(
+            "give at least one --metrics-url or --metrics-file",
+            param_hint="--metrics-url",
+        )
+    read: list[rollout.SourceStatus] = []
+    unreachable: list[dict[str, str]] = []
+    sources: list[str | Path] = [*(metrics_url or []), *(metrics_file or [])]
+    for source in sources:
+        try:
+            text = (
+                rollout.read_file(source)
+                if isinstance(source, Path)
+                else rollout.read_url(source)
+            )
+            read.append(rollout.parse_metrics_text(text, str(source)))
+        except (OSError, rollout.MetricsTextError) as exc:
+            unreachable.append({"source": str(source), "error": str(exc)})
+    report = rollout.build_report(read, unreachable, min_btauth_share=min_btauth_share)
+    typer.echo(rollout.render(report, fmt), nl=False)
     raise typer.Exit(report.exit_code)
