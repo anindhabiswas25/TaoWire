@@ -719,3 +719,21 @@ def test_selector_bounds() -> None:
         sel.after_btauth(view(hotkey=hotkey), status=200, headers=[], verified=True)
     assert sel.known("a") is None
     assert sel.known("c") == "btauth/1"
+
+
+def test_non_finite_field_checks_the_bytes_actually_sent() -> None:
+    """G4-4: a plain model's ``model_dump_json`` writes even a float ``inf`` as null."""
+
+    class Plain(BaseModel):
+        score: float
+        timeout: float = 0.0
+
+    answer = Plain(score=float("inf"))
+    assert wire.non_finite_field(answer, skip=()) is None  # JSON-mode keeps inf
+    sent = json.loads(answer.model_dump_json())
+    assert sent["score"] is None
+    assert wire.non_finite_field(answer, rendered=sent, skip=()) == "score"
+    envelope = Plain(score=1.0, timeout=float("nan"))
+    rendered = json.loads(envelope.model_dump_json())
+    assert wire.non_finite_field(envelope, rendered=rendered) is None  # envelope
+    assert wire.non_finite_field(envelope, rendered=rendered, skip=()) == "timeout"

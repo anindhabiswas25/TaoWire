@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import copy
+import threading
 from typing import Any
 
 import pytest
@@ -214,6 +216,50 @@ def test_metagraph_view_over_a_source() -> None:
     source.snap = view(neuron(0), neuron(2))
     with pytest.raises(RuntimeError, match="contiguous"):
         _ = mg.hotkeys
+
+
+def test_a_copied_metagraph_is_frozen_at_its_snapshot() -> None:
+    """Template ``resync_metagraph``: ``previous = copy.deepcopy(self.metagraph)``."""
+
+    class Source:
+        snap: MetagraphView | None = view(neuron(0))
+        lock = threading.Lock()  # live sources hold things that do not copy
+
+        def snapshot(self) -> MetagraphView | None:
+            return self.snap
+
+    source = Source()
+    live = Metagraph(source)  # type: ignore[arg-type]
+    previous = copy.deepcopy(live)
+    shallow = copy.copy(live)
+    source.snap = view(neuron(0), neuron(1))
+    assert (previous.n, shallow.n, live.n) == (1, 1, 2)
+    assert previous.axons != live.axons
+    assert previous.axons == live.axons[:1]
+
+
+def test_a_pinned_metagraph_moves_on_sync_only() -> None:
+    """v10 semantics (the template adapters): the template's resync compares
+    ``copy.deepcopy(self.metagraph)`` with the metagraph after ``sync()``."""
+
+    class Source:
+        snap: MetagraphView | None = view(neuron(0))
+
+        def snapshot(self) -> MetagraphView | None:
+            return self.snap
+
+    source = Source()
+    mg = Metagraph(source, pinned=True)  # type: ignore[arg-type]
+    assert mg.n == 1
+    source.snap = view(neuron(0), neuron(1))  # the kit's cache refreshed
+    assert mg.n == 1  # still the pinned snapshot
+    previous = copy.deepcopy(mg)
+    mg.sync(subtensor=None)
+    assert (previous.n, mg.n) == (1, 2)
+    assert previous.axons != mg.axons  # the template sees the change
+    previous = copy.deepcopy(mg)
+    mg.sync()
+    assert previous.axons == mg.axons  # nothing changed since: early return
 
 
 # ---------------------------------------------------------------- Dendrite helpers

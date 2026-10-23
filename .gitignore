@@ -35,8 +35,14 @@ htmlcov/
 node_modules/
 *.tsbuildinfo
 
+# Go toolchain helpers (just go-tools)
+.tools/
+
 # Rust
 target/
+rust/fuzz/corpus/
+rust/fuzz/artifacts/
+rust/fuzz/coverage/
 
 # Editors / OS
 .idea/

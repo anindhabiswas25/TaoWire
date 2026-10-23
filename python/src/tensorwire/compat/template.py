@@ -25,10 +25,20 @@ methods can subclass the adapter and override them (``self.scores`` may be
 a numpy array, a torch tensor or a list).
 
 What the team's code sees is the template's surface: ``self.config``
-(``netuid`` and the ``neuron.*`` options), ``self.metagraph``
-(``compat.Metagraph``), ``self.dendrite``, ``self.step``, ``self.scores``,
-``self.hotkeys``, ``self.uid``, ``self.block``, ``update_scores()``,
-``set_weights()``, ``run()``, and ``with Validator() as v:``.
+(``netuid``, the ``neuron.*`` options and v10's ``wallet.*`` /
+``subtensor.*`` / ``logging.*`` groups filled from the kit's settings),
+``self.metagraph`` (``compat.Metagraph``, pinned: it moves on
+``metagraph.sync()``, as v10's did), ``self.dendrite``, ``self.step``,
+``self.scores``, ``self.hotkeys``, ``self.uid``, ``self.block``,
+``self.wallet`` (hotkey only), ``self.subtensor`` (reads only),
+``update_scores()``, ``sync()``, ``set_weights()``, ``run()``, and
+``with Validator() as v:`` (:mod:`tensorwire.compat.neuron`).
+
+Like v10's ``BaseNeuron``, the chain is available while the subclass's
+``__init__`` runs: the first read of ``self.metagraph`` (or ``self.uid``,
+``self.wallet``, ...) outside a running event loop starts the kit on the
+adapter's own event loop, which ``run()`` then keeps using. In async code
+(tests) ``await start()`` first.
 
 Differences from the v10 template (also in ``docs/migration-from-v10.md``):
 
@@ -37,13 +47,17 @@ Differences from the v10 template (also in ``docs/migration-from-v10.md``):
   and weights follow the chain's rate limit and
   ``TW_MIN_WEIGHT_INTERVAL_BLOCKS``.
 - The moving-average alpha is ``TW_SCORE_ALPHA``.
+- After the forwards, a step runs ``sync()`` (the template's order), then
+  the kit submits weights if due. ``set_weights()`` does nothing on its own:
+  the kit's schedule decides (``submit_weights()`` submits now, if due).
 - Scores and the step count persist in ``TW_STATE_DIR``; ``save_state`` and
   ``load_state`` have nothing left to do.
 - The subnet's own ``--neuron.*`` options: override ``add_args`` (call
   ``super().add_args(parser)``, then the subnet's helpers). Options the
   adapter also defines are replaced, not refused.
-- ``self.wallet`` and ``self.subtensor`` do not exist: the kit never loads
-  the coldkey, and chain calls go through the gateway (``self.gateway``).
+- ``self.wallet`` holds the hotkey only (the kit never loads the coldkey),
+  and ``self.subtensor`` answers reads from the kit's metagraph; other chain
+  calls go through the gateway (``self.gateway``) or v11's ``bt.Subtensor``.
 """
 
 from __future__ import annotations
@@ -57,15 +71,22 @@ import sys
 import threading
 import time
 from collections.abc import Sequence
-from types import SimpleNamespace
 from typing import Any
 
 import structlog
 import uvicorn
 
 from tensorwire.chain.gateway import ChainGateway, MetagraphView
+from tensorwire.compat.config import config as v10_config
+from tensorwire.compat.config import fill_defaults, fill_v10_groups
 from tensorwire.compat.dendrite import Dendrite
 from tensorwire.compat.metagraph import Metagraph
+from tensorwire.compat.neuron import (
+    HotkeyWallet,
+    SubtensorView,
+    TemplateNeuronSurface,
+    interrupt,
+)
 from tensorwire.config import ValidatorSettings
 from tensorwire.errors import ConfigError, StartupError
 from tensorwire.miner.app import NoSignalServer
@@ -120,33 +141,7 @@ def _scaled(values: Sequence[float]) -> list[float]:
     return [v / top for v in clipped] if top > 1.0 else clipped
 
 
-def _interrupt(_signum: int, _frame: Any) -> None:
-    raise KeyboardInterrupt
-
-
-def _namespace(args: argparse.Namespace) -> SimpleNamespace:
-    """``{"neuron.sample_size": 5}`` -> ``config.neuron.sample_size == 5``."""
-    config = SimpleNamespace()
-    for key, value in vars(args).items():
-        *parents, leaf = key.split(".")
-        node = config
-        for part in parents:
-            node = node.__dict__.setdefault(part, SimpleNamespace())
-        setattr(node, leaf, value)
-    return config
-
-
-def _fill(config: Any, defaults: SimpleNamespace) -> None:
-    """Set every attribute of ``defaults`` that ``config`` lacks (recursively)."""
-    for name, value in vars(defaults).items():
-        current = getattr(config, name, None)
-        if current is None:
-            setattr(config, name, value)
-        elif isinstance(value, SimpleNamespace):
-            _fill(current, value)
-
-
-class TemplateValidatorAdapter:
+class TemplateValidatorAdapter(TemplateNeuronSurface):
     """The v10 template's ``BaseValidatorNeuron``, run by the kit.
 
     Subclass it and implement ``async def forward(self)``. Everything after
@@ -189,9 +184,13 @@ class TemplateValidatorAdapter:
         self.is_running = False
         self.thread: threading.Thread | None = None
         self._dendrite: Dendrite | None = None
+        self._metagraph: Metagraph | None = None
         self._round_results: dict[int, MinerResult] = {}
         self._round_scores: dict[int, float] = {}
         self._restore_sigterm = False
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._loop_thread: threading.Thread | None = None
+        self._serving: Any = None
 
     # ------------------------------------------------------------ config
 
@@ -223,11 +222,10 @@ class TemplateValidatorAdapter:
         if config is None:
             parser = argparse.ArgumentParser(conflict_handler="resolve")
             cls.add_args(parser)
-            config = _namespace(parser.parse_known_args()[0])
+            config = v10_config(parser)
         parser = argparse.ArgumentParser()
         TemplateValidatorAdapter.add_args(parser)
-        defaults = _namespace(parser.parse_args([]))
-        _fill(config, defaults)
+        fill_defaults(config, v10_config(parser, []))
         config.netuid = settings.netuid
         neuron = config.neuron
         neuron.sample_size = settings.sample_size
@@ -235,26 +233,53 @@ class TemplateValidatorAdapter:
         neuron.moving_average_alpha = settings.score_alpha
         neuron.epoch_length = settings.min_weight_interval_blocks
         neuron.full_path = str(settings.state_dir)
+        fill_v10_groups(config, settings)
         return config
 
     # ------------------------------------------------------------ template surface
 
     @property
     def metagraph(self) -> Metagraph:
-        """The kit's metagraph with v10 attribute names (after start)."""
-        return Metagraph(self.runner.metagraph)
+        """The kit's metagraph with v10 attribute names."""
+        self._ensure_started()
+        if self._metagraph is None:  # pragma: no cover - start() sets it
+            raise RuntimeError("the validator has not started")
+        return self._metagraph
 
     @property
     def gateway(self) -> ChainGateway:
-        """The chain gateway (after start), for chain reads the template made."""
+        """The chain gateway, for chain reads the template made."""
+        self._ensure_started()
         return self.runner.gateway
 
     @property
     def dendrite(self) -> Dendrite:
-        """``compat.Dendrite`` over the kit's validator client (after start)."""
+        """``compat.Dendrite`` over the kit's validator client."""
+        self._ensure_started()
         if self._dendrite is None:
             raise RuntimeError("the validator has not started")
         return self._dendrite
+
+    @property
+    def wallet(self) -> HotkeyWallet:
+        """v10's wallet with the hotkey only (the kit never loads the coldkey)."""
+        self._ensure_started()
+        signer = self.runner.signer
+        if signer is None:  # pragma: no cover - start() sets it
+            raise RuntimeError("the validator has not started")
+        s = self.settings
+        return HotkeyWallet(
+            signer,
+            name=s.wallet_name,
+            hotkey_name=s.wallet_hotkey,
+            path=str(s.wallet_path),
+        )
+
+    @property
+    def subtensor(self) -> SubtensorView:
+        """The chain reads template code makes, from the kit's metagraph."""
+        self._ensure_started()
+        return SubtensorView(self.settings, self._snapshot, lambda: self.metagraph)
 
     @property
     def uid(self) -> int:
@@ -263,8 +288,9 @@ class TemplateValidatorAdapter:
 
     @property
     def block(self) -> int:
-        """The block of the current metagraph snapshot."""
-        return self.metagraph.block
+        """The block of the kit's latest metagraph snapshot."""
+        self._ensure_started()
+        return self._snapshot().block
 
     async def forward(self) -> Any:
         """The subnet's step: query miners, reward them, ``update_scores``."""
@@ -299,7 +325,11 @@ class TemplateValidatorAdapter:
             ]
         )
 
-    async def set_weights(self) -> Any:
+    def set_weights(self) -> None:
+        """Nothing to do: after each step the kit submits ``self.scores`` as
+        weights when its schedule allows (``submit_weights()`` to try now)."""
+
+    async def submit_weights(self) -> Any:
         """Store ``self.scores`` and submit them as weights if the schedule allows."""
         weights = self.runner.weights
         if weights is None:
@@ -308,8 +338,9 @@ class TemplateValidatorAdapter:
         return await weights.maybe_submit(self._store().scores(), self._snapshot())
 
     def resync_metagraph(self) -> None:
-        """The template's resync: zero the scores of replaced hotkeys and
-        resize ``self.scores`` to the metagraph."""
+        """The template's resync: ``metagraph.sync()``, then zero the scores of
+        replaced hotkeys and resize ``self.scores`` to the metagraph."""
+        self.metagraph.sync()
         hotkeys = self.metagraph.hotkeys
         if hotkeys == self.hotkeys:
             return
@@ -337,12 +368,52 @@ class TemplateValidatorAdapter:
 
     # ------------------------------------------------------------ steps
 
+    def _ensure_started(self) -> None:
+        """Start the kit on the adapter's own loop when read before ``start()``.
+
+        v10's ``BaseNeuron.__init__`` connected to the chain, so a subclass's
+        ``__init__`` reads ``self.metagraph`` right after ``super().__init__()``.
+        Inside a running event loop that cannot block: ``await start()``.
+        """
+        if self._dendrite is not None:
+            return
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            pass
+        else:
+            raise RuntimeError("the validator has not started (await start() first)")
+        asyncio.run_coroutine_threadsafe(self.start(), self._own_loop()).result()
+
+    def _own_loop(self) -> asyncio.AbstractEventLoop:
+        if self._loop is None:
+            loop = asyncio.new_event_loop()
+            thread = threading.Thread(
+                target=loop.run_forever, name="tensorwire-template-loop", daemon=True
+            )
+            thread.start()
+            self._loop, self._loop_thread = loop, thread
+        return self._loop
+
+    def _close_own_loop(self) -> None:
+        loop, thread = self._loop, self._loop_thread
+        if loop is None or thread is None:
+            return
+        self._loop = self._loop_thread = None
+        loop.call_soon_threadsafe(loop.stop)
+        thread.join(timeout=30)
+        if not loop.is_running():
+            loop.close()
+
     async def start(self) -> None:
         """Start the kit (hotkey, chain, metagraph, client, score store)."""
+        if self._dendrite is not None:
+            return
         await self.runner.start()
         client = self.runner.client
         if client is None:  # pragma: no cover - start() sets it
             raise RuntimeError("validator client missing after start")
+        self._metagraph = Metagraph(self.runner.metagraph, pinned=True)
         self._dendrite = Dendrite(client=client, on_results=self._collect)
         store = self._store()
         self.step = await asyncio.to_thread(store.next_round_id) - 1
@@ -372,7 +443,7 @@ class TemplateValidatorAdapter:
         self._round_results, self._round_scores = {}, {}
         _log.info("template_step", step=self.step, block=mg.block)
         await self.concurrent_forward()
-        self.resync_metagraph()
+        self.sync()
         await self._push_scores()
         report = await self.runner.end_round(
             self.step + 1,
@@ -389,7 +460,11 @@ class TemplateValidatorAdapter:
         self._round_results.update(results)
 
     def _snapshot(self) -> MetagraphView:
-        return self.metagraph.snapshot()
+        """The kit's latest snapshot (the kit's own work never uses the pinned one)."""
+        view = self.runner.metagraph.snapshot()
+        if view is None:
+            raise RuntimeError("no metagraph snapshot yet")
+        return view
 
     def _store(self) -> Any:
         if self.runner.store is None:
@@ -403,7 +478,10 @@ class TemplateValidatorAdapter:
         hotkey is not registered, 2 on invalid settings."""
         configure_logging(self.settings.log_level)
         try:
-            asyncio.run(self._serve(handle_signals=True))
+            if self._loop is None:
+                asyncio.run(self._serve(handle_signals=True))
+            else:
+                self._run_on_own_loop()
         except KeyboardInterrupt:
             sys.exit(130)
         except StartupError as exc:
@@ -413,17 +491,49 @@ class TemplateValidatorAdapter:
             _log.critical("config_invalid", reason=str(exc))
             sys.exit(2)
 
+    def _run_on_own_loop(self) -> None:
+        """``run()`` after the kit was started on the adapter's own loop.
+
+        Signals reach the main thread: SIGTERM becomes ``KeyboardInterrupt``
+        (like Ctrl-C), which asks the steps to stop and waits for them.
+        """
+        restore = (
+            threading.current_thread() is threading.main_thread()
+            and signal.getsignal(signal.SIGTERM) == signal.SIG_DFL
+        )
+        if restore:
+            signal.signal(signal.SIGTERM, interrupt)
+        future = asyncio.run_coroutine_threadsafe(
+            self._serve(handle_signals=False), self._own_loop()
+        )
+        try:
+            try:
+                future.result()
+            except KeyboardInterrupt:
+                self.should_exit = True
+                future.result(timeout=self.settings.query_timeout_s * 3 + 30)
+                raise
+        finally:
+            if restore:
+                signal.signal(signal.SIGTERM, signal.SIG_DFL)
+            self._close_own_loop()
+
     def run_in_background_thread(self) -> None:
         """v10's background mode: run in a daemon thread."""
         if self.is_running:
             return
         self.should_exit = False
-        self.thread = threading.Thread(
-            target=lambda: asyncio.run(self._serve(handle_signals=False)),
-            name="tensorwire-template-validator",
-            daemon=True,
-        )
-        self.thread.start()
+        if self._loop is not None:
+            self._serving = asyncio.run_coroutine_threadsafe(
+                self._serve(handle_signals=False), self._loop
+            )
+        else:
+            self.thread = threading.Thread(
+                target=lambda: asyncio.run(self._serve(handle_signals=False)),
+                name="tensorwire-template-validator",
+                daemon=True,
+            )
+            self.thread.start()
         self.is_running = True
 
     def stop_run_thread(self) -> None:
@@ -431,8 +541,14 @@ class TemplateValidatorAdapter:
         if not self.is_running:
             return
         self.should_exit = True
+        timeout = self.settings.query_timeout_s * 3 + 30
+        if self._serving is not None:
+            with contextlib.suppress(Exception):
+                self._serving.result(timeout=timeout)
+            self._serving = None
+            self._close_own_loop()
         if self.thread is not None:
-            self.thread.join(timeout=self.settings.query_timeout_s * 3 + 30)
+            self.thread.join(timeout=timeout)
         self.is_running = False
 
     def __enter__(self) -> TemplateValidatorAdapter:
@@ -447,7 +563,7 @@ class TemplateValidatorAdapter:
             threading.current_thread() is threading.main_thread()
             and signal.getsignal(signal.SIGTERM) == signal.SIG_DFL
         ):
-            signal.signal(signal.SIGTERM, _interrupt)
+            signal.signal(signal.SIGTERM, interrupt)
             self._restore_sigterm = True
         self.run_in_background_thread()
         return self

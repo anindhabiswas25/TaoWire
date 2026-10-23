@@ -13,7 +13,11 @@ import structlog.testing
 from bittensor import sp_core
 from pydantic import SecretStr
 
-from tensorwire.auth.nonce_store import MemoryNonceStore, RedisNonceStore
+from tensorwire.auth.nonce_store import (
+    MemoryNonceStore,
+    RedisNonceStore,
+    StepGuardedNonceStore,
+)
 from tensorwire.auth.sdk_check import SdkReport
 from tensorwire.chain.gateway import ChainUnavailable, MetagraphView
 from tensorwire.config import MinerSettings
@@ -66,7 +70,9 @@ async def test_startup_publishes_axon_and_becomes_ready(
             ("44.1.2.3", 8091, 87, None)
         ]
         assert miner.lifecycle.runtime.axon_in_sync is True
-        assert isinstance(miner.lifecycle.runtime.store, MemoryNonceStore)
+        store = miner.lifecycle.runtime.store
+        assert isinstance(store, StepGuardedNonceStore)
+        assert isinstance(store.inner, MemoryNonceStore)
         verdict = await miner.lifecycle.readiness()
         assert (verdict.ready, verdict.degraded) == (True, ())
     assert not miner.lifecycle.ready
@@ -334,7 +340,8 @@ async def test_redis_url_builds_the_shared_store(
     )
     async with miner.running():
         rt = miner.lifecycle.runtime
-        assert isinstance(rt.store, RedisNonceStore)
+        assert isinstance(rt.store, StepGuardedNonceStore)
+        assert isinstance(rt.store.inner, RedisNonceStore)
         assert rt.store_backend == "redis"
         assert isinstance(rt.ip_limiter, RedisRateLimiter)
         assert isinstance(rt.hotkey_limiter, RedisRateLimiter)
@@ -463,3 +470,19 @@ async def test_snapshot_listener_sees_every_refresh(
         miner.lifecycle.runtime.metagraph.add_refresh_listener(seen.append)
         await miner.lifecycle.runtime.metagraph.refresh_now()
     assert len(seen) == 1
+
+
+async def test_the_clock_timer_also_watches_for_steps(
+    tw_miner_kwargs: dict[str, Any], tw_clock: FakeClock
+) -> None:
+    """D21: the 10-minute clock check runs the step guard too, not only requests."""
+    miner = build(tw_miner_kwargs)
+    async with miner.running():
+        rt = miner.lifecycle.runtime
+        tw_clock.step_wall(-49)  # margin is 60 - 12 = 48 s
+        await rt.clock.check_async()  # what the 10-minute timer runs
+        assert miner.metrics.registry.get_sample_value(
+            "tw_clock_step_seconds"
+        ) == pytest.approx(49)
+        verdict = await miner.lifecycle.readiness()
+        assert verdict.reasons == ("clock_step",)

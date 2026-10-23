@@ -429,10 +429,11 @@ class MinerSettings(CommonSettings):
                 "TW_EXTERNAL_IP is a private/loopback address; validators reject it "
                 "(set TW_ALLOW_PRIVATE_AXONS=1 on localnet only)"
             )
-        if self.nonce_retention_s < self.auth_max_age_s + self.auth_allowed_skew_s:
+        window = self.auth_max_age_s + self.auth_allowed_skew_s
+        if self.nonce_retention_s < 2 * window:  # spec 8.4.3, D21
             raise ValueError(
                 "TW_NONCE_RETENTION_S must be >= "
-                "TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S"
+                "2 x (TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S)"
             )
         if (self.tls_cert_file is None) != (self.tls_key_file is None):
             raise ValueError(

@@ -114,6 +114,13 @@ class Metrics:
             registry=r,
             **recent,
         )
+        self.clock_step = Gauge(
+            "tw_clock_step_seconds",
+            "Size of the last backwards wall-clock step that opened the "
+            "fail-closed window (0 = none since start).",
+            registry=r,
+            **recent,
+        )
         self.nonce_store_errors = Counter(
             "tw_nonce_store_errors_total",
             "Replay-store failures (fail-closed 503s).",

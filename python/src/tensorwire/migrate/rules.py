@@ -219,11 +219,12 @@ RULES: Mapping[str, Rule] = _table(
     ),
     Rule(
         "TWM026",
-        "customised template BaseValidatorNeuron",
-        "manual",
-        "keep your additions: make your BaseValidatorNeuron subclass "
-        "tensorwire.compat.TemplateValidatorAdapter and keep only the methods "
-        "the template does not have (spec 10b.2.4)",
+        "customised template bases",
+        "auto",
+        "BaseMinerNeuron / BaseValidatorNeuron also subclass "
+        "tensorwire.compat.TemplateMinerAdapter / TemplateValidatorAdapter; the "
+        "run loops, axon serving, set_weights and wallet/subtensor set-up go, "
+        "your own methods stay (spec 10b.2.4)",
     ),
     Rule(
         "TWM027",
@@ -252,6 +253,31 @@ RULES: Mapping[str, Rule] = _table(
         "manual",
         "neither a known v10 symbol nor part of the v11 public API: check it by "
         "hand (removed in v11, or a typo)",
+    ),
+    Rule(
+        "TWM031",
+        "v10 config calls",
+        "auto",
+        'bt.<group>.add_args(parser) -> add_v10_args(parser, "<group>"), '
+        "bt.config(parser) -> tensorwire.compat.config(parser), a bt.Config "
+        "annotation -> Config, bt.logging.check_config(...) removed: defaults "
+        "come from TW_* settings",
+    ),
+    Rule(
+        "TWM032",
+        "bt.logging set-up statement",
+        "auto",
+        "removed: the kit configures logging (TW_LOG_LEVEL); bare "
+        "bt.logging(...), bt.logging.set_debug(...), set_trace, enable_* ... "
+        "statements have nothing left to do",
+    ),
+    Rule(
+        "TWM033",
+        "bt.Wallet(config=c)",
+        "auto",
+        "v11's constructor: bt.Wallet(name=c.wallet.name, hotkey=c.wallet.hotkey, "
+        "path=c.wallet.path) (the subnet's own wallet use; the kit loads its "
+        "hotkey from TW_WALLET_*)",
     ),
     Rule(
         "TWM100",

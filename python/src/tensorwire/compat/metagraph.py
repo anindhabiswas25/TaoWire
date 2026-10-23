@@ -10,10 +10,14 @@ background) or a fixed ``MetagraphView``::
     uid = metagraph.hotkeys.index(synapse.dendrite.hotkey)
     stake = float(metagraph.S[uid])
 
-Every attribute reads the latest snapshot. ``sync()`` is a no-op: the kit's
-cache refreshes itself. Values are plain Python lists (``S`` is the
-caller's stake in TAO at spot price, ``NeuronView.total_stake_tao``), not
-tensors; wrap them in ``numpy.array(...)`` where the code needs arrays.
+Every attribute reads the latest snapshot, or, ``pinned=True`` (the template
+adapters), the snapshot of the last ``sync()``, as v10's metagraph did; the
+kit's cache refreshes itself in the background. ``copy.deepcopy(metagraph)``
+freezes the current snapshot, so "before / after" comparisons in template
+code still work.
+Values are plain Python lists (``S`` is the caller's stake in TAO at spot
+price, ``NeuronView.total_stake_tao``), not tensors; wrap them in
+``numpy.array(...)`` where the code needs arrays.
 """
 
 from __future__ import annotations
@@ -49,8 +53,18 @@ class _MinerSnapshots:
 class Metagraph:
     """``bt.metagraph`` attributes over a TensorWire metagraph."""
 
-    def __init__(self, source: MetagraphSource | MetagraphView | _Snapshots) -> None:
+    def __init__(
+        self,
+        source: MetagraphSource | MetagraphView | _Snapshots,
+        *,
+        pinned: bool = False,
+    ) -> None:
+        """``pinned=True``: v10's semantics, reads stay on the snapshot taken
+        at the last :meth:`sync` (or the first read); ``sync()`` moves it to
+        the latest. Otherwise every read is the latest snapshot."""
         self._source = source
+        self._pinned = pinned
+        self._pin: MetagraphView | None = None
 
     @classmethod
     def of_miner(cls, miner: Miner) -> Metagraph:
@@ -62,13 +76,20 @@ class Metagraph:
         """
         return cls(_MinerSnapshots(miner))
 
-    def snapshot(self) -> MetagraphView:
-        """The current snapshot. ``RuntimeError`` before the first one."""
+    def _latest(self) -> MetagraphView:
         source = self._source
         view = source if isinstance(source, MetagraphView) else source.snapshot()
         if view is None:
             raise RuntimeError("no metagraph snapshot yet")
         return view
+
+    def snapshot(self) -> MetagraphView:
+        """The snapshot reads use. ``RuntimeError`` before the first one."""
+        if not self._pinned:
+            return self._latest()
+        if self._pin is None:
+            self._pin = self._latest()
+        return self._pin
 
     def _neurons(self) -> list[NeuronView]:
         neurons = sorted(self.snapshot().neurons, key=lambda n: n.uid)
@@ -77,7 +98,20 @@ class Metagraph:
         return neurons
 
     def sync(self, *_args: Any, **_kwargs: Any) -> None:
-        """No-op: the kit's metagraph cache refreshes in the background."""
+        """Pinned: move to the latest snapshot of the kit's cache (which
+        refreshes in the background). Otherwise nothing to do. v10 arguments
+        (``subtensor=``, ``lite=``) are ignored."""
+        if self._pinned:
+            self._pin = self._latest()
+
+    def __copy__(self) -> Metagraph:
+        """A view frozen at the current snapshot (template ``resync_metagraph``
+        code compares ``copy.deepcopy(self.metagraph)`` with the live one)."""
+        return Metagraph(self.snapshot())
+
+    def __deepcopy__(self, _memo: dict[int, Any]) -> Metagraph:
+        """As :meth:`__copy__`: snapshots are immutable."""
+        return self.__copy__()
 
     @property
     def netuid(self) -> int:

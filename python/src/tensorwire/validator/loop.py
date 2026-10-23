@@ -202,6 +202,8 @@ class ValidatorRunner:
         self.store: ScoreStore | None = None
         self.weights: WeightScheduler | None = None
         self.hotkey_ss58: str | None = None
+        #: Signs with the validator's hotkey (after :meth:`start`).
+        self.signer: HotkeySigner | None = None
 
     @classmethod
     def from_env(
@@ -253,6 +255,7 @@ class ValidatorRunner:
                 "TW_LEGACY_V10_CLIENT_UNTIL, or use an sr25519 hotkey"
             )
         self.hotkey_ss58 = signer.hotkey_ss58
+        self.signer = raw
         self._lock = HotkeyLock(s.state_dir, signer.hotkey_ss58)
         try:
             self._lock.acquire()

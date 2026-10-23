@@ -17,8 +17,14 @@ Only ``auto`` rules are rewritten:
 - ``.item()`` / ``.tolist()`` on metagraph values are dropped (TWM023);
 - the template's ``from template.base.validator import BaseValidatorNeuron``
   -> ``from tensorwire.compat import TemplateValidatorAdapter as
-  BaseValidatorNeuron`` (TWM024), only when that base is the stock template
-  (a customised one is TWM026, by hand);
+  BaseValidatorNeuron`` (TWM024), only when that base is the stock template;
+- a customised copy of the template's bases (``<pkg>/base/{neuron,miner,
+  validator}.py``) is put on ``TemplateMinerAdapter`` /
+  ``TemplateValidatorAdapter``, keeping the subnet's own methods (TWM026,
+  :mod:`tensorwire.migrate.base_swap`);
+- ``bt.<group>.add_args(parser)`` -> ``add_v10_args(parser, "<group>")``,
+  ``bt.config(parser)`` -> ``config(parser)``, bare
+  ``bt.<group>.check_config(...)`` statements removed (TWM031);
 - ``time.sleep(x)`` inside ``async def`` -> ``await asyncio.sleep(x)``
   (TWM027);
 - string annotations ``"bt.metagraph.Metagraph"``, ``"bt.Synapse"``, ...
@@ -51,10 +57,18 @@ from typing import Literal
 import libcst as cst
 from libcst.metadata import MetadataWrapper, ParentNodeProvider, PositionProvider
 
+from tensorwire.migrate.base_swap import (
+    ADAPTERS,
+    role_of,
+    swap_base,
+    swappable_packages,
+)
 from tensorwire.migrate.rules import RULES
 from tensorwire.migrate.scan import (
     ANNOTATION_COMPAT,
+    CONFIG_GROUPS,
     LOG_LEVELS,
+    LOGGING_SETUP,
     is_axons_list,
     is_metagraph_tensor_call,
     python_files,
@@ -342,6 +356,9 @@ class _Rewriter(cst.CSTTransformer):
         if not self._is_bt(original_node.value):
             return updated_node
         attr = original_node.attr.value
+        if self._annotation_depth and attr in ("Config", "config"):
+            self.rewrites["TWM031"] += 1  # ``config: bt.Config`` -> compat ``Config``
+            return cst.Name(self._compat("Config"))
         compat = _COMPAT_NAMES.get(attr)
         if compat is None:
             return updated_node
@@ -396,6 +413,13 @@ class _Rewriter(cst.CSTTransformer):
                     )
                 )
             )
+        config_call = self._config_call(original_node, updated_node, head, last)
+        if config_call is not None:
+            return config_call
+        if head in self.bt and last in ("Wallet", "wallet"):
+            wallet = self._wallet_call(original_node, updated_node)
+            if wallet is not None:
+                return wallet
         if head.rpartition(".")[2] == "logging" and self._is_bt_path(head, 1):
             return self._logging_call(updated_node, last)
         if head in self.bt and last in ("axon", "Axon"):
@@ -410,6 +434,115 @@ class _Rewriter(cst.CSTTransformer):
             self.rewrites["TWM023"] += 1
             return updated_node.func.value
         return updated_node
+
+    def _config_call(
+        self, original: cst.Call, updated: cst.Call, head: str, last: str
+    ) -> cst.Call | None:
+        """TWM031: ``bt.<group>.add_args(p)`` and ``bt.config(p)``."""
+        if head in self.bt and last in ("config", "Config"):
+            self.rewrites["TWM031"] += 1
+            return updated.with_changes(func=cst.Name(self._compat("config")))
+        group_head, _, group = head.rpartition(".")
+        if (
+            last == "add_args"
+            and group_head in self.bt
+            and group in CONFIG_GROUPS
+            and len(original.args) == 1
+            and original.args[0].keyword is None
+            and not original.args[0].star
+        ):
+            self.rewrites["TWM031"] += 1
+            name = cst.SimpleString(f'"{CONFIG_GROUPS[group]}"')
+            first = updated.args[0].with_changes(
+                comma=cst.Comma(whitespace_after=cst.SimpleWhitespace(" "))
+            )
+            return cst.Call(
+                func=cst.Name(self._compat("add_v10_args")),
+                args=[first, cst.Arg(value=name)],
+            )
+        return None
+
+    def _wallet_call(self, original: cst.Call, updated: cst.Call) -> cst.Call | None:
+        """TWM033: ``bt.Wallet(config=c)`` -> v11's ``bt.Wallet(name=..., ...)``."""
+        if not (
+            len(original.args) == 1
+            and original.args[0].keyword is not None
+            and original.args[0].keyword.value == "config"
+        ):
+            return None
+        config = updated.args[0].value
+        func = original.func
+        if not isinstance(func, cst.Attribute):  # pragma: no cover - head was checked
+            return None
+        self.rewrites["TWM033"] += 1
+
+        def part(name: str) -> cst.Attribute:
+            return cst.Attribute(
+                value=cst.Attribute(value=config, attr=cst.Name("wallet")),
+                attr=cst.Name(name),
+            )
+
+        names = ("name", "hotkey", "path")
+        return cst.Call(
+            func=func.with_changes(attr=cst.Name("Wallet")),
+            args=[
+                _kwarg(n, part(n)).with_changes(
+                    comma=cst.Comma(whitespace_after=cst.SimpleWhitespace(" "))
+                    if n != names[-1]
+                    else cst.MaybeSentinel.DEFAULT
+                )
+                for n in names
+            ],
+        )
+
+    def _removed_statement(self, statement: cst.BaseStatement) -> str | None:
+        """The rule a bare statement is removed by: ``bt.<group>.check_config(...)``
+        (TWM031) or a ``bt.logging`` set-up call (TWM032); else ``None``."""
+        if not (
+            isinstance(statement, cst.SimpleStatementLine) and len(statement.body) == 1
+        ):
+            return None
+        small = statement.body[0]
+        if not (isinstance(small, cst.Expr) and isinstance(small.value, cst.Call)):
+            return None
+        parts = (_dotted(small.value.func) or "").split(".")
+        if not parts or parts[0] not in self.bt:
+            return None
+        if len(parts) == 3 and parts[1] in CONFIG_GROUPS and parts[2] == "check_config":
+            return "TWM031"
+        if parts[1:] == ["logging"] or (
+            len(parts) == 3 and parts[1] == "logging" and parts[2] in LOGGING_SETUP
+        ):
+            return "TWM032"
+        return None
+
+    def _without_removed(
+        self, body: Sequence[cst.BaseStatement]
+    ) -> list[cst.BaseStatement] | None:
+        kept: list[cst.BaseStatement] = []
+        for statement in body:
+            rule = self._removed_statement(statement)
+            if rule is None:
+                kept.append(statement)
+            else:
+                self.rewrites[rule] += 1
+        return None if len(kept) == len(body) else kept
+
+    def leave_IndentedBlock(  # noqa: N802 - libcst API
+        self, _original: cst.IndentedBlock, updated_node: cst.IndentedBlock
+    ) -> cst.IndentedBlock:
+        body = self._without_removed(updated_node.body)
+        if body is None:
+            return updated_node
+        return updated_node.with_changes(
+            body=body or [cst.SimpleStatementLine(body=[cst.Pass()])]
+        )
+
+    def leave_Module(  # noqa: N802 - libcst API
+        self, _original: cst.Module, updated_node: cst.Module
+    ) -> cst.Module:
+        body = self._without_removed(updated_node.body)
+        return updated_node if body is None else updated_node.with_changes(body=body)
 
     def _is_bt_path(self, dotted: str, depth: int) -> bool:
         parts = dotted.split(".")
@@ -863,11 +996,15 @@ def apply_source(
     path: str = "<string>",
     *,
     custom_bases: Mapping[str, list[str] | None] | None = None,
+    swap_role: str | None = None,
 ) -> FileResult:
     """``source`` after the rewrites and the ``TW-MIGRATE`` markers.
 
     ``custom_bases``: :func:`~tensorwire.migrate.scan.template_bases` of the
     repository (without it, a ``BaseValidatorNeuron`` import is swapped).
+    ``swap_role`` (``"neuron"``, ``"miner"`` or ``"validator"``): this file
+    is that base of a customised template package, swapped onto the
+    adapters (TWM026; :func:`plan_repo` decides).
     Raises ``libcst.ParserSyntaxError`` for code that does not parse.
     """
     bases = custom_bases or {}
@@ -875,6 +1012,13 @@ def apply_source(
     aliases = _BtAliases()
     module.visit(aliases)
     rewriter = _Rewriter(aliases.aliases, path, bases, aliases.bound)
+    if swap_role is not None:
+        adapter = ADAPTERS.get(swap_role)
+        local = None if adapter is None else rewriter._compat(adapter)
+        swapped = swap_base(module, swap_role, aliases.aliases, local)
+        if swapped.swapped:
+            rewriter.rewrites["TWM026"] += 1
+            module = swapped.module
     rewritten = MetadataWrapper(module).visit(rewriter)
     if rewriter.rewrites or rewriter.need_compat:
         rewritten = _fix_imports(rewritten, rewriter)
@@ -901,13 +1045,26 @@ def plan_repo(root: Path | str) -> ApplyReport:
         raise NotADirectoryError(str(base))
     report = ApplyReport(root=str(base))
     bases = template_bases(base)
+    customised = sorted(
+        {target.rpartition(".")[0] for target, extras in bases.items() if extras}
+    )
+    swapped = swappable_packages(base, customised)
+    # After the swap those bases are on the adapters: no TWM026 import finding.
+    scan_bases = {
+        target: None if target.rpartition(".")[0] in swapped else extras
+        for target, extras in bases.items()
+    }
     for path in python_files(base):
         rel = path.relative_to(base).as_posix()
         if path.is_symlink():
             continue  # never written through a link
+        role = role_of(".".join(Path(rel).with_suffix("").parts))
+        swap_role = role[1] if role is not None and role[0] in swapped else None
         try:
             source = path.read_text(encoding="utf-8")
-            report.files.append(apply_source(source, rel, custom_bases=bases))
+            report.files.append(
+                apply_source(source, rel, custom_bases=scan_bases, swap_role=swap_role)
+            )
         except (UnicodeDecodeError, OSError) as exc:
             report.parse_errors.append(f"{rel}: {type(exc).__name__}")
         except cst.ParserSyntaxError as exc:

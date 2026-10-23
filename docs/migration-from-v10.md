@@ -88,18 +88,65 @@ replaced hotkeys are zeroed); the kit stores the scores and sets weights from
 them. Steps start at most every `TW_ROUND_INTERVAL_S`; weights follow the
 chain's rate limit and `TW_MIN_WEIGHT_INTERVAL_BLOCKS`.
 
-If your base adds methods of its own (wandb logging, stake filters, ...),
-`apply` leaves the import and marks it TWM026: make your
-`BaseValidatorNeuron` subclass `TemplateValidatorAdapter` instead of
-`BaseNeuron`, keep only your additions (override `update_scores` /
-`resync_metagraph` if you changed them; `self.scores` may be a numpy array, a
-torch tensor or a list), and add your own command-line options in an
-`add_args` classmethod that calls `super().add_args(parser)` first. The
+### A customised copy of the template's bases (TWM026)
+
+Many subnets keep their own copy of the template's bases
+(`<pkg>/base/neuron.py`, `miner.py`, `validator.py`) with methods added:
+wandb logging, stake filters, version checks, per-miner counters. `apply`
+puts those classes on the kit's adapters and keeps every method you wrote:
+
+- `BaseMinerNeuron(BaseNeuron)` becomes `BaseMinerNeuron(BaseNeuron,
+  TemplateMinerAdapter)`, and `BaseValidatorNeuron(BaseNeuron)` becomes
+  `BaseValidatorNeuron(BaseNeuron, TemplateValidatorAdapter)`.
+- The methods the kit runs now are removed: `run`, `run_in_background_thread`,
+  `stop_run_thread`, `__enter__`, `__exit__`, the validator's `serve_axon`
+  and `set_weights`, and `BaseNeuron`'s abstract `run`. A
+  `# TW-MIGRATE: TWM026` line lists the ones that held code: move anything
+  custom they did (say, closing a wandb run) into `sync()` or
+  `resync_metagraph()`, then delete the line.
+- In `__init__`, `**kit_parts` is passed through to the adapter (tests use
+  it to inject `FakeChain`), `BaseNeuron.__init__` calls `super().__init__()`
+  first, and the statements that built what the kit owns now go: the
+  assignments to `self.wallet`, `self.subtensor`, `self.metagraph`,
+  `self.dendrite`, `self.axon`, `self.uid`, `self.loop` and `self.config`,
+  the template's config merge, and `bt.logging(...)` set-up. Everything else
+  stays where it was.
+
+Your kept methods then run against the template surface the adapters
+provide (`tensorwire.compat.neuron`):
+
+| You use | On TensorWire |
+|---|---|
+| `self.config` | your `add_args` options, `netuid` from `TW_NETUID`, and v10's `wallet.*` / `subtensor.*` / `logging.*` / `axon.*` groups filled from the `TW_*` settings the kit really uses |
+| `self.wallet.hotkey` | the hotkey (`ss58_address`, `public_key`, `sign()`). `self.wallet.coldkey` raises: the kit never loads it |
+| `self.subtensor` | reads from the kit's metagraph: `block`, `get_current_block()`, `metagraph()`, `is_hotkey_registered()`, `chain_endpoint`. Anything else raises: other chain reads use v11's `bt.Subtensor` (spec 3) |
+| `self.metagraph`, `self.uid`, `self.block` | the kit's metagraph cache; `copy.deepcopy(self.metagraph)` freezes a snapshot, `metagraph.sync()` is a no-op |
+| `sync()`, `check_registered()`, `should_sync_metagraph()`, `should_set_weights()`, `serve_axon()`, `set_weights()` | the template's `sync()` order; registration is checked at startup (exit 3), the kit serves the axon and sets weights on its own schedule, so `set_weights()` does nothing by itself. Your own versions of these methods take precedence |
+| Chain reads in `__init__` | the validator adapter starts the kit on its first chain read, as v10's `BaseNeuron.__init__` connected; the miner adapter does one read for `__init__` and then serves from its own cache |
+| `with Miner() as miner:` / `with Validator() as v:` | serve in the background; SIGTERM stops them like Ctrl-C |
+| The miner's per-epoch loop | `sync()` runs once per `neuron.epoch_length` blocks |
+
+What stays a hand change: v11's own API changes outside networking (for
+example `subtensor.get_stake_info_for_coldkey` is
+`client.staking.stake_for_coldkeys` in v11), and anything else the scan still
+marks. `apply` swaps a package only when its three bases have the template's
+shape (`BaseMinerNeuron` and `BaseValidatorNeuron` subclass `BaseNeuron`);
+otherwise the TWM026 marker stays on the import and the swap is yours. The
 llm-detection case study shows one: `docs/migrations/llm-detection.md`.
 
-The miner side has no adapter: port `template/base/miner.py` and `neuron.py`
-onto `compat.Axon(miner=Miner.from_env())` and `Metagraph.of_miner(...)` as
-the template example does (about 20 lines written).
+For the stock template, the miner side is the example's
+`template/base/miner.py` and `neuron.py` (the template port); the
+`TemplateMinerAdapter` does the same for a customised copy.
+
+### v10 config calls (TWM031)
+
+`bt.wallet.add_args(parser)` (and `subtensor`, `axon`, `logging`) becomes
+`add_v10_args(parser, "wallet")`, `bt.config(parser)` becomes
+`tensorwire.compat.config(parser)`, and bare `bt.logging.check_config(c)`
+statements go. The v10 option names stay, so your code that reads
+`config.wallet.name` or `config.logging.logging_dir` keeps working; their
+defaults come from the `TW_*` variables, and the kit itself only ever reads
+`TW_*` settings.
 
 ## The compat layer
 
@@ -295,9 +342,11 @@ From tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron (t
 Remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else.
 
 <a id="twm026"></a>
-### TWM026: customised template BaseValidatorNeuron (`manual`)
+### TWM026: customised template bases (`auto`)
 
-Keep your additions: make your BaseValidatorNeuron subclass tensorwire.compat.TemplateValidatorAdapter and keep only the methods the template does not have (spec 10b.2.4).
+BaseMinerNeuron / BaseValidatorNeuron also subclass tensorwire.compat.TemplateMinerAdapter / TemplateValidatorAdapter; the run loops, axon serving, set_weights and wallet/subtensor set-up go, your own methods stay (spec 10b.2.4).
+
+See [A customised copy of the template's bases](#a-customised-copy-of-the-templates-bases-twm026).
 
 <a id="twm027"></a>
 ### TWM027: time.sleep in a coroutine (`auto`)
@@ -318,6 +367,27 @@ Update it by hand (a mock.patch target such as 'mod.bt.logging.info' breaks once
 ### TWM030: unknown bittensor name (`manual`)
 
 Neither a known v10 symbol nor part of the v11 public API: check it by hand (removed in v11, or a typo).
+
+<a id="twm031"></a>
+### TWM031: v10 config calls (`auto`)
+
+bt.<group>.add_args(parser) -> add_v10_args(parser, "<group>"), bt.config(parser) -> tensorwire.compat.config(parser), a bt.Config annotation -> Config, bt.logging.check_config(...) removed: defaults come from TW_* settings.
+
+See [v10 config calls](#v10-config-calls-twm031). Other shapes (extra arguments, `bt.config` used as a value) stay TWM006.
+
+<a id="twm032"></a>
+### TWM032: bt.logging set-up statement (`auto`)
+
+Removed: the kit configures logging (TW_LOG_LEVEL); bare bt.logging(...), bt.logging.set_debug(...), set_trace, enable_* ... statements have nothing left to do.
+
+Only bare statements go; any other use of `bt.logging` that is not a log call (assigning `bt.logging.trace` to patch it, for example) stays TWM025.
+
+<a id="twm033"></a>
+### TWM033: bt.Wallet(config=c) (`auto`)
+
+V11's constructor: bt.Wallet(name=c.wallet.name, hotkey=c.wallet.hotkey, path=c.wallet.path) (the subnet's own wallet use; the kit loads its hotkey from TW_WALLET_*).
+
+v11's `Wallet` reads the coldkey only when your code asks for it (`wallet.coldkey`); `wallet.get_coldkeypub()` is the `wallet.coldkeypub` property in v11.
 
 <a id="twm100"></a>
 ### TWM100: Synapse without required_hash_fields (`risk`)

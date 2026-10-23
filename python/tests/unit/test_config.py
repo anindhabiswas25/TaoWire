@@ -146,7 +146,7 @@ RANGES = [
     ("external_port", 0, 1, 65535, 65536),
     ("instance_count", 0, 1, 1024, 1025),
     ("workers", 0, 1, 256, 257),
-    ("auth_max_age_s", 1.9, 2, 58, 61),
+    ("auth_max_age_s", 1.9, 2, 60, 61),
     ("auth_allowed_skew_s", 0.4, 0.5, 10, 10.1),
     ("max_body_bytes", 0, 1, 256 * 1024 * 1024, 256 * 1024 * 1024 + 1),
     ("rate_ip_per_s", 0, 0.001, 1_000_000, 1_000_001),
@@ -166,6 +166,8 @@ def test_miner_ranges(
 ) -> None:
     if name in {"workers", "instance_count"}:
         env.set(redis_url="redis://localhost:6379/0")
+    if name.startswith("auth_"):  # the store must cover 2x the window (D21)
+        env.set(nonce_retention_s=3600)
     for ok in (ok_low, ok_high):
         env.set(**{name: ok})
         miner()
@@ -223,12 +225,16 @@ def test_max_age_must_exceed_soft_age(
             miner()
 
 
-def test_nonce_retention_covers_window(env: TWEnv) -> None:
-    env.set(auth_max_age_s=50, auth_allowed_skew_s=10, nonce_retention_s=59)
-    with fails("TW_NONCE_RETENTION_S must be >="):
+def test_nonce_retention_covers_twice_the_window(env: TWEnv) -> None:
+    # spec 8.4.3, D21: retention >= 2 x (max_age + allowed_skew).
+    env.set(auth_max_age_s=50, auth_allowed_skew_s=10, nonce_retention_s=119.9)
+    with fails("TW_NONCE_RETENTION_S must be >= 2 x"):
         miner()
-    env.set(nonce_retention_s=60)
+    env.set(nonce_retention_s=120)
     miner()
+    env.set(auth_max_age_s=10, auth_allowed_skew_s=2, nonce_retention_s=23.9)
+    with fails("TW_NONCE_RETENTION_S must be >= 2 x"):
+        miner()
 
 
 # --------------------------------------------------------------- formats

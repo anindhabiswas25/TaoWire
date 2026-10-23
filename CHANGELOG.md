@@ -57,3 +57,31 @@ All notable changes to this project are documented here. The format follows
 
 - `TW_EXTERNAL_IP` is never `0.0.0.0`, `::` or `127.0.0.1`; legacy end dates are at most 180
   days ahead; `TW_METAGRAPH_SOFT_AGE_S` unset means "derive from the tempo".
+
+### Security
+
+- The sender address must be exactly 48 characters before it is base58-decoded (decoding is
+  quadratic and ran before authentication; a 64 KiB sender cost about a second of CPU).
+- Weak public keys (the sr25519 identity, ed25519 points of small order) and signatures over
+  the `<Bytes>`-wrapped payload are refused as `tw.auth_bad_signature` by the request
+  verifier, and by `crypto.verify(strict=True)` (twresp/1, the v10 wire); signature headers
+  must be hex digits only (ADR-0010).
+- Replay stores must keep pairs for at least `2 × (max_age + allowed_skew)`; the memory store
+  forgets a pair only when both clocks agree; a backwards wall-clock step larger than the
+  margin fails closed for `retention` seconds (503 `tw.replay_store_unavailable`, `/readyz`
+  `clock_step`, `clock_step_detected`, `tw_clock_step_seconds`).
+- Native `legacy_body_hash` v10 answers holding `inf` / `nan` are refused (500) instead of
+  being sent as `null`.
+
+### Added (Phase 3 gate fixes)
+
+- `compat.TemplateMinerAdapter`, and the template surface on both adapters: hotkey-only
+  `wallet`, read-only `subtensor`, `sync()`, `check_registered()`, pinned `metagraph`; the
+  validator adapter starts the kit on its first chain read. `compat.config`,
+  `compat.add_v10_args`, `compat.Config`. `Miner.serve_in_background()`.
+- `migrate apply`: customised template bases are put on the adapters (TWM026, now auto);
+  new auto rules TWM031 (v10 config calls), TWM032 (`bt.logging` set-up statements), TWM033
+  (`bt.Wallet(config=...)`).
+- `tensorwire bench` reaches Redis directly by default (container IP / host network) and
+  prints which path it used; a `docker-proxy` run is marked as extra information.
+- Case studies: llm-detection (S6 recounted with its bases), data-universe.

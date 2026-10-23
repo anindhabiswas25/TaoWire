@@ -30,6 +30,7 @@ with ``twresp/1`` (v10 Dendrites do not read it).
 from __future__ import annotations
 
 import functools
+import json
 import time
 from collections.abc import MutableMapping
 from typing import Any
@@ -53,6 +54,7 @@ from tensorwire.errors import (
     ReplayStoreUnavailable,
     TWError,
 )
+from tensorwire.extensions.legacy_v10 import wire
 from tensorwire.extensions.response_sig import sign_response
 from tensorwire.miner.legacy import LegacyRequestLike, LegacyServerLike
 from tensorwire.miner.lifecycle import Lifecycle, Runtime
@@ -312,7 +314,18 @@ class RouteEndpoint:
             if isinstance(result, (bytes, bytearray)):
                 return None, bytes(result)
             if isinstance(result, BaseModel):
-                return None, result.model_dump_json().encode()
+                raw = result.model_dump_json().encode()
+                # D11 / G4-4: never let inf / nan become null silently (8.11.2).
+                bad = wire.non_finite_field(result, rendered=json.loads(raw), skip=())
+                if bad is not None:
+                    _log.error(
+                        "legacy_non_finite_answer",
+                        route=self.route.path,
+                        field=bad,
+                        hint="v10 answers are JSON: inf / nan would become null",
+                    )
+                    raise HandlerError()
+                return None, raw
         elif isinstance(result, type(synapse)):
             return result, None
         elif isinstance(result, BaseModel):

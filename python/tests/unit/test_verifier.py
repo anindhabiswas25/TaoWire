@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 import anyio
+import fakeredis
 import pytest
 from bittensor import http_auth, sp_core
 
-from tensorwire.auth.nonce_store import MemoryNonceStore
+from tensorwire.auth.nonce_store import MemoryNonceStore, RedisNonceStore
 from tensorwire.auth.verifier import RequestVerifier
 from tensorwire.errors import AuthFailed, ReplayStoreUnavailable
 from tensorwire.testing.clock import FakeClock
@@ -237,6 +239,18 @@ def test_undecodable_sender_is_malformed(
     assert code(verifier, headers) == "tw.auth_malformed"
 
 
+def test_huge_sender_is_refused_before_decoding(
+    verifier: RequestVerifier, clock: FakeClock
+) -> None:
+    """G4-2 (D19): base58 decoding is quadratic and runs before authentication."""
+    headers = signed(clock)
+    headers[http_auth.HEADER_HOTKEY] = "z" * 64 * 1024
+    start = time.perf_counter()
+    assert code(verifier, headers) == "tw.auth_malformed"
+    assert time.perf_counter() - start < 0.05
+    assert len(verifier.store) == 0  # type: ignore[arg-type]
+
+
 def test_duplicate_auth_headers_are_malformed(
     verifier: RequestVerifier, clock: FakeClock
 ) -> None:
@@ -263,13 +277,148 @@ def test_non_canonical_nonce_is_malformed(
     assert code(verifier, headers) == "tw.auth_malformed"
 
 
+@pytest.mark.parametrize(
+    "mangle",
+    [
+        lambda sig: sig[:10] + " " + sig[10:],
+        lambda sig: sig + " ",
+        lambda sig: sig[:10] + "\t" + sig[10:],
+        lambda sig: "0X" + sig[2:],
+    ],
+    ids=["inner-space", "trailing-space", "tab", "0X"],
+)
+def test_signature_must_be_hex_digits_only(
+    verifier: RequestVerifier, clock: FakeClock, mangle: Any
+) -> None:
+    """``bytes.fromhex`` in the SDK skips whitespace; the kit does not (4.3 step 1)."""
+    headers = signed(clock)
+    headers[http_auth.HEADER_SIGNATURE] = mangle(headers[http_auth.HEADER_SIGNATURE])
+    with pytest.raises(AuthFailed, match="not hex") as info:
+        verify(verifier, headers)
+    assert info.value.code == "tw.auth_malformed"
+
+
+def test_upper_case_hex_and_no_prefix_are_accepted(
+    verifier: RequestVerifier, clock: FakeClock
+) -> None:
+    headers = signed(clock)
+    headers[http_auth.HEADER_SIGNATURE] = headers[http_auth.HEADER_SIGNATURE][
+        2:
+    ].upper()
+    assert verify(verifier, headers).hotkey_ss58 == ALICE.ss58
+
+
+class _CountingStore(MemoryNonceStore):
+    def __init__(self) -> None:
+        super().__init__(60)
+        self.calls = 0
+
+    def check_and_store(self, hotkey_ss58: str, nonce_ns: int) -> bool:
+        self.calls += 1
+        return super().check_and_store(hotkey_ss58, nonce_ns)
+
+
+def _sdk_accepts(headers: dict[str, str], clock: FakeClock) -> bool:
+    return bool(
+        http_auth.verify(
+            headers,
+            BODY,
+            method="POST",
+            path=TARGET,
+            self_hotkey_ss58=BOB.ss58,
+            nonce_store=MemoryNonceStore(60),
+            now_ns=clock.now_ns(),
+        )
+    )
+
+
+@pytest.mark.parametrize(
+    ("scheme", "public_key", "signature"),
+    [
+        ("sr25519", bytes(32), bytes(63) + b"\x80"),
+        ("ed25519", b"\x01" + bytes(31), b"\x01" + bytes(63)),
+    ],
+)
+def test_weak_key_universal_signature_is_refused_before_the_store(
+    clock: FakeClock, scheme: str, public_key: bytes, signature: bytes
+) -> None:
+    """The SDK accepts these; the kit refuses them as a bad signature (D20)."""
+    store = _CountingStore()
+    verifier = RequestVerifier(BOB.ss58, store, now_ns=clock.now_ns)
+    sender = str(sp_core.ss58_encode(public_key, 42))
+    headers = {
+        http_auth.HEADER_VERSION: "1",
+        http_auth.HEADER_HOTKEY: sender,
+        http_auth.HEADER_RECEIVER: BOB.ss58,
+        http_auth.HEADER_NONCE: str(clock.now_ns()),
+        http_auth.HEADER_SIGNATURE: "0x" + signature.hex(),
+    }
+    if scheme == "ed25519":
+        headers[http_auth.HEADER_CRYPTO] = "ed25519"
+    assert _sdk_accepts(headers, clock)  # the SDK alone accepts it
+    assert code(verifier, headers) == "tw.auth_bad_signature"
+    assert store.calls == 0
+
+
+@pytest.mark.parametrize("scheme", ["sr25519", "ed25519"])
+def test_bytes_wrapped_signature_is_refused_before_the_store(
+    clock: FakeClock, scheme: str
+) -> None:
+    """D22 (A10, 11.7): the Python verifier is strict on ``<Bytes>`` too."""
+    key = dev_key("alice", scheme)
+    store = _CountingStore()
+    verifier = RequestVerifier(BOB.ss58, store, now_ns=clock.now_ns)
+    nonce = clock.now_ns()
+    payload = http_auth.build_payload(
+        scheme=scheme,
+        method="POST",
+        path=TARGET,
+        body=BODY,
+        nonce_ns=nonce,
+        sender_ss58=key.ss58,
+        receiver_ss58=BOB.ss58,
+    )
+    wrapped = bytes(key.keypair.sign(b"<Bytes>" + payload + b"</Bytes>"))
+    headers = {
+        http_auth.HEADER_VERSION: "1",
+        http_auth.HEADER_HOTKEY: key.ss58,
+        http_auth.HEADER_RECEIVER: BOB.ss58,
+        http_auth.HEADER_NONCE: str(nonce),
+        http_auth.HEADER_SIGNATURE: "0x" + wrapped.hex(),
+        http_auth.HEADER_CRYPTO: scheme,
+    }
+    assert _sdk_accepts(headers, clock)  # the SDK alone accepts it (fact A10)
+    with pytest.raises(AuthFailed) as info:
+        verify(verifier, headers)
+    assert info.value.code == "tw.auth_bad_signature"
+    assert "Bytes" not in str(info.value)
+    assert store.calls == 0
+
+
+@pytest.mark.parametrize("scheme", ["sr25519", "ed25519"])
+def test_real_keys_still_reach_the_store(clock: FakeClock, scheme: str) -> None:
+    store = _CountingStore()
+    verifier = RequestVerifier(BOB.ss58, store, now_ns=clock.now_ns)
+    caller = verify(verifier, signed(clock, key=dev_key("alice", scheme)))
+    assert caller.scheme == scheme
+    assert store.calls == 1
+
+
 # ---------------------------------------------------------------- construction
 
 
-def test_retention_shorter_than_window_is_refused() -> None:
+def test_retention_shorter_than_twice_the_window_is_refused() -> None:
+    # spec 8.4.3, D21: retention >= 2 x (max_age + allowed_skew), any store.
     with pytest.raises(ValueError, match="retention too short"):
-        RequestVerifier(BOB.ss58, MemoryNonceStore(11.9), max_age=10, allowed_skew=2)
-    RequestVerifier(BOB.ss58, MemoryNonceStore(12), max_age=10, allowed_skew=2)
+        RequestVerifier(BOB.ss58, MemoryNonceStore(23.9), max_age=10, allowed_skew=2)
+    with pytest.raises(ValueError, match="retention too short"):
+        RequestVerifier(BOB.ss58, MemoryNonceStore(12), max_age=10, allowed_skew=2)
+    redis_store = RedisNonceStore(
+        "redis://unused", retention=23.9, client=fakeredis.FakeRedis()
+    )
+    with pytest.raises(ValueError, match="retention too short"):
+        RequestVerifier(BOB.ss58, redis_store, max_age=10, allowed_skew=2)
+    RequestVerifier(BOB.ss58, MemoryNonceStore(24), max_age=10, allowed_skew=2)
 
 
 def test_store_without_retention_is_refused() -> None:

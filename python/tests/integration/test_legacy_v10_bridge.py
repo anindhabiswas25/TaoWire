@@ -7,7 +7,9 @@
 13. Client side: ``ValidatorClient`` with ``LegacyClient`` + ``ProtocolSelector``
     against a fake v10 Axon falls back to v10 once and remembers it; re-probe
     switches an upgraded miner back; a hotkey that answered over btauth/1 is
-    never downgraded.
+    never downgraded, unless its own signed ``ServeAxon`` moves its protocol
+    tag away from the kit's (D16), which the running validator picks up at
+    its next metagraph refresh.
 
 Needs Engineer A's ``compat`` and ``validator`` packages; skipped without them.
 """
@@ -42,7 +44,7 @@ from tensorwire import crypto
 from tensorwire.auth.nonce_store import MemoryNonceStore
 from tensorwire.chain.gateway import NeuronView
 from tensorwire.compat.synapse import Synapse
-from tensorwire.config import MinerSettings
+from tensorwire.config import MinerSettings, ValidatorSettings
 from tensorwire.errors import ConfigError, Forbidden, HandlerError
 from tensorwire.extensions.legacy_v10 import wire
 from tensorwire.extensions.legacy_v10.client import (
@@ -58,7 +60,8 @@ from tensorwire.testing.keys import dev_key
 from tensorwire.testing.metagraph import FakeMetagraphSource
 from tensorwire.testing.pytest_plugin import TEST_NETUID
 from tensorwire.testing.transport import AppRouter
-from tensorwire.validator.client import ValidatorClient
+from tensorwire.validator.client import MinerResult, ValidatorClient
+from tensorwire.validator.loop import SubnetValidator, Task, ValidatorRunner
 
 TODAY = dt.datetime.now(dt.timezone.utc).date()
 UNTIL = TODAY + dt.timedelta(days=30)
@@ -407,6 +410,18 @@ class Switch:
         await self.app(scope, receive, send)
 
 
+class _NoRounds(SubnetValidator):
+    """The runner only refreshes and queries here; no rounds of its own."""
+
+    async def make_task(self, round_id: int) -> Task:
+        return Task(route="/Dummy", body=b"{}")
+
+    async def score(
+        self, task: Task, results: dict[int, MinerResult]
+    ) -> dict[int, float]:
+        return {}
+
+
 def upgraded_miner(chain: FakeChain, clock: FakeClock, tmp: Any) -> Miner:
     settings = MinerSettings(
         netuid=TEST_NETUID,
@@ -521,3 +536,69 @@ async def test_13_on_chain_tag_means_btauth_only(
     assert not result.ok
     assert result.protocol == "btauth/1"
     assert fake.v10_hits == 0
+
+
+async def test_13_signed_tag_change_reaches_a_rolled_back_miner_over_v10(
+    tw_env: Any, fake_chain: FakeChain, tw_clock: FakeClock, tmp_path: Any
+) -> None:
+    """D16 (8.11.3 step 5, 10b.5 stage 2 rollback) end to end, in the running
+    validator: after Bob answered over btauth/1, a v10-shaped answer never
+    downgrades him; once his own ``ServeAxon`` moves his tag away from the
+    kit's, the next metagraph refresh lets the next query reach him over v10.
+    Unit detail of the trigger: ``test_validator_protocol_tag.py``."""
+    settings = ValidatorSettings(
+        netuid=TEST_NETUID,
+        wallet_name="alice",
+        wallet_path=tmp_path / "w",
+        state_dir=tmp_path / "s",
+        legacy_v10_client="auto",
+        legacy_v10_client_until=UNTIL,
+        allow_private_axons=True,
+    )
+    fake_chain.set_axon(TEST_NETUID, BOB, V10_ADDRESS, protocol=settings.protocol_tag)
+    fake = FakeV10Axon(tw_clock)
+    miner = upgraded_miner(fake_chain, tw_clock, tmp_path)
+    gateway = fake_chain.with_signer(ALICE)
+    source = FakeMetagraphSource(gateway, TEST_NETUID, clock=tw_clock.monotonic)
+    async with miner.running() as upgraded_app:
+        switch = Switch(upgraded_app)
+        runner = ValidatorRunner(
+            _NoRounds(),
+            settings,
+            gateway=gateway,
+            metagraph=source,
+            hotkey=dev_key("alice").keypair,
+            transport=AppRouter({V10_ADDRESS: switch}),
+            clock_ns=tw_clock.now_ns,
+            legacy=lambda s, signer: (
+                LegacyClient(signer, now_ns=tw_clock.now_ns),
+                ProtocolSelector(s.protocol_tag, until=UNTIL),
+            ),
+            check_sdk=False,
+        )
+
+        async def refresh() -> NeuronView:
+            mg = await source.refresh_now()
+            await runner.begin_round(mg)
+            neuron = mg.by_hotkey(BOB)
+            assert neuron is not None
+            return neuron
+
+        async with runner.running():
+            client = runner.client
+            assert client is not None
+            first = await ask(client, await refresh(), 1)
+            assert (first.ok, first.protocol, first.response_verified) == (
+                True, "btauth/1", True,
+            )  # fmt: skip
+            switch.app = fake.app  # Bob rolls back to v10 at the same address
+            held = await ask(client, await refresh(), 2)  # tag unchanged
+            assert (held.ok, held.protocol, fake.v10_hits) == (False, "btauth/1", 0)
+            fake_chain.set_axon(TEST_NETUID, BOB, V10_ADDRESS, protocol=4)
+            with structlog.testing.capture_logs() as logs:
+                neuron = await refresh()  # his signed ServeAxon is on chain now
+            assert any(e["event"] == "legacy_v10_protocol_tag_changed" for e in logs)
+            back = await ask(client, neuron, 3)
+            assert (back.ok, back.protocol) == (True, "v10")
+            assert back.data.dummy_output == 6
+            assert fake.v10_hits == 1

@@ -9,12 +9,21 @@ guard measures the offset at startup and every 10 minutes:
   only make things worse) but ``/readyz`` reports ``clock_skew``.
 - No NTP server answers, or ``ntplib`` is not installed: the offset is
   "unknown". That never fails anything.
+
+:class:`ClockStepGuard` watches for **backwards wall-clock steps** (spec
+8.4.3-8.4.4, D21). Freshness is judged on the wall clock, so after a step
+back a nonce the replay store has already forgotten could look fresh again.
+A step larger than the store's margin opens a fail-closed window of
+``retention`` seconds (503 ``tw.replay_store_unavailable``, ``/readyz``
+``clock_step``) instead of reopening nonces.
 """
 
 from __future__ import annotations
 
 import enum
 import math
+import threading
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -28,6 +37,7 @@ __all__ = [
     "ClockGuard",
     "ClockReading",
     "ClockStatus",
+    "ClockStepGuard",
     "NtpQuery",
     "ntplib_query",
 ]
@@ -174,3 +184,87 @@ class ClockGuard:
             _log.info("clock_offset_unknown", servers=list(self._servers))
         if self._on_reading is not None:
             self._on_reading(reading)
+
+
+class ClockStepGuard:
+    """Detects backwards wall-clock steps and fails closed after one (D21).
+
+    Each :meth:`check` compares ``wall - monotonic`` with its previous value.
+    When it dropped by more than ``margin_s`` (the replay store's margin,
+    ``retention - (max_age + allowed_skew)``), the guard logs
+    ``clock_step_detected`` at ERROR and stays :attr:`failing_closed` for
+    ``hold_s`` seconds (the store's ``retention``) on the monotonic clock: by
+    then every nonce that could look fresh again has expired from freshness.
+    A forward step, or a smaller backwards one, only moves the baseline.
+
+    ``wall_ns`` and ``monotonic`` are injectable for tests. ``on_step``
+    receives the size of each detected step in seconds (the miner sets
+    ``tw_clock_step_seconds`` there). Thread-safe: the request path calls
+    :meth:`check` from verification threads.
+    """
+
+    def __init__(
+        self,
+        *,
+        margin_s: float,
+        hold_s: float,
+        wall_ns: Callable[[], int] = time.time_ns,
+        monotonic: Callable[[], float] = time.monotonic,
+        on_step: Callable[[float], None] | None = None,
+    ) -> None:
+        for name, value in (("margin_s", margin_s), ("hold_s", hold_s)):
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError(f"{name} must be a positive number of seconds")
+        self._margin = float(margin_s)
+        self._hold = float(hold_s)
+        self._wall_ns = wall_ns
+        self._monotonic = monotonic
+        self._on_step = on_step
+        self._lock = threading.Lock()
+        self._until: float | None = None
+        self._last_step_s = 0.0
+        self._offset = self._read()[0]
+
+    @property
+    def margin_s(self) -> float:
+        """A backwards step larger than this opens the fail-closed window."""
+        return self._margin
+
+    @property
+    def last_step_s(self) -> float:
+        """Size of the last detected backwards step (0 before the first)."""
+        return self._last_step_s
+
+    def _read(self) -> tuple[float, float]:
+        mono = self._monotonic()
+        return self._wall_ns() / 1e9 - mono, mono
+
+    def check(self) -> bool:
+        """Measure now; return whether the guard is failing closed."""
+        with self._lock:
+            offset, mono = self._read()
+            step = self._offset - offset
+            self._offset = offset
+            if step > self._margin:
+                self._until = mono + self._hold
+                self._last_step_s = step
+                detected = True
+            else:
+                detected = False
+            closed = self._until is not None and mono < self._until
+        if detected:
+            _log.error(
+                "clock_step_detected",
+                step_s=round(step, 3),
+                margin_s=self._margin,
+                fail_closed_s=self._hold,
+                hint="authenticated requests get 503 until the window ends",
+            )
+            if self._on_step is not None:
+                self._on_step(step)
+        return closed
+
+    @property
+    def failing_closed(self) -> bool:
+        """Whether the fail-closed window is open (runs a :meth:`check`)."""
+        return self.check()

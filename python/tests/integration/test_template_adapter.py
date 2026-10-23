@@ -132,7 +132,7 @@ async def test_steps_score_and_set_weights_with_the_kit_version_key(
         assert set(submission.weights) == {miner_uid}
         metrics = v.runner.metrics.render().decode()
         assert 'tw_validator_miners_by_protocol{protocol="btauth/1"} 1.0' in metrics
-        decision = await v.set_weights()
+        decision = await v.submit_weights()
         assert decision.reason == "not_due"
     finally:
         await v.stop()
@@ -187,7 +187,7 @@ async def test_update_scores_and_resync_keep_template_semantics(
         v.update_scores([1.0], [miner_uid])
         assert v.scores[own] == pytest.approx(0.45)  # not queried: decays
         assert v.scores[miner_uid] == pytest.approx(0.1)
-        await v.set_weights()  # the store gets self.scores
+        await v.submit_weights()  # the store gets self.scores
         stored = v.runner.store.scores() if v.runner.store else {}
         assert stored[own] == pytest.approx(0.45)
         assert stored[miner_uid] == pytest.approx(0.1)
@@ -245,7 +245,7 @@ async def test_before_start(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="not started"):
         _ = v.dendrite
     with pytest.raises(RuntimeError, match="not started"):
-        await v.set_weights()
+        await v.submit_weights()
     v.update_scores([1.0], [0])  # no metagraph yet: no UID to score
     assert len(v.scores) == 0
     with pytest.raises(NotImplementedError):

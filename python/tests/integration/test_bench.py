@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -120,6 +121,16 @@ def _keep_logging(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(bench_cmd, "configure_logging", lambda level: None)
 
 
+NO_REDIS = bench_cmd.RedisPath(None, "none", "no Redis found (test)")
+
+
+@pytest.fixture
+def no_redis(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The CLI tests must not depend on a Redis being up on this host."""
+    monkeypatch.setattr(bench_cmd, "resolve_redis_path", lambda url: NO_REDIS)
+
+
+@pytest.mark.usefixtures("no_redis")
 def test_cli_short_run(tmp_path: Path) -> None:
     out = tmp_path / "bench.json"
     result = CliRunner().invoke(
@@ -160,12 +171,147 @@ def test_cli_short_run(tmp_path: Path) -> None:
     assert set(report["verdict"]) == {"rps", "auth_p50", "auth_p99", "fanout"}
     assert "verified requests/s" in result.output
     assert "fan-out to 4 miners" in result.output
+    assert "redis path: none" in result.output
+    assert report["environment"]["redis_path"]["kind"] == "none"
 
 
+@pytest.mark.usefixtures("no_redis")
 def test_cli_refuses_workers_without_redis() -> None:
     result = CliRunner().invoke(app, ["bench", "--workers", "2"])
     assert result.exit_code != 0
     assert "redis-url" in result.output
+
+
+# ---------------------------------------------------------------- redis path (D17)
+
+TW_REDIS = bench_cmd.DockerRedis(
+    name="tw-redis", ip="172.17.0.3", published=(("127.0.0.1", 6379),)
+)
+HOST_NET = bench_cmd.DockerRedis(
+    name="redis-host", ip=None, published=(), host_network=True
+)
+
+
+def resolve(
+    url: str | None, found: list[bench_cmd.DockerRedis], up: set[str]
+) -> bench_cmd.RedisPath:
+    return bench_cmd.resolve_redis_path(
+        url, containers=lambda: found, answers=lambda u: u in up
+    )
+
+
+def test_default_reaches_the_container_ip_not_docker_proxy() -> None:
+    path = resolve(None, [TW_REDIS], {"redis://172.17.0.3:6379/14"})
+    assert (path.url, path.kind, path.counts) == (
+        "redis://172.17.0.3:6379/14",
+        "direct",
+        True,
+    )
+    assert path.describe() == "redis path: direct: container tw-redis at its own IP"
+
+
+def test_default_uses_host_network_redis() -> None:
+    path = resolve(None, [HOST_NET], {"redis://127.0.0.1:6379/14"})
+    assert (path.url, path.kind) == ("redis://127.0.0.1:6379/14", "direct")
+    assert "host network" in path.detail
+
+
+def test_default_falls_back_to_the_proxy_and_says_so() -> None:
+    # The container IP does not answer (e.g. Docker Desktop on macOS).
+    path = resolve(None, [TW_REDIS], {"redis://127.0.0.1:6379/14"})
+    assert (path.kind, path.counts) == ("docker-proxy", False)
+    assert "extra information only" in path.describe()
+    assert "redis://172.17.0.3:6379/14" in path.detail
+
+
+def test_default_host_redis_without_docker() -> None:
+    path = resolve(None, [], {"redis://127.0.0.1:6379/14"})
+    assert path.kind == "direct"
+    assert "not a Docker port mapping" in path.detail
+
+
+def test_default_without_any_redis() -> None:
+    path = resolve(None, [TW_REDIS], set())
+    assert (path.url, path.kind) == (None, "none")
+
+
+@pytest.mark.parametrize(
+    ("url", "kind"),
+    [
+        ("redis://127.0.0.1:6379/14", "docker-proxy"),
+        ("redis://localhost:6379/3", "docker-proxy"),
+        ("redis://172.17.0.3:6379/14", "direct"),
+        ("unix:///run/redis.sock?db=14", "direct"),
+        ("redis://127.0.0.1:6380/14", "direct"),
+        ("redis://10.0.0.5:6379/14", "direct"),
+    ],
+)
+def test_an_explicit_url_is_used_as_given_and_classified(url: str, kind: str) -> None:
+    path = resolve(url, [TW_REDIS], set())
+    assert (path.url, path.kind) == (url, kind)
+
+
+def test_explicit_loopback_url_on_host_network_is_direct() -> None:
+    path = resolve("redis://127.0.0.1:6379/14", [HOST_NET], set())
+    assert path.kind == "direct"
+
+
+def test_docker_inspect_is_parsed() -> None:
+    inspect = [
+        {
+            "Name": "/tw-redis",
+            "Config": {"Image": "redis:7"},
+            "HostConfig": {"NetworkMode": "bridge"},
+            "NetworkSettings": {
+                "Ports": {"6379/tcp": [{"HostIp": "127.0.0.1", "HostPort": "6379"}]},
+                "Networks": {"bridge": {"IPAddress": "172.17.0.3"}},
+            },
+        },
+        {
+            "Name": "/redis-host",
+            "Config": {"Image": "redis:7"},
+            "HostConfig": {"NetworkMode": "host"},
+            "NetworkSettings": {"Ports": {}, "Networks": {"host": {"IPAddress": ""}}},
+        },
+        {
+            "Name": "/postgres",
+            "Config": {"Image": "postgres:16"},
+            "HostConfig": {"NetworkMode": "bridge"},
+            "NetworkSettings": {"Ports": {"5432/tcp": None}, "Networks": {}},
+        },
+        {"Name": "/broken", "NetworkSettings": {"Ports": {"6379/tcp": [{}]}}},
+        "not a container",
+    ]
+
+    def run(cmd: list[str]) -> str:
+        return "a b c d e\n" if cmd[1] == "ps" else json.dumps(inspect)
+
+    assert bench_cmd.docker_redis_containers(run) == [TW_REDIS, HOST_NET]
+
+
+@pytest.mark.parametrize("output", ["", "not json"])
+def test_docker_output_problems_mean_no_containers(output: str) -> None:
+    def run(cmd: list[str]) -> str:
+        return "a\n" if cmd[1] == "ps" and output else output
+
+    assert bench_cmd.docker_redis_containers(run) == []
+
+
+def test_no_docker_means_no_containers() -> None:
+    def run(cmd: list[str]) -> str:
+        raise FileNotFoundError(cmd[0])
+
+    assert bench_cmd.docker_redis_containers(run) == []
+
+
+def test_render_prints_the_redis_path() -> None:
+    proxy = resolve("redis://127.0.0.1:6379/14", [TW_REDIS], set())
+    report = bench_cmd.BenchReport(
+        environment={"tensorwire": "x", "redis_path": dataclasses.asdict(proxy)}
+    )
+    report.verdict = bench_cmd._verdict(report, bench_cmd.Targets())
+    text = bench_cmd.render(report, bench_cmd.Targets())
+    assert "redis path: docker-proxy (extra information only" in text
 
 
 def test_cli_rejects_unknown_skip() -> None:

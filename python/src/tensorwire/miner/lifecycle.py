@@ -13,7 +13,12 @@ Startup, in order:
 4. Exit with code 3 if our hotkey is not registered on ``TW_NETUID``.
 5. Build the nonce store, verifier, caller gate and both rate limiters (Redis
    when ``TW_REDIS_URL`` is set, else per process); refuse a per-process
-   nonce store or rate limiter when several workers or instances run.
+   nonce store or rate limiter when several workers or instances run, and a
+   store whose retention is below ``2 x (max_age + allowed_skew)``. The store
+   is wrapped by the clock-step guard (8.4.3-8.4.4, D21): after a backwards
+   wall-clock step larger than the margin, authenticated requests get 503
+   ``tw.replay_store_unavailable`` and ``/readyz`` says ``clock_step`` for
+   ``retention`` seconds.
 6. Check the clock against NTP.
 7. Publish the axon if the on-chain one differs from
    ``TW_EXTERNAL_IP:TW_EXTERNAL_PORT`` (only when ``TW_AUTO_SERVE_AXON=1`` and
@@ -43,14 +48,20 @@ import anyio
 import anyio.to_thread
 import structlog
 
-from tensorwire.auth.clock import ClockGuard, ClockReading, NtpQuery
+from tensorwire.auth.clock import ClockGuard, ClockReading, ClockStepGuard, NtpQuery
 from tensorwire.auth.keys import (
     ColdkeyState,
     WalletLike,
     coldkey_state,
     load_hotkey,
 )
-from tensorwire.auth.nonce_store import MemoryNonceStore, NonceStore, RedisNonceStore
+from tensorwire.auth.nonce_store import (
+    MemoryNonceStore,
+    NonceStore,
+    RedisNonceStore,
+    StepGuardedNonceStore,
+    check_retention_margin,
+)
 from tensorwire.auth.sdk_check import check_sdk
 from tensorwire.auth.verifier import RequestVerifier
 from tensorwire.chain.axon import Endpoint
@@ -144,6 +155,7 @@ class Runtime:
     hotkey_limiter: RateLimiter
     limiter_backend: str
     clock: ClockGuard
+    step_guard: ClockStepGuard
     legacy: LegacyServerLike | None = None
     axon_in_sync: bool | None = None
     tasks: list[asyncio.Task[None]] = field(default_factory=list)
@@ -329,8 +341,11 @@ class Lifecycle:
                 )
             except RuntimeError as exc:  # the redis extra is not installed
                 raise StartupError(str(exc)) from None
+        wall_ns = time.time_ns if self.parts.clock_ns is None else self.parts.clock_ns
         if store is None:
-            store = MemoryNonceStore(s.nonce_retention_s, clock=self.parts.monotonic)
+            store = MemoryNonceStore(
+                s.nonce_retention_s, clock=self.parts.monotonic, wall_ns=wall_ns
+            )
         backend = "memory" if isinstance(store, MemoryNonceStore) else "redis"
         multi = s.workers > 1 or s.instance_count > 1
         if backend == "memory" and multi:
@@ -356,6 +371,20 @@ class Lifecycle:
                 "per_process_rate_limits",
                 hint="rate limits apply per worker/instance, not in total",
             )
+        try:
+            margin = check_retention_margin(
+                store.retention, s.auth_max_age_s, s.auth_allowed_skew_s
+            )
+        except ValueError as exc:
+            raise StartupError(str(exc)) from None
+        step_guard = ClockStepGuard(
+            margin_s=margin,
+            hold_s=store.retention,
+            wall_ns=wall_ns,
+            monotonic=self.parts.monotonic,
+            on_step=self.metrics.clock_step.set,
+        )
+        store = StepGuardedNonceStore(store, step_guard)
         verifier = RequestVerifier(
             hotkey_ss58,
             store,
@@ -397,6 +426,7 @@ class Lifecycle:
             hotkey_limiter=hotkey_limiter,
             limiter_backend=limiter_backend,
             clock=clock,
+            step_guard=step_guard,
             legacy=legacy,
         )
 
@@ -436,6 +466,8 @@ class Lifecycle:
     def _on_clock_reading(self, reading: ClockReading) -> None:
         offset = reading.offset_s
         self.metrics.clock_offset.set(float("nan") if offset is None else offset)
+        if self._runtime is not None:  # the 10-minute timer also watches for steps
+            self._runtime.step_guard.check()
 
     @staticmethod
     def _spawn(coro: Coroutine[Any, Any, None], name: str) -> asyncio.Task[None]:
@@ -579,6 +611,8 @@ class Lifecycle:
                 break
         if rt.clock.skewed:
             reasons.append("clock_skew")
+        if rt.step_guard.failing_closed:
+            reasons.append("clock_step")
         if rt.axon_in_sync is False:
             degraded.append("axon_not_published")
         return Readiness(not reasons, tuple(reasons), tuple(degraded))

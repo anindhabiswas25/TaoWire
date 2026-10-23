@@ -198,6 +198,9 @@ again; unknown callers are never admitted on stale data. Set at least one
    key on Redis's clock, so all workers and hosts share one limit. If Redis
    is unreachable, protected routes answer 503 `tw.replay_store_unavailable`
    (fail closed); `/healthz` and `/readyz` still answer.
+   The replay store must keep pairs for at least
+   `2 × (TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S)`; `TW_NONCE_RETENTION_S`
+   below that refuses to start (D21).
 6. Check the clock against NTP (`TW_NTP_SERVERS`).
 7. Publish the axon (`TW_EXTERNAL_IP:TW_EXTERNAL_PORT`, protocol
    `TW_PROTOCOL_TAG`) when the chain shows something else and
@@ -235,10 +238,22 @@ histograms summed, gauges most recent).
 - `GET /readyz`: `{"status": "ready", "degraded": [...]}` or 503
   `{"status": "not_ready", "reasons": [...]}`; reasons are `starting`,
   `stopping`, `not_registered`, `metagraph_stale`, `nonce_store_unreachable`,
-  `rate_limiter_unreachable`, `clock_skew`; degraded entries
+  `rate_limiter_unreachable`, `clock_skew`, `clock_step`; degraded entries
   `metagraph_stale`, `axon_not_published`. The clock is checked at startup
   and every 10 minutes; `clock_skew` clears at the first check that finds
   the clock back within `TW_AUTH_ALLOWED_SKEW_S`.
+- **Operator note: wall-clock steps.** If the host's wall clock jumps
+  **back** by more than `TW_NONCE_RETENTION_S − (TW_AUTH_MAX_AGE_S +
+  TW_AUTH_ALLOWED_SKEW_S)` (48 s with the defaults), the miner logs
+  `clock_step_detected` (ERROR, with the size of the step), sets
+  `tw_clock_step_seconds`, and for `TW_NONCE_RETENTION_S` seconds answers
+  authenticated requests with 503 `tw.replay_store_unavailable` and
+  `/readyz` with 503 `clock_step`. This is deliberate: during that time the
+  replay store could not tell a replayed request from a new one. It ends on
+  its own. To avoid it, let chrony slew the clock instead of stepping it
+  after startup (`makestep 1 3` steps only during the first three updates),
+  and alert on `clock_step_detected`. A larger `TW_NONCE_RETENTION_S` widens
+  the margin (and the length of the window).
 - Prometheus metrics on `TW_METRICS_BIND` (127.0.0.1:9100), never on the
   public port. See [metrics.md](metrics.md).
 

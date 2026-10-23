@@ -13,23 +13,36 @@ Import changes for a template-derived subnet::
     process_weights_for_netuid(...)           ->  weights.to_mapping(uids, weights)
     bt.metagraph(...).hotkeys / .S / .axons   ->  Metagraph(source).hotkeys / .S
     template.base.validator.BaseValidatorNeuron -> TemplateValidatorAdapter
+    a customised template base (TWM031)        -> TemplateMinerAdapter /
+                                                  TemplateValidatorAdapter
+    bt.config(parser)                          -> config(parser)
+    bt.wallet.add_args(parser)                 -> add_v10_args(parser, "wallet")
 """
 
 from tensorwire.compat import weights
 from tensorwire.compat.axon import Axon
+from tensorwire.compat.config import Config, add_v10_args, config
 from tensorwire.compat.dendrite import AxonInfo, Dendrite, axons_from
 from tensorwire.compat.metagraph import Metagraph
+from tensorwire.compat.neuron import HotkeyWallet, SubtensorView
 from tensorwire.compat.synapse import Synapse, TerminalInfo
 from tensorwire.compat.template import TemplateValidatorAdapter
+from tensorwire.compat.template_miner import TemplateMinerAdapter
 
 __all__ = [
     "Axon",
     "AxonInfo",
+    "Config",
     "Dendrite",
+    "HotkeyWallet",
     "Metagraph",
+    "SubtensorView",
     "Synapse",
+    "TemplateMinerAdapter",
     "TemplateValidatorAdapter",
     "TerminalInfo",
+    "add_v10_args",
     "axons_from",
+    "config",
     "weights",
 ]
