@@ -3,7 +3,7 @@ module github.com/tensorwire/tensorwire/go
 go 1.22
 
 require (
-	filippo.io/edwards25519 v1.1.0
+	filippo.io/edwards25519 v1.1.1
 	github.com/ChainSafe/go-schnorrkel v1.1.0
 	github.com/mr-tron/base58 v1.2.0
 	github.com/redis/go-redis/v9 v9.7.3

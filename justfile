@@ -3,10 +3,24 @@
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
+# Go (spec 11.4, D23): go.mod keeps the `go 1.22` directive for users; development,
+# release builds and `just audit` use a supported toolchain, for this project only:
+# ~/sdk/go1.26.10 (install: `go install golang.org/dl/go1.26.10@latest && go1.26.10 download`)
+# and the tools from `just go-tools` in .tools/go/bin. Nothing outside the repo changes.
+go_sdk := env_var_or_default("TENSORWIRE_GO_SDK", env_var("HOME") + "/sdk/go1.26.10")
+export PATH := go_sdk + "/bin:" + justfile_directory() + "/.tools/go/bin:" + env_var("PATH")
+export GOTOOLCHAIN := "local"
+
 default: check
 
 # the full local gate
 check: lint typecheck test conformance
+
+# staticcheck and govulncheck, built with the project's Go, into .tools/go/bin
+go-tools:
+    GOBIN={{justfile_directory()}}/.tools/go/bin go install honnef.co/go/tools/cmd/staticcheck@v0.8.2
+    GOBIN={{justfile_directory()}}/.tools/go/bin go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
+    go version
 
 # install the Python dev environment (all extras: redis, ntp, migrate, dev)
 setup:

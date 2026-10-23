@@ -35,6 +35,9 @@ htmlcov/
 node_modules/
 *.tsbuildinfo
 
+# Go toolchain helpers (just go-tools)
+.tools/
+
 # Rust
 target/
 rust/fuzz/corpus/
