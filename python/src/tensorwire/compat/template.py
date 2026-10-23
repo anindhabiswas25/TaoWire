@@ -27,7 +27,8 @@ a numpy array, a torch tensor or a list).
 What the team's code sees is the template's surface: ``self.config``
 (``netuid``, the ``neuron.*`` options and v10's ``wallet.*`` /
 ``subtensor.*`` / ``logging.*`` groups filled from the kit's settings),
-``self.metagraph`` (``compat.Metagraph``), ``self.dendrite``, ``self.step``,
+``self.metagraph`` (``compat.Metagraph``, pinned: it moves on
+``metagraph.sync()``, as v10's did), ``self.dendrite``, ``self.step``,
 ``self.scores``, ``self.hotkeys``, ``self.uid``, ``self.block``,
 ``self.wallet`` (hotkey only), ``self.subtensor`` (reads only),
 ``update_scores()``, ``sync()``, ``set_weights()``, ``run()``, and
@@ -183,6 +184,7 @@ class TemplateValidatorAdapter(TemplateNeuronSurface):
         self.is_running = False
         self.thread: threading.Thread | None = None
         self._dendrite: Dendrite | None = None
+        self._metagraph: Metagraph | None = None
         self._round_results: dict[int, MinerResult] = {}
         self._round_scores: dict[int, float] = {}
         self._restore_sigterm = False
@@ -240,7 +242,9 @@ class TemplateValidatorAdapter(TemplateNeuronSurface):
     def metagraph(self) -> Metagraph:
         """The kit's metagraph with v10 attribute names."""
         self._ensure_started()
-        return Metagraph(self.runner.metagraph)
+        if self._metagraph is None:  # pragma: no cover - start() sets it
+            raise RuntimeError("the validator has not started")
+        return self._metagraph
 
     @property
     def gateway(self) -> ChainGateway:
@@ -284,8 +288,9 @@ class TemplateValidatorAdapter(TemplateNeuronSurface):
 
     @property
     def block(self) -> int:
-        """The block of the current metagraph snapshot."""
-        return self.metagraph.block
+        """The block of the kit's latest metagraph snapshot."""
+        self._ensure_started()
+        return self._snapshot().block
 
     async def forward(self) -> Any:
         """The subnet's step: query miners, reward them, ``update_scores``."""
@@ -333,8 +338,9 @@ class TemplateValidatorAdapter(TemplateNeuronSurface):
         return await weights.maybe_submit(self._store().scores(), self._snapshot())
 
     def resync_metagraph(self) -> None:
-        """The template's resync: zero the scores of replaced hotkeys and
-        resize ``self.scores`` to the metagraph."""
+        """The template's resync: ``metagraph.sync()``, then zero the scores of
+        replaced hotkeys and resize ``self.scores`` to the metagraph."""
+        self.metagraph.sync()
         hotkeys = self.metagraph.hotkeys
         if hotkeys == self.hotkeys:
             return
@@ -407,6 +413,7 @@ class TemplateValidatorAdapter(TemplateNeuronSurface):
         client = self.runner.client
         if client is None:  # pragma: no cover - start() sets it
             raise RuntimeError("validator client missing after start")
+        self._metagraph = Metagraph(self.runner.metagraph, pinned=True)
         self._dendrite = Dendrite(client=client, on_results=self._collect)
         store = self._store()
         self.step = await asyncio.to_thread(store.next_round_id) - 1
@@ -453,7 +460,11 @@ class TemplateValidatorAdapter(TemplateNeuronSurface):
         self._round_results.update(results)
 
     def _snapshot(self) -> MetagraphView:
-        return self.metagraph.snapshot()
+        """The kit's latest snapshot (the kit's own work never uses the pinned one)."""
+        view = self.runner.metagraph.snapshot()
+        if view is None:
+            raise RuntimeError("no metagraph snapshot yet")
+        return view
 
     def _store(self) -> Any:
         if self.runner.store is None:

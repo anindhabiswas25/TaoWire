@@ -238,6 +238,30 @@ def test_a_copied_metagraph_is_frozen_at_its_snapshot() -> None:
     assert previous.axons == live.axons[:1]
 
 
+def test_a_pinned_metagraph_moves_on_sync_only() -> None:
+    """v10 semantics (the template adapters): the template's resync compares
+    ``copy.deepcopy(self.metagraph)`` with the metagraph after ``sync()``."""
+
+    class Source:
+        snap: MetagraphView | None = view(neuron(0))
+
+        def snapshot(self) -> MetagraphView | None:
+            return self.snap
+
+    source = Source()
+    mg = Metagraph(source, pinned=True)  # type: ignore[arg-type]
+    assert mg.n == 1
+    source.snap = view(neuron(0), neuron(1))  # the kit's cache refreshed
+    assert mg.n == 1  # still the pinned snapshot
+    previous = copy.deepcopy(mg)
+    mg.sync(subtensor=None)
+    assert (previous.n, mg.n) == (1, 2)
+    assert previous.axons != mg.axons  # the template sees the change
+    previous = copy.deepcopy(mg)
+    mg.sync()
+    assert previous.axons == mg.axons  # nothing changed since: early return
+
+
 # ---------------------------------------------------------------- Dendrite helpers
 
 

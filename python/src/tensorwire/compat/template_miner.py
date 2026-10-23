@@ -82,6 +82,7 @@ class TemplateMinerAdapter(TemplateNeuronSurface):
         self._last_sync_block: int | None = None
         self._restore_sigterm = False
         self._preflight: MetagraphView | None = None
+        self._metagraph: Metagraph | None = None
 
     # ------------------------------------------------------------ config
 
@@ -121,8 +122,11 @@ class TemplateMinerAdapter(TemplateNeuronSurface):
 
     @property
     def metagraph(self) -> Metagraph:
-        """The miner's metagraph with v10 attribute names."""
-        return Metagraph(_Snapshots(self))
+        """The miner's metagraph with v10 attribute names (pinned: it moves on
+        ``metagraph.sync()``, which ``resync_metagraph()`` calls each epoch)."""
+        if self._metagraph is None:
+            self._metagraph = Metagraph(_Snapshots(self), pinned=True)
+        return self._metagraph
 
     def snapshot(self) -> MetagraphView:
         """The miner's current snapshot, or the pre-flight one before it serves."""
@@ -185,8 +189,12 @@ class TemplateMinerAdapter(TemplateNeuronSurface):
 
     @property
     def block(self) -> int:
-        """The block of the miner's current metagraph snapshot (once it serves)."""
-        return self.metagraph.block
+        """The block of the latest snapshot (the pre-flight one before serving)."""
+        return self.snapshot().block
+
+    def resync_metagraph(self) -> None:
+        """The template's miner resync: ``metagraph.sync()``."""
+        self.metagraph.sync()
 
     # ------------------------------------------------------------ epochs
 
