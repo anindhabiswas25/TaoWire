@@ -5,11 +5,13 @@ Python core · btauth/1 native · v10 → v11 migration (compat layer, two-way b
 
 | Field | Value |
 |---|---|
-| Document version | 1.4 |
+| Document version | 1.6 |
 | Changes in 1.1 | Migration of existing v10 subnets is a first-class goal: new Section 10b, two-way legacy bridge (8.11), `tensorwire migrate` CLI, migration rollout runbook, success criterion S6, phase plan updated |
 | Changes in 1.2 | SDK version range instead of an exact pin (3, 18); staged metagraph staleness instead of a 15-minute hard stop (8.5.1); product metrics (1.6); relationship with the core team (1.7); sustainability and maintenance (Section 20) |
 | Changes in 1.3 | Phase 0–1 findings: protocol tag is a u8, default 87 (D1); stake units and `total_stake_tao` (D2, 2, 8.3); v10 marker (D3, 8.11.3); write retries and `set_weights` meaning (8.3); stricter shape rules (4.3); localnet facts (14.2, 14.5); 8.11.1 rewritten from captured vectors (by Engineer B) |
 | Changes in 1.4 | Phase 2 findings: component dependencies without a cycle (5.2); one time budget per query incl. the v10 fallback (8.8); v10 end-date wording, axon-signature scope, non-finite floats in v10 answers (8.11.2-8.11.3); `https-if-tls-published` refused until TLS ships (8.6); days-remaining gauge kept current (8.11); compat additions (10b.2); how S6 is counted (1.5, 13.8); `tw.legacy_auth_failed` covers unparseable bodies (Appendix A) |
+| Changes in 1.5 | Phase 3 finding F1 (Engineer B, rollout walk-through): no-downgrade vs the stage 2 rollback. A signed on-chain protocol-tag change away from `TW_PROTOCOL_TAG` clears the hotkey's protocol memory (D16; 8.11.3 step 5, 10b.5 stage 2 rollback, integration test 13) |
+| Changes in 1.6 | Phase 3 gate: benchmarks count with Redis reached directly (D17, 13.7); S6 counts hand-written changes in customised template bases (D18, 1.5); sender must be 48 characters before base58 decoding (D19, 4.3); weak public keys refused, ADR-0010 accepted (D20, 4.3); nonce-store expiry vs wall-clock steps, fail-closed window (D21, 8.4.3-8.4.4); Python verifier strict on `<Bytes>` too (D22, A10, 11.7); Go toolchain, module path and dalek v2 (D23, 11.4-11.5) |
 | Date | 23 October 2026 |
 | Target SDK | `bittensor>=11.3.0,<12` (baseline verified against 11.3.0, stable, released 7 Oct 2026; see Section 18.3) |
 | Target protocol | `btauth/1` (hotkey-signed HTTP, defined by the Bittensor v11 docs) |
@@ -137,7 +139,7 @@ The kit has two audiences with equal priority: **new subnet teams** (goals 1–5
 | S3 | No high or critical findings open from the security review | Review report |
 | S4 | Quickstart works on a clean Ubuntu 24.04 and macOS machine | Timed walkthrough under 60 minutes |
 | S5 | Miner sustains ≥ 500 verified requests/second on 4 vCPU with p99 auth overhead ≤ 5 ms | `just bench` report (Section 13.7) |
-| S6 | A template-derived v10 subnet migrates with ≤ 50 changed lines (excluding import lines and every change `migrate apply` makes on its own, e.g. `bt.logging` → `logging` and the `template/base` → `TemplateValidatorAdapter` swap), and a mixed fleet runs on localnet. Counted as `git diff --stat` between `migrate apply` output and the final port, subnet code only | Migration case studies (Section 13.8): lines changed, hours spent, mixed-fleet matrix green |
+| S6 | A template-derived v10 subnet migrates with ≤ 50 changed lines (excluding import lines and every change `migrate apply` makes on its own, e.g. `bt.logging` → `logging` and the `template/base` → `TemplateValidatorAdapter` swap), and a mixed fleet runs on localnet. Counted as `git diff --stat` between `migrate apply` output and the final port, subnet code only. "Subnet code" includes the subnet's own customised copies of the template's base classes and config modules (for example `<pkg>/base/*`, `utils/config.py`): hand-written changes there count, and only changes `migrate apply` makes on its own are excluded (D18). If a common customisation pattern costs many lines, the answer is a `migrate` rule or compat helper, not a narrower count | Migration case studies (Section 13.8): lines changed, hours spent, mixed-fleet matrix green |
 | S7 | At least 2 real v10 subnets (design partners) ported, plus the archived template | Case-study reports in `docs/migrations/` |
 
 S1–S7 decide when 1.0 is **done**. They do not say whether the product **works for users**; Section 1.6 does.
@@ -292,7 +294,7 @@ Behaviour that matters for the kit (read from the source, not just the docs):
 | A7 | Only `sr25519` and `ed25519` are valid schemes (`CRYPTO_TYPE_NAMES`). The `X-Bittensor-Crypto` header is sent only for ed25519. | Other-language implementations must use the same rule. |
 | A8 | `verify` lower-cases header names itself and accepts a `Mapping[str, str]`. | Pass Starlette's headers directly or convert to `dict`. |
 | A9 | `now_ns` is injectable. | Tests can freeze time without monkeypatching. |
-| A10 | The SDK's verifier (via `sp_core`) also accepts signatures over the `<Bytes>…</Bytes>`-wrapped payload (Polkadot-JS `signRaw` compatibility). Other implementations are not required to accept it and must never produce it. | Conformance vectors include this case as "Python accepts, others may reject". Kit verifiers in other languages **reject** it (strict mode). |
+| A10 | The SDK's verifier (via `sp_core`) also accepts signatures over the `<Bytes>…</Bytes>`-wrapped payload (Polkadot-JS `signRaw` compatibility). Other implementations are not required to accept it and must never produce it. | Kit verifiers in **every** language, Python included, **reject** it (strict mode; decision D22). The Python request verifier checks with `crypto.verify(strict=True)` after the SDK's own checks. The conformance vector expects `tw.auth_bad_signature` everywhere. |
 | A11 | `sp_core.verify` (and so `verify`) accepts the sender's address in **any** SS58 format, not only prefix 42 (checked in Phase 0). | Other implementations accept prefix 42 only (Appendix D); add a negative conformance vector. Python stays safe: the address string is signed, and policy looks callers up by their prefix-42 address, so such a caller fails closed. `tensorwire.crypto` accepts prefix 42 only. |
 
 ### 3.3 Client and reads
@@ -434,10 +436,10 @@ Rules:
 ### 4.3 Verification order (normative)
 
 1. **Shape.** All required headers present and parseable; version is `1`; scheme (if present) is known. Signature is hex (an optional `0x` prefix is stripped). Else `MalformedAuth`.
-   TensorWire verifiers are **stricter than the SDK** here, in every language, and reject with `tw.auth_malformed`: a sender address that is not SS58 prefix 42 (fact A11); any duplicated `X-Bittensor-*` header; a nonce that is not `[0-9]{1,20}`; an `X-Bittensor-Crypto` value other than exactly `ed25519` or `sr25519`. Each has a vector in `negative.json`.
+   TensorWire verifiers are **stricter than the SDK** here, in every language, and reject with `tw.auth_malformed`: a sender address that is not SS58 prefix 42 (fact A11); any duplicated `X-Bittensor-*` header; a nonce that is not `[0-9]{1,20}`; an `X-Bittensor-Crypto` value other than exactly `ed25519` or `sr25519`; a sender value that is not exactly **48 characters** (every prefix-42 SS58 address of a 32-byte key has 48), checked **before** any base58 decoding, because base58 decoding is quadratic in the input length and runs before authentication (decision D19); a signature that is not hex digits only (no whitespace or other characters, which some hex decoders skip). Each has a vector in `negative.json`.
 2. **Receiver.** `X-Bittensor-Receiver` must equal the server's hotkey. Missing receiver is rejected unless explicitly allowed. Else `WrongReceiver`.
 3. **Freshness.** `now - nonce <= max_age` (default 10 s) and `nonce - now <= allowed_skew` (default 2 s). Else `StaleRequest`.
-4. **Signature.** Rebuild the payload from the *received* method, target and body (always recompute the body hash). Decode the sender's SS58. Verify under the declared scheme **only**; never try both. Address or signature that cannot be decoded → `MalformedAuth`. Invalid signature → `BadSignature`.
+4. **Signature.** Rebuild the payload from the *received* method, target and body (always recompute the body hash). Decode the sender's SS58. Verify under the declared scheme **only**; never try both. Address or signature that cannot be decoded → `MalformedAuth`. Invalid signature → `BadSignature`. TensorWire verifiers also refuse **weak public keys** whose "universal" signature verifies for any payload (the sr25519 identity point, ed25519 small-order points) with `BadSignature`, even where the SDK accepts them (decision D20, ADR-0010).
 5. **Replay.** The `(hotkey, nonce)` pair must not have been accepted before within the window. Consult the store only after step 4 succeeds. Else `ReplayedRequest`.
 
 Clients sign a fresh nonce for every attempt, including retries of an identical body.
@@ -1093,6 +1095,12 @@ class RedisNonceStore:
         return bool(self._r.set(key, b"1", nx=True, px=self._px))
 ```
 
+**Expiry and wall-clock steps (decision D21).** Freshness (4.3 step 3) uses the wall clock, so a backwards wall-clock step on the miner could make a forgotten nonce look fresh again.
+- `MemoryNonceStore` forgets a pair only when `retention` has passed on the monotonic clock **and** the nonce is older than `retention` on the wall clock.
+- `RedisNonceStore` keeps `SET NX PX retention`. Every store refuses to start when `retention < 2 × (max_age + allowed_skew)`, which gives a margin of `retention − (max_age + allowed_skew)` (48 s with the defaults).
+- The clock guard (8.4.4) watches `wall − monotonic`. If it drops by more than that margin (a backwards step), authenticated requests get **503 `tw.replay_store_unavailable`** and `/readyz` returns 503 with reason `clock_step` for `retention` seconds, then normal service resumes. This fails closed instead of reopening nonces.
+- The same rules apply to the Go and Rust stores.
+
 Failure policy: if Redis is unreachable, `check_and_store` raises. The verifier maps that to **503 `tw.replay_store_unavailable`** (fail-closed). Never fall back to the memory store silently when more than one worker runs.
 
 Startup check in `miner.lifecycle`: if `workers > 1` (uvicorn) or `TW_INSTANCE_COUNT > 1` and the store is `MemoryNonceStore`, **refuse to start** with a clear message, unless `TW_UNSAFE_ALLOW_MEMORY_NONCE_MULTIWORKER=1`.
@@ -1103,6 +1111,7 @@ Startup check in `miner.lifecycle`: if `workers > 1` (uvicorn) or `TW_INSTANCE_C
 - `|offset| > 0.5 s`: log a warning and set metric `tw_clock_offset_seconds`.
 - `|offset| > allowed_skew`: log an error. The miner keeps running, because refusing would only make things worse, but `/readyz` returns 503 with reason `clock_skew`.
 - If NTP is unreachable, record "unknown"; do not fail.
+- **Clock steps:** a check driven by requests and the 10-minute timer compares `time.time() − time.monotonic()` with its last value. A backwards step larger than the nonce store's margin triggers the fail-closed window in 8.4.3 (D21), logs `clock_step_detected` at ERROR (size of the step), and sets `tw_clock_step_seconds`.
 
 ### 8.5 Caller policy (`policy/caller.py`)
 
@@ -1435,7 +1444,8 @@ Confirmed byte for byte against a real `bittensor==10.5.0` Dendrite and Axon (`c
   1. If the on-chain axon `protocol` field is readable through the gateway and equals `TW_PROTOCOL_TAG`, use btauth/1. (Confirmed in Phase 0: the field is readable through `Metagraph.raw["axons"][uid]["protocol"]` and exposed as `NeuronView.axon_protocol`.)
   2. Otherwise try btauth/1 first. If the answer has the v10 shape (an HTTP 500 carrying a `bt_header_axon_status_code` header, which every v10 Axon response has; vector N7), retry once immediately with a fresh v10 request and remember `v10` for that hotkey.
   3. Re-probe v10 miners with btauth/1 once per tempo, so upgraded miners switch over without a restart.
-  4. **No downgrade:** once a hotkey has answered with btauth/1, never send it v10 again until the hotkey changes. This stops an on-path attacker from forcing the weaker format.
+  4. **No downgrade:** once a hotkey has answered with btauth/1, never send it v10 again until the hotkey changes **or its on-chain protocol tag moves away from `TW_PROTOCOL_TAG`** (below). This stops an on-path attacker from forcing the weaker format.
+  5. **Signed rollback (decision D16):** when a metagraph refresh shows that a hotkey whose `axon_protocol` was `TW_PROTOCOL_TAG` in the previous snapshot now has a different value, the validator forgets that hotkey's protocol memory (the same `forget()` used on a hotkey change) and logs `legacy_v10_protocol_tag_changed` at INFO (hotkey prefix, old and new tag). The next query follows steps 1–2 again, so a miner that rolled back to its v10 release is reached over v10 without restarting the validator. This keeps the security goal of step 4: the tag is set by a `ServeAxon` extrinsic signed by the miner's own hotkey, so an on-path attacker cannot change it. A v10 shape answer on its own, without the tag change, still never causes a downgrade. Limits: only the transition *from* `TW_PROTOCOL_TAG` counts (a miner that never published the kit's tag stays btauth-only until the validator restarts, as before), and the switch happens at the first refresh after the new axon info is on chain (the miner's `ServeAxon` is subject to the subnet's `serving_rate_limit`).
 - v10 results come back as `MinerResult(protocol="v10", response_verified=False)`. Scoring code decides whether unverified answers count; the default `SubnetValidator` treats them as valid answers but exposes the flag.
 - Counted as `tw_legacy_v10_requests_total{direction="outbound"}` and summarised per round: `n_btauth`, `n_v10`. This is the number the subnet owner watches to decide when to end the transition (Section 10b.5).
 
@@ -1667,7 +1677,7 @@ Each stage has an entry check, an exit check and a rollback. The owner decides w
 |---|---|---|---|
 | 0. Prepare | Port the code with `migrate`; run the mixed-fleet localnet test (13.8) on the `testnet` image tag | Mixed-fleet matrix green | — |
 | 1. Validators first | Validators upgrade with `TW_LEGACY_V10_CLIENT=auto`. They reach v10 and v11 miners alike | All validators upgraded; per-round `n_ok` unchanged vs before | Validators go back to the v10 release |
-| 2. Miners upgrade | Miners release with `TW_LEGACY_V10_UNTIL=<date>` so any v10 validator still works | `migrate status`: ≥ 95% of queried miners answer over btauth/1 | Miners go back to the v10 release; validators still reach them |
+| 2. Miners upgrade | Miners release with `TW_LEGACY_V10_UNTIL=<date>` so any v10 validator still works | `migrate status`: ≥ 95% of queried miners answer over btauth/1 | Miners go back to the v10 release, which re-publishes the axon without the kit's protocol tag; upgraded validators reach them over v10 again at their next metagraph refresh after that `ServeAxon` lands (8.11.3 step 5), with no validator restart |
 | 3. Push stragglers | Upgraded validators already send a higher `TW_WEIGHTS_VERSION_KEY` (set in the stage 1 release). The owner now raises the subnet's weights-version hyperparameter to that value, so v10 validators can no longer set weights | No v10 inbound traffic for one tempo (`tw_legacy_v10_requests_total{direction="inbound"}` flat) | Lower the version key again |
 | 4. End the transition | Remove `TW_LEGACY_V10_UNTIL` and set `TW_LEGACY_V10_CLIENT=off` | Legacy counters at zero | Re-enable with a new end date |
 
@@ -1770,7 +1780,7 @@ Notes:
 
 ### 11.4 Go (`github.com/<org>/tensorwire/go/btauth`)
 
-**Go:** ≥ 1.22. **Dependencies:** `github.com/ChainSafe/go-schnorrkel` (sr25519), stdlib `crypto/ed25519`, `crypto/sha256`, `golang.org/x/crypto/blake2b` (SS58 checksum), `github.com/mr-tron/base58`, `github.com/redis/go-redis/v9` (optional).
+**Go:** the module keeps the `go 1.22` directive (the minimum for users). Development, release builds and `just audit` use a **supported** Go release (currently the 1.25 or 1.26 line), so `govulncheck` judges a patched standard library (decision D23). **Module path:** working name `github.com/tensorwire/tensorwire/go` (package `.../go/btauth`) until package names are reserved (Phase 0 item); rename with one search-and-replace. **Dependencies:** `github.com/ChainSafe/go-schnorrkel` (sr25519), stdlib `crypto/ed25519`, `crypto/sha256`, `golang.org/x/crypto/blake2b` (SS58 checksum), `github.com/mr-tron/base58`, `github.com/redis/go-redis/v9` (optional).
 
 ```go
 func BuildPayload(scheme, method, target string, body []byte, nonce uint64, sender, receiver string) []byte {
@@ -1801,7 +1811,7 @@ Notes:
 
 ### 11.5 Rust (`tensorwire-btauth`)
 
-**Rust:** stable ≥ 1.80, edition 2021. **Dependencies:** `schnorrkel` (sr25519), `ed25519-dalek` v2, `sha2`, `blake2`, `bs58`, `hex`, `thiserror`; features `axum` (`axum`, `tower`), `client` (`reqwest`), `redis` (`redis` crate with tokio).
+**Rust:** stable ≥ 1.80, edition 2021. **Dependencies:** `schnorrkel` (sr25519), `ed25519-dalek` v2 (stay on v2 for 1.0, even though v3 is out; revisit after 1.0, D23), `sha2`, `blake2`, `bs58`, `hex`, `thiserror`; features `axum` (`axum`, `tower`), `client` (`reqwest`), `redis` (`redis` crate with tokio).
 
 ```rust
 pub fn build_payload(scheme: Scheme, method: &str, target: &str, body: &[u8],
@@ -1871,7 +1881,7 @@ Files in `conformance/vectors/` (JSON, UTF-8). Each vector has an `id`, a `descr
 
 **`sr25519_verify.json`**: 10 payloads pre-signed by Python with `//Alice` and `//Bob`; each implementation must verify all as valid, and must verify its own fresh signatures with the Python verifier (live interop, Section 13.5).
 
-**`negative.json`** (each with expected `tw.*` code): missing each header; version `2`; unknown crypto `ecdsa`; non-hex signature; wrong-length signature; bad SS58 checksum; receiver mismatch; receiver missing; nonce 11 s old; nonce 3 s in future; body changed by one byte; target decoded (`/a b` instead of `/a%20b`); method changed; ed25519 signature presented without `X-Bittensor-Crypto` (must fail as sr25519, not fall back); sr25519 signature with `X-Bittensor-Crypto: ed25519`; `<Bytes>`-wrapped signature (Python: accept; strict implementations: reject `tw.auth_bad_signature`); replay of an accepted request.
+**`negative.json`** (each with expected `tw.*` code): missing each header; version `2`; unknown crypto `ecdsa`; non-hex signature; wrong-length signature; bad SS58 checksum; receiver mismatch; receiver missing; nonce 11 s old; nonce 3 s in future; body changed by one byte; target decoded (`/a b` instead of `/a%20b`); method changed; ed25519 signature presented without `X-Bittensor-Crypto` (must fail as sr25519, not fall back); sr25519 signature with `X-Bittensor-Crypto: ed25519`; `<Bytes>`-wrapped signature (every implementation, Python included, rejects with `tw.auth_bad_signature`, D22); sender not 48 characters, incl. a very long one (D19); weak public keys (D20); replay of an accepted request.
 
 **`twresp.json`**: build + ed25519 deterministic vectors for response signing, including a streaming digest vector with 3 chunks.
 
@@ -2023,7 +2033,7 @@ Use `httpx.ASGITransport` against the real miner app with `FakeChain`:
 10. Validator client against 3 fake miners (one slow, one returning a bad signature, one good) → correct `MinerResult`s.
 11. Streaming route: valid trailer accepted; tampered chunk rejected.
 12. Legacy v10 bridge, server side: a request built from `legacy_v10.json` vectors is accepted on a `compat.Synapse` route (body hash computed by the kit), answered in v10 shape, and rejected after the end date; replay and caller policy still apply.
-13. Legacy v10 bridge, client side: against a fake v10 Axon, `auto` falls back to v10 once and remembers it; a miner that has answered over btauth/1 is never downgraded; re-probe switches an upgraded miner back.
+13. Legacy v10 bridge, client side: against a fake v10 Axon, `auto` falls back to v10 once and remembers it; a miner that has answered over btauth/1 is never downgraded by a v10-shaped answer alone; after its on-chain protocol tag moves from `TW_PROTOCOL_TAG` to another value (FakeChain re-serve), the next query reaches it over v10; re-probe switches an upgraded miner back.
 14. Compat layer: the template's `Dummy` Synapse, `forward`, `blacklist` and `priority` functions run unchanged on `compat.Axon`; `compat.Dendrite` returns the v10 result shapes, including `dendrite.status_code` on timeout.
 15. Compat blacklist cannot widen access: a `blacklist_fn` that returns `False` for an unregistered caller still gets 403 `tw.forbidden_not_registered`.
 
@@ -2039,7 +2049,7 @@ Use `httpx.ASGITransport` against the real miner app with `FakeChain`:
 
 ### 13.7 Benchmark targets (`tensorwire bench`)
 
-On 4 vCPU / 8 GB, 4 uvicorn workers + Redis on localhost:
+On 4 vCPU / 8 GB, 4 uvicorn workers + Redis on the same host, **reached directly** (host networking, a Unix socket, or the container's own IP), not through Docker's userland port proxy (`docker-proxy`). This matches a production deployment, and it is what "met" means (decision D17). `just bench` uses the direct path by default and prints which path it used. A run through `docker-proxy` may be recorded as extra information, never as the result.
 
 | Metric | Target |
 |---|---|
@@ -2273,7 +2283,7 @@ Stop services. Keep the subnet if more runs are planned. Otherwise note that dis
 | 9 | Unsigned responses | `twresp/1` on by default; scoring treats bad signatures as failures | integration 10 |
 | 10 | Public miner IPs | Docs: firewall, optional proxy, only miner port exposed | review |
 | 11 | Answer copying / leaking | Timelock extension (opt-in) | integration |
-| 12 | Weak legacy bridge (both directions) | Opt-in, mandatory end dates on both sides, kit freshness + replay + caller policy on inbound v10, no downgrade after a miner speaks btauth/1, `migrate scan` flags unhashed Synapse fields, traffic counters | integration 12–13, T16 |
+| 12 | Weak legacy bridge (both directions) | Opt-in, mandatory end dates on both sides, kit freshness + replay + caller policy on inbound v10, no downgrade after a miner speaks btauth/1 (only its own signed on-chain tag change re-enables v10, D16), `migrate scan` flags unhashed Synapse fields, traffic counters | integration 12–13, T16 |
 | 19 | Compat hooks weakening security | `blacklist_fn` runs after caller policy and can only narrow access; custom `verify_fn` refused | integration 15 |
 | 13 | Coldkey on server | Refuse to start if unencrypted coldkey readable; never access `wallet.coldkey` | unit |
 | 14 | Supply chain | Locked deps, `just audit`, signed releases, provenance | Section 18 |
