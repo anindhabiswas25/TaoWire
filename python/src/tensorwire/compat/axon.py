@@ -220,11 +220,16 @@ class Axon:
             if gate is None or priority_fn is None:
                 return await self._forward(cls, forward_fn, synapse)
             priority = float(await _call(priority_fn, synapse))
-            if issubclass(cls, StreamingSynapse):
-                # The work is the token streamer: hold the slot while it runs.
-                reply = await self._forward(cls, forward_fn, synapse)
-                return _gated(gate, priority, reply)
             await gate.acquire(priority)
+            if issubclass(cls, StreamingSynapse):
+                # forward_fn and the token streamer both run under the slot; the
+                # stream gives it back when it ends, fails or is closed.
+                try:
+                    reply = await self._forward(cls, forward_fn, synapse)
+                except BaseException:
+                    gate.release()
+                    raise
+                return _GatedFrames(reply, gate.release)
             try:
                 return await self._forward(cls, forward_fn, synapse)
             finally:
@@ -270,23 +275,39 @@ class Axon:
         return self.miner.app
 
 
-async def _gated(
-    gate: PriorityGate, priority: float, frames: AsyncIterator[Any]
-) -> AsyncIterator[Any]:
-    """A stream's frames under one ``gate`` slot, taken at its first chunk.
+class _GatedFrames:
+    """A stream's frames holding a gate slot until they end or are closed.
 
-    The slot covers the token streamer and is given back when the stream ends
-    or is closed; a stream that never starts never takes one.
+    ``release`` runs exactly once: at the end of the frames, on an error, or
+    on ``aclose()`` (also of a stream that never started), so the slot never
+    leaks however the kit drops the stream.
     """
-    await gate.acquire(priority)
-    try:
-        async for frame in frames:
-            yield frame
-    finally:
-        gate.release()
-        close = getattr(frames, "aclose", None)
-        if close is not None:
-            await close()
+
+    def __init__(self, frames: AsyncIterator[Any], release: Callable[[], None]) -> None:
+        self._frames = frames
+        self._release: Callable[[], None] | None = release
+
+    def __aiter__(self) -> _GatedFrames:
+        return self
+
+    async def __anext__(self) -> Any:
+        try:
+            return await anext(self._frames)
+        except BaseException:
+            await self.aclose()
+            raise
+
+    async def aclose(self) -> None:
+        """Close the frames and give the slot back (idempotent)."""
+        release, self._release = self._release, None
+        if release is None:
+            return
+        try:
+            close = getattr(self._frames, "aclose", None)
+            if close is not None:
+                await close()
+        finally:
+            release()
 
 
 def _encode(synapse: Synapse) -> bytes:

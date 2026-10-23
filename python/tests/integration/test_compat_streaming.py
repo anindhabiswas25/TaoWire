@@ -401,3 +401,54 @@ async def test_the_priority_slot_covers_the_whole_stream(
         )
     assert all(f.dendrite.status_code == 200 for _, f in finals)
     assert peak == 1  # max_concurrency held while each token streamer ran
+
+
+async def test_the_priority_slot_also_covers_forward_and_never_leaks(
+    tw_miner_kwargs: dict[str, Any],
+    fake_chain: FakeChain,
+    tw_clock: FakeClock,
+    protocol: Any,
+) -> None:
+    """forward_fn runs under the slot too; a failing forward gives it back."""
+    miner = Miner(**tw_miner_kwargs)
+    in_forward = peak = 0
+    fail_next = [True]
+
+    async def forward(synapse: Any) -> Any:
+        nonlocal in_forward, peak
+        in_forward += 1
+        peak = max(peak, in_forward)
+        await asyncio.sleep(0.1)  # heavy set-up before streaming
+        in_forward -= 1
+        if fail_next and fail_next.pop():
+            raise RuntimeError("model not loaded")
+
+        async def streamer(send: Any) -> None:
+            await send({"type": "http.response.body", "body": b"tok"})
+
+        return synapse.create_streaming_response(streamer)
+
+    forward.__annotations__ = {"synapse": protocol.StreamPrompting}
+    axon = Axon(miner=miner)
+    axon.attach(forward_fn=forward, priority_fn=lambda s: 1.0, max_concurrency=1)
+    fake_chain.set_axon(TEST_NETUID, dev_key(MINER_KEY).ss58, ADDRESS, protocol=87)
+    await fake_chain.connect()
+    neuron = (await fake_chain.metagraph(TEST_NETUID)).by_hotkey(
+        dev_key(MINER_KEY).ss58
+    )
+    assert neuron is not None
+    async with (
+        miner.running() as app,
+        dendrite(AppRouter({ADDRESS: app}), tw_clock) as d,
+    ):
+        info = AxonInfo.from_neuron(neuron)
+        finals = await asyncio.gather(
+            *[
+                collect(await d(info, request(protocol), deserialize=False))
+                for _ in range(3)
+            ]
+        )
+    codes = sorted(f.dendrite.status_code for _, f in finals)
+    assert codes == [200, 200, 500]  # the first forward failed, the slot came back
+    assert peak == 1  # forward_fn itself ran under the gate
+    assert axon.gates["/StreamPrompting"].queued == 0
