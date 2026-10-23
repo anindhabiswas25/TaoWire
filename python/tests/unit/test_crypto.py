@@ -276,3 +276,89 @@ def test_repr_has_no_secrets(alice: crypto.Keypair) -> None:
     assert (
         repr(crypto.HotkeySigner(alice)) == f"HotkeySigner('{ALICE}', scheme='sr25519')"
     )
+
+
+# ---------------------------------------------------------------- D20 / D22
+
+#: The canonical encodings of the eight ed25519 points of small order.
+ED25519_TORSION = sorted(
+    bytes.fromhex(h)
+    for h in (
+        "0100000000000000000000000000000000000000000000000000000000000000",
+        "ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f",
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "0000000000000000000000000000000000000000000000000000000000000080",
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc05",
+        "26e8958fc2b227b045c3f489f2ef98f0d5dfac05d3c63339b13802886d53fc85",
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac037a",
+        "c7176a703d4dd84fba3c0b760d10670f2a2053fa2c39ccc64ec7fd7792ac03fa",
+    )
+)
+
+
+@pytest.mark.parametrize("key", ED25519_TORSION, ids=lambda k: k.hex()[:8])
+def test_every_small_order_ed25519_key_is_weak(key: bytes) -> None:
+    assert crypto.is_weak_public_key(key, crypto.CRYPTO_ED25519)
+
+
+def test_real_and_non_point_keys_are_not_weak() -> None:
+    for uri in ("//Alice", "//Bob", "//Charlie"):
+        for ctype in (crypto.CRYPTO_SR25519, crypto.CRYPTO_ED25519):
+            key = bytes(crypto.keypair_from_uri(uri, crypto_type=ctype).public_key)
+            assert not crypto.is_weak_public_key(key, ctype), (uri, ctype)
+    assert crypto.is_weak_public_key(bytes(32), crypto.CRYPTO_SR25519)
+    assert not crypto.is_weak_public_key(b"\x01" + bytes(31), crypto.CRYPTO_SR25519)
+    assert not crypto.is_weak_public_key(b"\xff" * 32, crypto.CRYPTO_ED25519)
+    with pytest.raises(ValueError, match="32 bytes"):
+        crypto.is_weak_public_key(b"\x01", crypto.CRYPTO_SR25519)
+    with pytest.raises(ValueError, match="unsupported crypto type"):
+        crypto.is_weak_public_key(bytes(32), 7)
+
+
+@pytest.mark.parametrize(
+    ("ctype", "public_key", "signature"),
+    [
+        (crypto.CRYPTO_SR25519, bytes(32), bytes(63) + b"\x80"),
+        (crypto.CRYPTO_ED25519, b"\x01" + bytes(31), b"\x01" + bytes(63)),
+    ],
+    ids=["sr25519-identity", "ed25519-identity"],
+)
+def test_strict_verify_refuses_universal_signatures(
+    ctype: int, public_key: bytes, signature: bytes
+) -> None:
+    """twresp/1 and the v10 wire use ``verify(strict=True)``: D20 applies there too."""
+    address = str(crypto._sp_core.ss58_encode(public_key, 42))
+    for payload in (b"any", b"other payload"):
+        assert crypto.verify(payload, signature, address, ctype, strict=False)
+        assert not crypto.verify(payload, signature, address, ctype)
+
+
+@pytest.mark.parametrize("ctype", [crypto.CRYPTO_SR25519, crypto.CRYPTO_ED25519])
+def test_is_bytes_wrapped_signature(ctype: int) -> None:
+    keypair = crypto.keypair_from_uri("//Alice", crypto_type=ctype)
+    payload = b"btauth/1\nsr25519"
+    plain = bytes(keypair.sign(payload))
+    wrapped = bytes(keypair.sign(b"<Bytes>" + payload + b"</Bytes>"))
+    address = keypair.ss58_address
+    assert not crypto.is_bytes_wrapped_signature(payload, plain, address, ctype)
+    assert crypto.is_bytes_wrapped_signature(payload, wrapped, address, ctype)
+
+
+@pytest.mark.parametrize("bad", ["0xab cd", "abcd ", " abcd", "ab\tcd", "0Xabcd", "zz"])
+def test_signature_from_hex_takes_hex_digits_only(bad: str) -> None:
+    with pytest.raises(ValueError, match="non-hexadecimal"):
+        crypto.signature_from_hex(bad)
+
+
+def test_btauth_payload_is_the_sdk_payload() -> None:
+    kwargs: dict[str, Any] = {
+        "scheme": "sr25519",
+        "method": "post",
+        "body": b"x",
+        "nonce_ns": 5,
+        "sender_ss58": ALICE,
+        "receiver_ss58": None,
+    }
+    assert crypto.btauth_payload(target="/a%20b?q", **kwargs) == (
+        http_auth.build_payload(path="/a%20b?q", **kwargs)
+    )

@@ -11,8 +11,10 @@ Only the hotkey is ever resolved. Nothing here touches a coldkey.
 from __future__ import annotations
 
 import inspect
+import re
 from typing import Any
 
+from bittensor import http_auth as _http_auth
 from bittensor import sp_core as _sp_core
 from bittensor.keyfiles import Keypair
 from bittensor.signing import Signer, WalletLike, resolve_signer
@@ -24,7 +26,10 @@ __all__ = [
     "SS58_FORMAT",
     "HotkeySigner",
     "Keypair",
+    "btauth_payload",
     "crypto_type_from_scheme",
+    "is_bytes_wrapped_signature",
+    "is_weak_public_key",
     "keypair_from_uri",
     "public_key_from_ss58",
     "scheme_name",
@@ -45,6 +50,7 @@ _SCHEME_TYPES: dict[str, int] = {name: ct for ct, name in _SCHEMES.items()}
 
 _WRAP_PREFIX = b"<Bytes>"
 _WRAP_SUFFIX = b"</Bytes>"
+_HEX = re.compile(r"(?:[0-9a-fA-F]{2})*")
 _SS58_LEN = 48
 
 
@@ -137,16 +143,34 @@ def verify(
     ``<Bytes>payload</Bytes>`` wrapping (Polkadot-JS ``signRaw``). With
     ``strict=True`` (the default, and the rule for every kit extension) such
     a signature is rejected, matching the TypeScript, Go and Rust
-    implementations (spec 3.2 A10, 11.2 rule 8).
+    implementations (spec 3.2 A10, 11.2 rule 8). ``strict=True`` also
+    refuses weak public keys, whose signature fits any payload (D20,
+    ADR-0010).
     """
     scheme_name(crypto_type)
-    public_key_from_ss58(ss58_address)
+    key = public_key_from_ss58(ss58_address)
     if not _sp_core.verify(payload, signature, ss58_address, crypto_type):
         return False
     if not strict:
         return True
+    if is_weak_public_key(key, crypto_type):
+        return False
+    return not is_bytes_wrapped_signature(payload, signature, ss58_address, crypto_type)
+
+
+def is_bytes_wrapped_signature(
+    payload: bytes, signature: bytes, ss58_address: str, crypto_type: int
+) -> bool:
+    """Whether ``signature`` is over ``<Bytes>payload</Bytes>`` (Polkadot-JS signRaw).
+
+    The strict half of :func:`verify`, for callers that already know the
+    signature passes ``sp_core.verify`` (the request verifier, after the
+    SDK's own check): ``verify(..., strict=True)`` is exactly
+    ``sp_core.verify(...) and not is_weak_public_key(...) and not
+    is_bytes_wrapped_signature(...)`` (spec 3.2 A10, D22).
+    """
     wrapped = _WRAP_PREFIX + payload + _WRAP_SUFFIX
-    return not _sp_core.verify(wrapped, signature, ss58_address, crypto_type)
+    return bool(_sp_core.verify(wrapped, signature, ss58_address, crypto_type))
 
 
 def public_key_from_ss58(ss58_address: str) -> bytes:
@@ -175,8 +199,41 @@ def signature_to_hex(signature: bytes) -> str:
 
 
 def signature_from_hex(value: str) -> bytes:
-    """Decode a header signature (``0x`` optional). ``ValueError`` if not hex."""
-    return bytes.fromhex(value.removeprefix("0x"))
+    """Decode a header signature (``0x`` optional). ``ValueError`` if not hex.
+
+    Only hex digits are accepted: unlike ``bytes.fromhex``, no whitespace,
+    so the Go and Rust decoders give the same answer for every header value.
+    """
+    digits = value.removeprefix("0x")
+    if not _HEX.fullmatch(digits):
+        raise ValueError("non-hexadecimal signature (hex digits only, no whitespace)")
+    return bytes.fromhex(digits)
+
+
+def btauth_payload(
+    *,
+    scheme: str,
+    method: str,
+    target: str,
+    body: bytes,
+    nonce_ns: int,
+    sender_ss58: str,
+    receiver_ss58: str | None,
+) -> bytes:
+    """The SDK's btauth/1 signed payload (spec 4.2), as ``http_auth`` builds it.
+
+    ``target`` is the request target as sent (percent-encoded path plus
+    ``?query``); ``receiver_ss58=None`` writes the unbound marker ``-``.
+    """
+    return _http_auth.build_payload(
+        scheme=scheme,
+        method=method,
+        path=target,
+        body=body,
+        nonce_ns=nonce_ns,
+        sender_ss58=sender_ss58,
+        receiver_ss58=receiver_ss58,
+    )
 
 
 def keypair_from_uri(uri: str, *, crypto_type: int = CRYPTO_SR25519) -> Keypair:
@@ -187,3 +244,46 @@ def keypair_from_uri(uri: str, *, crypto_type: int = CRYPTO_SR25519) -> Keypair:
     """
     scheme_name(crypto_type)
     return Keypair.create_from_uri(uri, crypto_type=crypto_type)
+
+
+# ed25519 curve constants (RFC 8032 5.1): -x^2 + y^2 = 1 + d x^2 y^2 mod p.
+_P = 2**255 - 19
+_D = -121665 * pow(121666, -1, _P) % _P
+_SQRT_M1 = pow(2, (_P - 1) // 4, _P)
+
+
+def _ed_add(a: tuple[int, int], b: tuple[int, int]) -> tuple[int, int]:
+    (x1, y1), (x2, y2) = a, b
+    t = _D * x1 * x2 * y1 * y2 % _P
+    x3 = (x1 * y2 + y1 * x2) * pow(1 + t, -1, _P) % _P
+    y3 = (y1 * y2 + x1 * x2) * pow(1 - t, -1, _P) % _P
+    return x3, y3
+
+
+def is_weak_public_key(public_key: bytes, crypto_type: int) -> bool:
+    """Whether a public key has a signature that verifies for every message.
+
+    sr25519: the ristretto identity (32 zero bytes; ristretto has no other
+    small-order element). ed25519: a point of order 1, 2, 4 or 8, where the
+    signature R = that point, S = 0 fits any payload under cofactorless
+    RFC 8032 verification. The SDK accepts such signatures; kit verifiers in
+    every language reject them as a bad signature (spec 4.3 step 4, D20,
+    ADR-0010). Keys that are not curve points at all are not weak (they
+    never verify).
+    """
+    scheme_name(crypto_type)
+    if len(public_key) != 32:
+        raise ValueError("a public key is 32 bytes")
+    if crypto_type == CRYPTO_SR25519:
+        return public_key == bytes(32)
+    y = int.from_bytes(public_key, "little") & ((1 << 255) - 1)
+    u = (y * y - 1) * pow(_D * y * y + 1, -1, _P) % _P
+    x = pow(u, (_P + 3) // 8, _P)
+    if x * x % _P != u:
+        x = x * _SQRT_M1 % _P
+        if x * x % _P != u:
+            return False  # not on the curve
+    point = (x, y % _P)
+    for _ in range(3):  # multiply by the cofactor 8
+        point = _ed_add(point, point)
+    return point == (0, 1)

@@ -84,6 +84,30 @@ and a permitted validator kept p99 < 71 ms (`docs/benchmarks.md`). One worker
 cannot absorb that rate on the reference machine. Run several workers (with
 Redis) if you expect it.
 
+## Stricter than the SDK (spec 4.3)
+
+The kit's request verifier refuses, in every language, some requests that
+`bittensor.http_auth.verify` accepts:
+
+- step 1, `tw.auth_malformed`: a sender that is not SS58 prefix 42 or not
+  exactly 48 characters (checked before base58 decoding, D19); duplicate
+  `X-Bittensor-*` headers; a nonce that is not `[0-9]{1,20}`; an
+  `X-Bittensor-Crypto` other than exactly `sr25519`/`ed25519`; a signature
+  that is not hex digits only (the SDK's `bytes.fromhex` skips whitespace);
+- step 4, `tw.auth_bad_signature`, before the replay store is touched: a
+  **weak public key** (the sr25519 identity, ed25519 points of small order),
+  whose "universal" signature fits any payload (D20, ADR-0010), and a
+  signature over the **`<Bytes>`-wrapped** payload (Polkadot-JS `signRaw`;
+  A10, D22).
+
+twresp/1 and the v10 wire verify with `crypto.verify(strict=True)`, which
+refuses weak keys and `<Bytes>`-wrapped signatures as well. Tests:
+`tests/unit/test_verifier.py` (`test_signature_must_be_hex_digits_only`,
+`test_weak_key_universal_signature_is_refused_before_the_store`,
+`test_bytes_wrapped_signature_is_refused_before_the_store`),
+`tests/unit/test_crypto.py`, `tests/unit/test_response_sig.py::test_weak_responder_key_is_refused`,
+`tests/property/test_auth_properties.py::test_any_non_hex_character_in_the_signature_is_malformed`.
+
 ## Replay stores and clock steps (spec 8.4.3-8.4.4, D21)
 
 Freshness (4.3 step 3) is judged on the miner's wall clock, but replay

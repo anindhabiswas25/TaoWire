@@ -15,6 +15,7 @@ import string
 from typing import Any
 
 import httpx
+import pytest
 from bittensor import http_auth
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
@@ -174,3 +175,24 @@ async def _round_trip(target: str) -> str:
 def test_percent_encoded_targets_survive_client_and_server(target: str) -> None:
     sent = httpx.URL("http://m" + target).raw_path.decode("ascii")
     assert asyncio.run(_round_trip(target)) == sent
+
+
+@settings(max_examples=150, suppress_health_check=[HealthCheck.too_slow])
+@given(
+    position=st.integers(min_value=0, max_value=130),
+    junk=st.sampled_from([" ", "\t", "\n", "\r", "\x0b", "\x0c", "g", "-", "+"]),
+)
+def test_any_non_hex_character_in_the_signature_is_malformed(
+    position: int, junk: str
+) -> None:
+    """4.3 step 1: hex digits only; ``bytes.fromhex`` would skip whitespace."""
+    clock = FakeClock(start_ns=NOW_NS)
+    headers = ALICE.signer(clock_ns=clock.now_ns).sign(
+        method="POST", target="/v1/x", body=b"", receiver_ss58=BOB.ss58
+    )
+    sig = headers[http_auth.HEADER_SIGNATURE]
+    cut = min(position, len(sig))
+    headers[http_auth.HEADER_SIGNATURE] = sig[:cut] + junk + sig[cut:]
+    with pytest.raises(AuthFailed) as info:
+        verifier(clock).verify_sync(headers, b"", method="POST", target="/v1/x")
+    assert info.value.code == "tw.auth_malformed"

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from bittensor import sp_core
 
 from tensorwire.crypto import HotkeySigner, signature_to_hex
 from tensorwire.extensions import response_sig as rs
@@ -146,6 +147,16 @@ def test_wrapped_signature_is_rejected() -> None:
     headers[rs.HEADER_SIGNATURE] = signature_to_hex(bytes(wrapped))
     with pytest.raises(rs.ResponseSignatureError, match="invalid"):
         check(headers)
+
+
+def test_weak_responder_key_is_refused() -> None:
+    """D20 / ADR-0010: a universal signature from a weak key never verifies."""
+    weak = str(sp_core.ss58_encode(bytes(32), 42))  # the sr25519 identity
+    headers = signed()
+    headers[rs.HEADER_HOTKEY] = weak
+    headers[rs.HEADER_SIGNATURE] = signature_to_hex(bytes(63) + b"\x80")
+    with pytest.raises(rs.ResponseSignatureError, match="invalid"):
+        check(headers, expected_responder=weak)
 
 
 def test_bad_responder_address_is_malformed() -> None:
