@@ -12,8 +12,8 @@ background) or a fixed ``MetagraphView``::
 
 Every attribute reads the latest snapshot. ``sync()`` is a no-op: the kit's
 cache refreshes itself. ``copy.deepcopy(metagraph)`` freezes the current
-snapshot, so "before / after" comparisons in template code still work. Values are plain Python lists (``S`` is the
-caller's stake in TAO at spot price, ``NeuronView.total_stake_tao``), not
+snapshot, so "before / after" comparisons in template code still work.
+Values are plain Python lists (``S`` is the caller's stake in TAO at spot price, ``NeuronView.total_stake_tao``), not
 tensors; wrap them in ``numpy.array(...)`` where the code needs arrays.
 """
 
