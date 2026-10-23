@@ -131,6 +131,7 @@ markers = [
   "testnet: runs against public testnet; costs test TAO; manual only",
   "mixed_fleet: v10 + v11 fleet on localnet (just mixed-fleet)",
   "redis: needs a real Redis at TENSORWIRE_TEST_REDIS_URL",
+  "abuse: attacks a real miner process (spec 13.6); a few seconds each",
 ]
 
 [tool.coverage.run]

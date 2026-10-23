@@ -242,9 +242,17 @@ class Forbidden(TWError):
 
 
 class PayloadTooLarge(TWError):
-    """The request body is over the configured limit (spec 8.6.1)."""
+    """The request body is over the configured limit (spec 8.6.1).
+
+    The answer closes the connection: the rest of the body is never read
+    (otherwise the server would have to read and discard it to keep the
+    connection alive).
+    """
 
     code = "tw.payload_too_large"
+
+    def response_headers(self) -> dict[str, str]:
+        return {"Connection": "close"}
 
 
 class RateLimited(TWError):

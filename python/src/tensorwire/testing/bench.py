@@ -321,11 +321,12 @@ async def serve_miners(
             stack.callback(sock.close)
             miner = bench_miner(_miner_settings(host, port), chain=chain, hotkey=key)
             app = await stack.enter_async_context(miner.running())
-            server = NoSignalServer(
-                uvicorn.Config(
-                    app, lifespan="off", log_config=None, access_log=False, **_quiet()
-                )
-            )
+            options = {
+                k: v
+                for k, v in miner.uvicorn_options().items()
+                if k not in ("host", "port")
+            }
+            server = NoSignalServer(uvicorn.Config(app, lifespan="off", **options))
             task = asyncio.get_running_loop().create_task(server.serve([sock]))
             servers.append((server, task))
             ports[index] = port
@@ -338,10 +339,6 @@ async def serve_miners(
             for running, _ in servers:
                 running.should_exit = True
             await asyncio.gather(*(t for _, t in servers), return_exceptions=True)
-
-
-def _quiet() -> dict[str, Any]:
-    return {"server_header": False, "timeout_keep_alive": 30}
 
 
 def fanout_neurons(ports: dict[int, int], host: str = "127.0.0.2") -> list[NeuronView]:

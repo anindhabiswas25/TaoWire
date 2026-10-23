@@ -114,6 +114,12 @@ async def test_fanout_in_process() -> None:
     assert seen == [(0, 3), (1, 3)]
 
 
+@pytest.fixture(autouse=True)
+def _keep_logging(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The command sets process-wide logging; other tests read INFO logs.
+    monkeypatch.setattr(bench_cmd, "configure_logging", lambda level: None)
+
+
 def test_cli_short_run(tmp_path: Path) -> None:
     out = tmp_path / "bench.json"
     result = CliRunner().invoke(

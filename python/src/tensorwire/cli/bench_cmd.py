@@ -27,6 +27,7 @@ capping throughput.
 from __future__ import annotations
 
 import asyncio
+import importlib.metadata
 import json
 import multiprocessing
 import os
@@ -122,6 +123,13 @@ def _cpu_model() -> str:
     return platform.processor() or "unknown"
 
 
+def _version(package: str) -> str:
+    try:
+        return importlib.metadata.version(package)
+    except importlib.metadata.PackageNotFoundError:
+        return "not installed"
+
+
 def _redis_version(url: str | None) -> str | None:
     if url is None:
         return None
@@ -139,8 +147,6 @@ def _redis_version(url: str | None) -> str | None:
 def _environment(
     redis_url: str | None, miner_cpus: list[int] | None, client_cpus: list[int] | None
 ) -> dict[str, Any]:
-    import bittensor  # noqa: PLC0415 - version for the report only
-    import uvicorn  # noqa: PLC0415
 
     mem_kb = 0
     try:
@@ -157,8 +163,8 @@ def _environment(
         "os": f"{platform.system()} {platform.release()}",
         "python": platform.python_version(),
         "tensorwire": __version__,
-        "bittensor": getattr(bittensor, "__version__", "unknown"),
-        "uvicorn": uvicorn.__version__,
+        "bittensor": _version("bittensor"),
+        "uvicorn": _version("uvicorn"),
         "redis": _redis_version(redis_url),
         "miner_cpus": miner_cpus,
         "client_cpus": client_cpus,

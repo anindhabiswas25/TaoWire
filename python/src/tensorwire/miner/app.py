@@ -58,6 +58,7 @@ from tensorwire.miner.health import health_routes
 from tensorwire.miner.legacy import LegacyServerFactory
 from tensorwire.miner.lifecycle import Lifecycle, MinerParts
 from tensorwire.miner.pipeline import RouteEndpoint
+from tensorwire.miner.protocol import guarded_protocol
 from tensorwire.miner.routes import Handler, Route, RouteRegistry
 from tensorwire.observability.logging import configure_logging
 from tensorwire.observability.metrics import MULTIPROC_ENV, Metrics, serve_multiprocess
@@ -303,6 +304,9 @@ class Miner:
             "server_header": False,
             "proxy_headers": False,  # the kit reads X-Forwarded-For itself
             "timeout_keep_alive": _KEEP_ALIVE_S,
+            # h11 with a request-read deadline (slowloris); the header limit
+            # below exists only for h11 (uvicorn would pick httptools).
+            "http": guarded_protocol(s.auth_max_age_s + s.auth_allowed_skew_s),
             "h11_max_incomplete_event_size": MAX_HEADER_BYTES,
             "limit_concurrency": DEFAULT_LIMIT_CONCURRENCY,
             "timeout_graceful_shutdown": max(1, round(s.drain_s)),
