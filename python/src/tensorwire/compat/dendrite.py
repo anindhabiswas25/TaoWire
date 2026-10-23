@@ -226,7 +226,10 @@ class Dendrite:
             )
         data = result.data
         if result.ok and isinstance(data, Synapse):
+            fields = type(item).model_fields
             for name, value in data.user_fields().items():
+                if name in fields and fields[name].frozen:
+                    continue  # a request field the miner cannot change (v10 kept it too)
                 setattr(item, name, value)
         code = status_code_for(result)
         message = "Success" if result.ok else result.status_message or result.error_code

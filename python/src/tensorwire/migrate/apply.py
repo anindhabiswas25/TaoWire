@@ -279,7 +279,10 @@ class _Rewriter(cst.CSTTransformer):
     METADATA_DEPENDENCIES = (ParentNodeProvider,)
 
     def __init__(
-        self, bt_aliases: set[str], path: str, custom_bases: Mapping[str, list[str]]
+        self,
+        bt_aliases: set[str],
+        path: str,
+        custom_bases: Mapping[str, list[str] | None],
     ) -> None:
         super().__init__()
         self.bt = bt_aliases
@@ -495,8 +498,8 @@ class _Rewriter(cst.CSTTransformer):
             return self._move_names(updated_node, {"Synapse", "AxonInfo"}, "TWM001")
         if module == "base.validator" or module.endswith(".base.validator"):
             target = resolve_module(module, len(updated_node.relative), self.path)
-            if self.custom_bases.get(target):
-                return updated_node  # customised base: TWM026, by hand
+            if target in self.custom_bases and self.custom_bases[target] != []:
+                return updated_node  # customised (TWM026) or already ported
             return self._swap_template_base(updated_node)
         return updated_node
 
@@ -800,7 +803,7 @@ def apply_source(
     source: str,
     path: str = "<string>",
     *,
-    custom_bases: Mapping[str, list[str]] | None = None,
+    custom_bases: Mapping[str, list[str] | None] | None = None,
 ) -> FileResult:
     """``source`` after the rewrites and the ``TW-MIGRATE`` markers.
 

@@ -241,22 +241,26 @@ def resolve_module(module: str, level: int, path: str) -> str:
     return ".".join([*base, module] if module else base)
 
 
-def _methods(module: cst.Module, cls: str) -> set[str]:
+def _class(module: cst.Module, name: str) -> cst.ClassDef | None:
     for statement in module.body:
-        if isinstance(statement, cst.ClassDef) and statement.name.value == cls:
-            return {
-                s.name.value
-                for s in statement.body.body
-                if isinstance(s, cst.FunctionDef)
-            }
-    return set()
+        if isinstance(statement, cst.ClassDef) and statement.name.value == name:
+            return statement
+    return None
 
 
-def template_bases(root: Path) -> dict[str, list[str]]:
+def _methods(module: cst.Module, name: str) -> set[str]:
+    node = _class(module, name)
+    if node is None:
+        return set()
+    return {s.name.value for s in node.body.body if isinstance(s, cst.FunctionDef)}
+
+
+def template_bases(root: Path) -> dict[str, list[str] | None]:
     """``<package>.base.validator`` modules defining ``BaseValidatorNeuron``,
     mapped to the methods they add beyond the archived template (with their
-    sibling ``neuron.py``'s ``BaseNeuron``). An empty list: a stock base."""
-    found: dict[str, list[str]] = {}
+    sibling ``neuron.py``'s ``BaseNeuron``). An empty list: a stock base.
+    ``None``: already ported (it subclasses ``TemplateValidatorAdapter``)."""
+    found: dict[str, list[str] | None] = {}
     for path in root.glob("**/base/validator.py"):
         rel = path.relative_to(root)
         if any(part in _SKIP_DIRS for part in rel.parts) or path.is_symlink():
@@ -271,13 +275,20 @@ def template_bases(root: Path) -> dict[str, list[str]]:
             )
         except (OSError, UnicodeDecodeError, cst.ParserSyntaxError):
             continue
-        methods = _methods(module, "BaseValidatorNeuron")
-        if not methods:
+        node = _class(module, "BaseValidatorNeuron")
+        if node is None:
             continue
-        extras = methods - STOCK_VALIDATOR_METHODS
+        name = ".".join(rel.with_suffix("").parts)
+        if any(
+            (_dotted(b.value) or "").endswith("TemplateValidatorAdapter")
+            for b in node.bases
+        ):
+            found[name] = None
+            continue
+        extras = _methods(module, "BaseValidatorNeuron") - STOCK_VALIDATOR_METHODS
         if neuron is not None:
             extras |= _methods(neuron, "BaseNeuron") - STOCK_NEURON_METHODS
-        found[".".join(rel.with_suffix("").parts)] = sorted(extras)
+        found[name] = sorted(extras)
     return found
 
 
@@ -323,7 +334,7 @@ class _Visitor(cst.CSTVisitor):
         path: str,
         module: cst.Module,
         lines: Sequence[str],
-        custom_bases: Mapping[str, list[str]],
+        custom_bases: Mapping[str, list[str] | None],
     ) -> None:
         super().__init__()
         self.path = path
@@ -392,6 +403,8 @@ class _Visitor(cst.CSTVisitor):
         if any(_dotted(a.name) == "BaseValidatorNeuron" for a in node.names):
             target = resolve_module(module, len(node.relative), self.path)
             extras = self.custom_bases.get(target, [])
+            if extras is None:
+                return  # already on TemplateValidatorAdapter
             if extras:
                 self.add(node, "TWM026", f"{target} adds: {', '.join(extras)}")
             else:
@@ -539,7 +552,7 @@ def scan_source(
     source: str,
     path: str = "<string>",
     *,
-    custom_bases: Mapping[str, list[str]] | None = None,
+    custom_bases: Mapping[str, list[str] | None] | None = None,
 ) -> tuple[list[Finding], bool]:
     """Scan one file's source. Returns (findings, template classes seen).
 

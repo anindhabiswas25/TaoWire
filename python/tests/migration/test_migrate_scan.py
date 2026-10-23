@@ -192,7 +192,19 @@ def test_customised_template_base(tmp_path: Path) -> None:
     (tmp_path / "subnet" / "x.py").write_text(
         "from .base.validator import BaseValidatorNeuron\n"
     )
-    found = {(f.path, f.rule, f.detail) for f in scan_repo(tmp_path).findings}
+    ported = tmp_path / "done" / "base"
+    ported.mkdir(parents=True)
+    (ported / "validator.py").write_text(
+        "from tensorwire.compat import TemplateValidatorAdapter\n"
+        "class BaseValidatorNeuron(TemplateValidatorAdapter):\n"
+        "    def log_step(self): ...\n"
+    )
+    (tmp_path / "neurons" / "d.py").write_text(
+        "from done.base.validator import BaseValidatorNeuron\n"
+    )
+    report = scan_repo(tmp_path)
+    found = {(f.path, f.rule, f.detail) for f in report.findings}
+    assert not [f for f in report.findings if f.path == "neurons/d.py"]  # ported
     custom = "subnet.base.validator adds: log_step, parse_versions"
     assert ("neurons/v.py", "TWM026", custom) in found
     assert ("subnet/x.py", "TWM026", custom) in found  # relative import
