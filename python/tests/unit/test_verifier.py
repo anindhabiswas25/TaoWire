@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 import anyio
@@ -345,6 +346,17 @@ def test_real_keys_still_reach_the_store(clock: FakeClock) -> None:
     verifier = RequestVerifier(BOB.ss58, store, now_ns=clock.now_ns)
     verify(verifier, signed(clock))
     assert store.calls == 1
+
+
+def test_huge_sender_is_refused_before_decoding(
+    verifier: RequestVerifier, clock: FakeClock
+) -> None:
+    """Base58 decoding is quadratic: a 1 MiB sender header cost minutes of CPU."""
+    headers = signed(clock)
+    headers[http_auth.HEADER_HOTKEY] = "z" * (1 << 20)
+    start = time.perf_counter()
+    assert code(verifier, headers) == "tw.auth_malformed"
+    assert time.perf_counter() - start < 0.5
 
 
 # ---------------------------------------------------------------- construction

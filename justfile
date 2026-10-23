@@ -17,7 +17,7 @@ lint: setup
     cd examples/text-ops-subnet && ../../python/.venv/bin/ruff check . && ../../python/.venv/bin/ruff format --check .
     if [ -f typescript/package.json ]; then cd typescript && npm run lint; else echo "skip: typescript/ not present yet"; fi
     if [ -f go/go.mod ]; then cd go && go vet ./... && staticcheck ./...; else echo "skip: go/ not present yet"; fi
-    if [ -f rust/Cargo.toml ]; then cd rust && cargo fmt --check && cargo clippy --all-targets -- -D warnings; else echo "skip: rust/ not present yet"; fi
+    if [ -f rust/Cargo.toml ]; then cd rust && cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings && cd fuzz && cargo fmt --check; else echo "skip: rust/ not present yet"; fi
 
 typecheck: setup
     cd python && uv run mypy --strict src
@@ -28,7 +28,7 @@ test: setup
     cd python && uv run pytest tests/unit tests/property tests/integration
     if [ -f typescript/package.json ]; then cd typescript && npm test; else echo "skip: typescript/ not present yet"; fi
     if [ -f go/go.mod ]; then cd go && go test -race ./...; else echo "skip: go/ not present yet"; fi
-    if [ -f rust/Cargo.toml ]; then cd rust && cargo test; else echo "skip: rust/ not present yet"; fi
+    if [ -f rust/Cargo.toml ]; then cd rust && cargo test --all-features; else echo "skip: rust/ not present yet"; fi
 
 # Python coverage (definition of done: >= 90% on auth/ policy/ limits/ ..., >= 80% elsewhere)
 coverage: setup

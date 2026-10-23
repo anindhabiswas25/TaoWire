@@ -998,6 +998,9 @@ def negative() -> dict[str, Any]:
         v("N58", "signature of another sender (//Bob signs, header says //Alice)",
           with_sig(_keypair("bob_sr25519").sign(good["payload"])),
           code="tw.auth_bad_signature"),
+        v("N65", "sender of 49 characters: longer than any prefix-42 address, "
+          "refused before base58 decoding (quadratic in the input length)",
+          with_headers(_set(gh, H_HOTKEY, "1" + ALICE_SS58)), code="tw.auth_malformed"),
         # -- order of the checks (spec 4.3)
         v("N59", "order: duplicate header and wrong receiver -> shape first",
           with_headers([*gh, [H_SIG, sig]]), code="tw.auth_malformed",

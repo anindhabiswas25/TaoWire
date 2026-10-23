@@ -62,7 +62,7 @@ def test_without_verbose_divergences_are_counted_not_listed() -> None:
 
 def test_run_vectors_counts() -> None:
     results = {r.name: r for r in run_vectors(VECTORS)}
-    assert results["negative.json"].passed == 77
+    assert results["negative.json"].passed == 78
     assert results["payload.json"].passed == 10
     assert not any(r.failures for r in results.values())
 
