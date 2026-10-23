@@ -197,6 +197,7 @@ class ValidatorRunner:
         self._started = False
         self._last_round_at: float | None = None
         self._last_reprobe_block: int | None = None
+        self._protocol_tags: dict[str, int | None] = {}
         self.client: ValidatorClient | None = None
         self.store: ScoreStore | None = None
         self.weights: WeightScheduler | None = None
@@ -441,8 +442,28 @@ class ValidatorRunner:
             await anyio.to_thread.run_sync(store.sync_hotkeys, hotkeys)
         ).values():
             client.forget(old)
+        self._forget_tag_changes(mg, client)
         self._maybe_reprobe(mg)
         return hotkeys
+
+    def _forget_tag_changes(self, mg: MetagraphView, client: ValidatorClient) -> None:
+        """D16 (spec 8.11.3 step 5): a miner whose on-chain protocol tag was the
+        kit's and now is something else (it rolled back to v10) loses its
+        protocol memory, so the next query may fall back to v10. The tag is
+        set by the miner's own signed ``ServeAxon``; a v10-shaped answer on its
+        own still never downgrades."""
+        tag = self.settings.protocol_tag
+        now = {n.hotkey: n.axon_protocol for n in mg.neurons}
+        for hotkey, before in self._protocol_tags.items():
+            if before == tag and hotkey in now and now[hotkey] != tag:
+                client.forget(hotkey)
+                _log.info(
+                    "legacy_v10_protocol_tag_changed",
+                    hotkey=hotkey,
+                    before=before,
+                    now=now[hotkey],
+                )
+        self._protocol_tags = now
 
     async def end_round(
         self,
