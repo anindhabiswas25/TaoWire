@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from typing import Any
 
 import anyio
@@ -235,6 +236,18 @@ def test_undecodable_sender_is_malformed(
     headers = signed(clock)
     headers[http_auth.HEADER_HOTKEY] = bad
     assert code(verifier, headers) == "tw.auth_malformed"
+
+
+def test_huge_sender_is_refused_before_decoding(
+    verifier: RequestVerifier, clock: FakeClock
+) -> None:
+    """G4-2 (D19): base58 decoding is quadratic and runs before authentication."""
+    headers = signed(clock)
+    headers[http_auth.HEADER_HOTKEY] = "z" * 64 * 1024
+    start = time.perf_counter()
+    assert code(verifier, headers) == "tw.auth_malformed"
+    assert time.perf_counter() - start < 0.05
+    assert len(verifier.store) == 0  # type: ignore[arg-type]
 
 
 def test_duplicate_auth_headers_are_malformed(

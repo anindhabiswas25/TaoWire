@@ -45,6 +45,7 @@ _SCHEME_TYPES: dict[str, int] = {name: ct for ct, name in _SCHEMES.items()}
 
 _WRAP_PREFIX = b"<Bytes>"
 _WRAP_SUFFIX = b"</Bytes>"
+_SS58_LEN = 48
 
 
 def scheme_name(crypto_type: int) -> str:
@@ -154,7 +155,14 @@ def public_key_from_ss58(ss58_address: str) -> bytes:
     Raises ``ValueError`` for anything else: bad base58, bad checksum, wrong
     length, or another network's prefix (spec Appendix D). The SDK itself
     accepts any prefix; the kit does not, so every language agrees.
+
+    Every prefix-42 address of a 32-byte key is exactly 48 characters, and
+    anything else is refused **before** base58 decoding (spec 4.3 step 1,
+    D19): decoding is quadratic in the input length and the sender header is
+    decoded before any signature check (a 64 KiB header cost 1.35 s of CPU).
     """
+    if len(ss58_address) != _SS58_LEN:
+        raise ValueError(f"invalid ss58 address: not a prefix-{SS58_FORMAT} address")
     key = bytes(_sp_core.ss58_decode(ss58_address))
     if _sp_core.ss58_encode(key, SS58_FORMAT) != ss58_address:
         raise ValueError(f"invalid ss58 address: not a prefix-{SS58_FORMAT} address")

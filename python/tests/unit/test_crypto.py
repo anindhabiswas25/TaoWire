@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import pytest
@@ -138,6 +139,37 @@ def test_public_key_from_ss58() -> None:
 def test_public_key_rejects_other_prefix() -> None:
     with pytest.raises(ValueError, match="prefix-42"):
         crypto.public_key_from_ss58(ALICE_POLKADOT)
+
+
+@pytest.mark.parametrize("delta", [-1, 1])
+def test_public_key_rejects_wrong_length(delta: int) -> None:
+    # D19: one character more or less than 48 is refused, whatever the content.
+    candidate = ALICE[:-1] if delta < 0 else ALICE + "1"
+    with pytest.raises(ValueError, match="not a prefix-42 address"):
+        crypto.public_key_from_ss58(candidate)
+
+
+def test_length_is_checked_before_base58_decoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def decode(_: str) -> bytes:
+        raise AssertionError("decoded before the length check")
+
+    monkeypatch.setattr(crypto._sp_core, "ss58_decode", decode)
+    with pytest.raises(ValueError, match="not a prefix-42 address"):
+        crypto.public_key_from_ss58("z" * 64 * 1024)
+
+
+def test_huge_sender_costs_no_decode_work() -> None:
+    """G4-2 regression (D19): a 64 KiB sender took 1.35 s of base58 decoding."""
+    huge = "z" * 64 * 1024
+    timings = []
+    for _ in range(5):
+        start = time.perf_counter()
+        with pytest.raises(ValueError, match="prefix-42"):
+            crypto.public_key_from_ss58(huge)
+        timings.append(time.perf_counter() - start)
+    assert min(timings) < 0.001
 
 
 def test_scheme_names() -> None:

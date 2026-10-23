@@ -12,6 +12,9 @@ step 1 of the normative order (spec 4.3) and fail as ``tw.auth_malformed``:
   sender address in any SS58 format, so one hotkey could appear under many
   address strings and slip past deny lists and per-hotkey rate limits keyed
   by the string. Every later stage only ever sees the canonical address.
+  The sender must be exactly 48 characters, checked before any base58
+  decoding (spec 4.3 step 1, D19): decoding is quadratic, and this runs
+  before authentication.
 - **No duplicate ``X-Bittensor-*`` headers.** Which copy wins would depend on
   the server framework; the request is ambiguous, so it is rejected.
 - **The nonce is plain ASCII digits** (at most 20). Python's ``int()`` also

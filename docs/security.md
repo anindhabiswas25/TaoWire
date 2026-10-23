@@ -27,7 +27,7 @@ a vulnerability, see `SECURITY.md` at the repository root.
 | 5 | Unbound receiver | Miners always require `X-Bittensor-Receiver` to be their own hotkey; the signer refuses an empty receiver | `tests/unit/test_signer.py`, `tests/unit/test_verifier.py` |
 | 6 | Transport retries resend a signed request | The validator client uses `retries=0`; its own retries sign afresh with a new nonce | `tests/unit/test_validator_client.py::test_the_default_transport_never_retries`, `::test_each_attempt_is_signed_afresh_and_bound_to_the_miner` |
 | 7 | Authenticated is not authorised | Strict caller policy (registered + permit) by default; staged metagraph staleness (below) | `tests/unit/test_policy.py`, `tests/unit/test_chain_metagraph_cache.py`, `tests/integration/test_miner_requests.py` |
-| 8 | Flooding, oversized bodies | Per-IP limit (outermost) → body cap → verification (thread pool, bounded) → per-hotkey limit; request-read deadline, 16 KiB / 100-field header cap | `tests/abuse/test_abuse.py` (all five attacks, `just abuse`), `tests/integration/test_miner_protocol.py`, `tests/unit/test_ratelimit.py`, `tests/unit/test_body_limit.py` |
+| 8 | Flooding, oversized bodies | Per-IP limit (outermost) → body cap → verification (thread pool, bounded) → per-hotkey limit; request-read deadline, 16 KiB / 100-field header cap; the sender address must be exactly 48 characters before any base58 decoding (D19) | `tests/abuse/test_abuse.py` (all five attacks, `just abuse`), `tests/integration/test_miner_protocol.py`, `tests/unit/test_ratelimit.py`, `tests/unit/test_body_limit.py`; sender bound: `tests/unit/test_crypto.py::test_huge_sender_costs_no_decode_work`, `::test_length_is_checked_before_base58_decoding`, `tests/unit/test_verifier.py::test_huge_sender_is_refused_before_decoding` |
 | 9 | Unsigned responses | `twresp/1` on by default; the validator scores a bad or missing signature as a failure | `tests/unit/test_response_sig.py`, `tests/property/test_response_sig_properties.py`, integration test 10 |
 | 10 | Public miner IPs | Documented: firewall, optional proxy, only the miner port exposed; metrics bind to 127.0.0.1 by default | this page ("What you still have to do"), `docs/miner-guide.md` |
 | 11 | Answer copying / leaking | Timelock extension (opt-in) | Phase 4 |
@@ -64,6 +64,15 @@ The miner's public port uses httptools with three extra limits:
 - **Ambiguous framing** (`Content-Length` plus `Transfer-Encoding`, two
   different `Content-Length` values, control bytes in header names) is
   refused with 400 (request smuggling).
+
+- **Sender length before decoding** (spec 4.3 step 1, D19): the
+  `X-Bittensor-Hotkey` value must be exactly 48 characters (every prefix-42
+  address of a 32-byte key has 48) before it is base58-decoded. Base58
+  decoding is quadratic in the input length and runs before the signature
+  check, so without the bound one unauthenticated request with a 64 KiB
+  sender cost about 0.8-1.35 s of CPU (about 50-85 ms at the 16 KiB header
+  cap). With the bound it is refused as `tw.auth_malformed` in about 10 µs
+  (`reports/phase-3/gate-fix/g4-2-timing.txt`).
 
 The per-IP limiter is the outermost layer, so a flood is refused before any
 other work. Its refusals are counted (`tw_rate_limited_total{layer="ip"}`,
