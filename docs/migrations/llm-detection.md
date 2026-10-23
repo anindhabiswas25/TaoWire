@@ -29,9 +29,9 @@ no Synapse, axon or dendrite, so it has nothing to migrate.
 ## What `migrate scan` and `migrate apply` did
 
 - `scan` (before): 89 files, 202 findings, template shape detected.
-- `apply`: 28 files changed, 182 rewrites, 23 `# TW-MIGRATE:` comments.
+- `apply`: 28 files changed, 184 rewrites, 31 `# TW-MIGRATE:` comments.
   The rewrites: TWM007 ×157 (`bt.logging`), TWM003 ×5, TWM004 ×3, TWM001
-  ×5, TWM013 ×4, TWM023 ×4, TWM012 ×2, TWM021 ×1, and TWM027 ×1 (their
+  ×5, TWM013 ×4, TWM023 ×4, TWM012 ×2, TWM028 ×2, TWM021 ×1, and TWM027 ×1 (their
   90-minute `time.sleep` at the end of the async `forward`, which would have
   stopped the kit's health endpoints for 90 minutes).
 - `apply` did **not** swap their `BaseValidatorNeuron` for the adapter. It
@@ -105,5 +105,8 @@ Reported separately:
 
 Clone at 12:15, port finished at 13:30 (2026-10-23): about 75 minutes. That
 includes finding the misses above and fixing them in the kit. The last
-`apply` plus the hand fixes took 7 minutes. Engineer A is an AI engineer;
+`apply` plus the hand fixes took 7 minutes. The counts above are against
+the final `apply` (after the fixes for B's data-universe port too): the
+hand fixes replayed onto its output unchanged, S6 is still 21, and the test
+still passes. Engineer A is an AI engineer;
 these times do not stand for what a human team needs.

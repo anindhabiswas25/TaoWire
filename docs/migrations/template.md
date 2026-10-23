@@ -25,13 +25,13 @@ changes.
 
 ## What `migrate apply` did on its own
 
-35 files read, 21 changed: 174 rewrites, 45 `# TW-MIGRATE:` comments.
+35 files read, 22 changed: 179 rewrites, 57 `# TW-MIGRATE:` comments.
 
 | Rule | Rewrites | What |
 |---|---|---|
 | TWM007 | 138 | `bt.logging.info/trace/...(...)` → `logging.info/debug/...(...)` |
 | TWM003 / TWM004 | 7 / 6 | `bt.axon(...)` → `Axon(miner=Miner.from_env())`, `bt.dendrite(wallet=w)` → `Dendrite(signer=RequestSigner(w))` |
-| TWM001 / TWM021 | 6 / 2 | `bt.Synapse`, `bt.AxonInfo` → `tensorwire.compat` |
+| TWM001 / TWM021 | 7 / 2 | `bt.Synapse`, `bt.TerminalInfo`, `bt.AxonInfo` → `tensorwire.compat` |
 | TWM013 | 6 | `[self.metagraph.axons[uid] for uid in uids]` → `axons_from(self.metagraph, uids)` |
 | TWM023 | 3 | `self.metagraph.n.item()` → `self.metagraph.n` |
 | TWM012 | 2 | `process_weights_for_netuid(uids=u, weights=w, ...)` → `(u, w)` |
@@ -40,9 +40,9 @@ changes.
 
 `import bittensor as bt` is removed wherever nothing uses `bt` any more, and
 the new imports take its place. String annotations such as
-`"bt.metagraph.Metagraph"` become `"Metagraph"`.
+`"bt.metagraph.Metagraph"` become `"Metagraph"` (TWM028, 4 of them).
 
-The 45 comments mark what a person has to do: `bt.subtensor` /
+The 57 comments mark what a person has to do: `bt.subtensor` /
 `bt.wallet` / `bt.metagraph` / `bt.config` and `bt.axon.add_args` in the template's framework and
 in `docs/stream_tutorial/`, the v10 mocks, `bt.logging.set_config`, the
 `StreamingSynapse` tutorial (Phase 4), and the two security findings
