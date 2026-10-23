@@ -3,12 +3,16 @@
 - `before/`: an unmodified copy of <https://github.com/latent-to/bittensor-subnet-template>
   at commit `539b77c30d60dea236ab1c48a3bde7f495caf516` (2026-07-10), MIT licence
   (`before/LICENSE`, Copyright (c) 2023 Opentensor). Nothing in it is changed.
-- `after/`: the same subnet on `tensorwire.compat`, ported by hand (spec 10b.6,
-  Phase 2). The changes and the lines they touched are listed in
+- `after/`: the same subnet on `tensorwire.compat`: `tensorwire migrate apply`
+  run on `before/`, plus `hand-fixes.patch` (what a person changed by hand).
+  The changes and the S6 count are in
   [`docs/migrations/template.md`](../../../docs/migrations/template.md).
+- `golden.py`: rebuilds `hand-fixes.patch` (`python golden.py write`) and
+  prints the S6 count (`python golden.py s6`).
 
-`tensorwire migrate scan before/` is the input of the migration tests
-(`python/tests/migration/test_migrate_scan.py`).
+`python/tests/migration/test_template_golden.py` checks that `before/` +
+`apply` + `hand-fixes.patch` is `after/` byte for byte;
+`test_migrate_scan.py` scans `before/`.
 
 ## Running `after/` on localnet
 

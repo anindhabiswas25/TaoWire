@@ -116,6 +116,14 @@ FIXTURES: dict[str, tuple[str, str]] = {
         "for uid in range(self.metagraph.n.item()):\n    pass\n",
         "for uid in range(self.metagraph.n):\n    pass\n",
     ),
+    "TWM024": (
+        "from template.base.validator import BaseValidatorNeuron\n",
+        "from template.base.miner import BaseMinerNeuron\n",
+    ),
+    "TWM025": (
+        "import bittensor as bt\nbt.logging.set_config(config=c)\n",
+        "import logging\nlogging.basicConfig()\n",
+    ),
     "TWM100": (
         "class Ask(Synapse):\n    question: str\n    answer: str | None = None\n",
         "class Ask(Synapse):\n    question: str\n"
@@ -195,6 +203,11 @@ def test_negative_fixture(rule: str) -> None:
         ("w = convert_weights_and_uids_for_emit(u, w)\n", "TWM012"),
         ("from bittensor.subnets import SubnetsAPI\n", "TWM016"),
         ("uids = self.metagraph.uids.tolist()\n", "TWM023"),
+        ("import bittensor as bt\nbt.logging(config=c)\n", "TWM025"),
+        ("import bittensor as bt\nbt.logging.set_trace(True)\n", "TWM025"),
+        ("from bittensor import logging\n", "TWM025"),
+        ("import bittensor as bt\nbt.logging.trace('x')\n", "TWM007"),
+        ("from .base.validator import BaseValidatorNeuron as B\n", "TWM024"),
     ],
 )
 def test_more_positives(source: str, rule: str) -> None:
@@ -213,6 +226,10 @@ def test_more_positives(source: str, rule: str) -> None:
         "import numpy as bt\nbt.Tensor\n",  # bt is not bittensor here
         "from bittensor import Subtensor, Wallet\n",
         "x = values.item()\n",
+        "a = self.metagraph.axons[uid]\n",  # works through compat.Metagraph
+        "a = [self.metagraph.axons[u] for u in uids if u]\n",  # not the plain list
+        "a = [self.metagraph.axons[0] for u in uids]\n",
+        "from template.base.validator import helper\n",
     ],
 )
 def test_more_negatives(source: str) -> None:
@@ -227,7 +244,7 @@ def test_finding_position_and_snippet() -> None:
     assert (f.path, f.line, f.rule) == ("m.py", 3, "TWM007")
     assert f.snippet == "bt.logging.info('hi')"
     assert f.detail == "bt.logging.info"
-    assert f.severity == "manual"
+    assert f.severity == "auto"
 
 
 # ---------------------------------------------------------------- the template

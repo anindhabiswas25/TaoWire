@@ -1,6 +1,8 @@
 import argparse
 import asyncio
 import bittensor as bt
+from tensorwire import RequestSigner
+from tensorwire.compat import Dendrite
 
 from protocol import StreamPrompting
 
@@ -26,9 +28,11 @@ async def query_synapse(my_uid, wallet_name, hotkey, network, netuid):
     )
 
     # create a wallet instance with provided wallet name and hotkey
+    # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
     wallet = bt.wallet(name=wallet_name, hotkey=hotkey)
 
     # instantiate the metagraph with provided network and netuid
+    # TW-MIGRATE: TWM009 the kit's MetagraphCache (refreshes itself); compat.Metagraph for hotkeys / S / validator_permit
     metagraph = bt.metagraph(
         netuid=netuid, network=network, sync=True, lite=False
     )
@@ -37,7 +41,7 @@ async def query_synapse(my_uid, wallet_name, hotkey, network, netuid):
     axon = metagraph.axons[my_uid]
 
     # Create a Dendrite instance to handle client-side communication.
-    dendrite = bt.dendrite(wallet=wallet)
+    dendrite = Dendrite(signer=RequestSigner(wallet))
 
     async def main():
         responses = await dendrite(

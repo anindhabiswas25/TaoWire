@@ -32,7 +32,16 @@ from libcst.metadata import MetadataWrapper, ParentNodeProvider, PositionProvide
 
 from tensorwire.migrate.rules import ATTRIBUTE_RULES, MODULE_RULES, RULES
 
-__all__ = ["Finding", "ScanReport", "render", "scan_repo", "scan_source"]
+__all__ = [
+    "LOG_LEVELS",
+    "Finding",
+    "ScanReport",
+    "is_axons_list",
+    "python_files",
+    "render",
+    "scan_repo",
+    "scan_source",
+]
 
 Format = Literal["text", "json", "md"]
 
@@ -61,6 +70,18 @@ _WEIGHT_HELPERS = frozenset(
     {"process_weights_for_netuid", "convert_weights_and_uids_for_emit"}
 )
 _V10_SERVER_BASES = frozenset({"axon", "Axon", "dendrite", "Dendrite"})
+#: ``bt.logging.<name>(...)`` -> the standard ``logging`` function (TWM007).
+LOG_LEVELS: dict[str, str] = {
+    "trace": "debug",
+    "debug": "debug",
+    "info": "info",
+    "success": "info",
+    "warning": "warning",
+    "warn": "warning",
+    "error": "error",
+    "critical": "critical",
+    "exception": "exception",
+}
 _REGISTRATION_HINTS = (
     "hotkeys",
     "is_hotkey_registered",
@@ -177,6 +198,23 @@ def _synapse_shape(
     return fields, hash_fields
 
 
+def is_axons_list(node: cst.ListComp) -> bool:
+    """``[<x>.metagraph.axons[uid] for uid in <uids>]`` (one ``for``, no ``if``)."""
+    comp = node.for_in
+    elt = node.elt
+    if comp.inner_for_in is not None or comp.ifs or comp.asynchronous is not None:
+        return False
+    if not (isinstance(elt, cst.Subscript) and isinstance(comp.target, cst.Name)):
+        return False
+    owner = _dotted(elt.value) or ""
+    if not (owner == "metagraph.axons" or owner.endswith(".metagraph.axons")):
+        return False
+    if len(elt.slice) != 1 or not isinstance(elt.slice[0].slice, cst.Index):
+        return False
+    index = elt.slice[0].slice.value
+    return isinstance(index, cst.Name) and index.value == comp.target.value
+
+
 def _is_bool(node: cst.BaseExpression, value: bool) -> bool:
     return isinstance(node, cst.Name) and node.value == ("True" if value else "False")
 
@@ -220,6 +258,7 @@ class _Visitor(cst.CSTVisitor):
                 self.add(node, rule, f"import {name}")
 
     def visit_ImportFrom(self, node: cst.ImportFrom) -> None:  # noqa: N802 - libcst API
+        self.check_template_import(node)
         module = _dotted(node.module) if node.module is not None else None
         if module is None or not (
             module == "bittensor" or module.startswith("bittensor.")
@@ -235,9 +274,20 @@ class _Visitor(cst.CSTVisitor):
             return
         for alias in node.names:
             name = _dotted(alias.name) or ""
-            rule = ATTRIBUTE_RULES.get(name)
+            rule = "TWM025" if name == "logging" else ATTRIBUTE_RULES.get(name)
             if rule:
                 self.add(node, rule, f"from bittensor import {name}")
+
+    def check_template_import(self, node: cst.ImportFrom) -> None:
+        module = _dotted(node.module) if node.module is not None else ""
+        if not module or not (
+            module == "base.validator" or module.endswith(".base.validator")
+        ):
+            return
+        if isinstance(node.names, cst.ImportStar):
+            return
+        if any(_dotted(a.name) == "BaseValidatorNeuron" for a in node.names):
+            self.add(node, "TWM024", f"from {module} import BaseValidatorNeuron")
 
     def visit_Attribute(self, node: cst.Attribute) -> None:  # noqa: N802 - libcst API
         if not (
@@ -250,6 +300,8 @@ class _Visitor(cst.CSTVisitor):
         full = self.full_name(node)
         if "weight_utils" in full:
             rule = "TWM012"
+        elif rule == "TWM007" and full.rsplit(".", 1)[-1] not in LOG_LEVELS:
+            rule = "TWM025"  # bt.logging.set_config(...), bt.logging(...), ...
         self.add(node, rule, full)
 
     def full_name(self, node: cst.Attribute) -> str:
@@ -323,10 +375,9 @@ class _Visitor(cst.CSTVisitor):
             ):
                 self.add(node, "TWM103", f"{name} = False")
 
-    def visit_Subscript(self, node: cst.Subscript) -> None:  # noqa: N802 - libcst API
-        name = _dotted(node.value) or ""
-        if name.endswith("metagraph.axons"):
-            self.add(node, "TWM013", name)
+    def visit_ListComp(self, node: cst.ListComp) -> None:  # noqa: N802 - libcst API
+        if is_axons_list(node):
+            self.add(node, "TWM013", self.module.code_for_node(node))
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:  # noqa: N802 - libcst API
         if node.name.value in _TEMPLATE_CLASSES:
@@ -383,7 +434,9 @@ def scan_source(source: str, path: str = "<string>") -> tuple[list[Finding], boo
     return findings, bool(visitor.template)
 
 
-def _python_files(root: Path) -> Iterator[Path]:
+def python_files(root: Path) -> Iterator[Path]:
+    """Python files under ``root``, skipping venvs, caches and VCS dirs, never
+    following a symlink out of the repository."""
     real_root = root.resolve()
     for current, dirs, files in os.walk(root, followlinks=False):
         dirs[:] = sorted(
@@ -405,7 +458,7 @@ def scan_repo(root: Path | str) -> ScanReport:
         raise NotADirectoryError(str(base))
     report = ScanReport(root=str(base))
     report.template_detected = (base / "template" / "base" / "neuron.py").is_file()
-    for path in _python_files(base):
+    for path in python_files(base):
         rel = path.relative_to(base).as_posix()
         try:
             if path.stat().st_size > _MAX_FILE_BYTES:

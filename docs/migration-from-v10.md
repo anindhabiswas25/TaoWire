@@ -111,9 +111,9 @@ changed and what it took: `docs/migrations/template.md`.
 From tensorwire.compat import Synapse.
 
 <a id="twm002"></a>
-### TWM002: bt.StreamingSynapse (`auto`)
+### TWM002: bt.StreamingSynapse (`manual`)
 
-From tensorwire.compat import StreamingSynapse (streaming support).
+Compat.StreamingSynapse arrives with the kit's streaming support (Phase 4); until then keep the route on v10 or answer without streaming.
 
 <a id="twm003"></a>
 ### TWM003: bt.axon / bt.Axon (`auto`)
@@ -142,9 +142,9 @@ port replaces `bt.config(parser)` with a ten-line helper that turns
 `--neuron.sample_size` into `config.neuron.sample_size`.
 
 <a id="twm007"></a>
-### TWM007: bt.logging (`manual`)
+### TWM007: bt.logging calls (`auto`)
 
-Standard logging (the kit configures structlog JSON logs).
+Standard logging: bt.logging.info(...) -> logging.info(...); trace -> debug, success -> info (the kit configures JSON logs).
 
 <a id="twm008"></a>
 ### TWM008: bt.subtensor / bt.AsyncSubtensor (`manual`)
@@ -172,9 +172,9 @@ Nothing: the kit publishes the axon at startup (TW_EXTERNAL_IP).
 Tensorwire.compat.weights.to_mapping(uids, weights); v11 SetWeights normalises itself.
 
 <a id="twm013"></a>
-### TWM013: metagraph.axons[uid] lists (`auto`)
+### TWM013: [metagraph.axons[uid] for uid in uids] (`auto`)
 
-Tensorwire.compat.axons_from(metagraph_view, uids).
+Tensorwire.compat.axons_from(metagraph, uids).
 
 <a id="twm014"></a>
 ### TWM014: bt.wallet (`manual`)
@@ -222,9 +222,19 @@ Tensorwire.compat.AxonInfo (ip, port, hotkey, is_serving).
 NeuronInfo / PrometheusInfo are gone: read NeuronView from the kit's metagraph; the SS58 format is 42 (tensorwire.crypto.SS58_FORMAT).
 
 <a id="twm023"></a>
-### TWM023: tensor methods on metagraph values (`manual`)
+### TWM023: tensor methods on metagraph values (`auto`)
 
-Compat.Metagraph values are plain ints and lists: drop .item() / .tolist(), or wrap in numpy.array(...).
+Compat.Metagraph values are plain ints and lists: .item() / .tolist() are dropped (wrap in numpy.array(...) where an array is needed).
+
+<a id="twm024"></a>
+### TWM024: template BaseValidatorNeuron (`auto`)
+
+From tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron (the kit runs the loop, scores and weights).
+
+<a id="twm025"></a>
+### TWM025: bt.logging configuration (`manual`)
+
+Remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else.
 
 <a id="twm100"></a>
 ### TWM100: Synapse without required_hash_fields (`risk`)

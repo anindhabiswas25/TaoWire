@@ -66,8 +66,9 @@ RULES: Mapping[str, Rule] = _table(
     Rule(
         "TWM002",
         "bt.StreamingSynapse",
-        "auto",
-        "from tensorwire.compat import StreamingSynapse (streaming support)",
+        "manual",
+        "compat.StreamingSynapse arrives with the kit's streaming support "
+        "(Phase 4); until then keep the route on v10 or answer without streaming",
     ),
     Rule(
         "TWM003",
@@ -95,9 +96,10 @@ RULES: Mapping[str, Rule] = _table(
     ),
     Rule(
         "TWM007",
-        "bt.logging",
-        "manual",
-        "standard logging (the kit configures structlog JSON logs)",
+        "bt.logging calls",
+        "auto",
+        "standard logging: bt.logging.info(...) -> logging.info(...); trace -> "
+        "debug, success -> info (the kit configures JSON logs)",
     ),
     Rule(
         "TWM008",
@@ -133,9 +135,9 @@ RULES: Mapping[str, Rule] = _table(
     ),
     Rule(
         "TWM013",
-        "metagraph.axons[uid] lists",
+        "[metagraph.axons[uid] for uid in uids]",
         "auto",
-        "tensorwire.compat.axons_from(metagraph_view, uids)",
+        "tensorwire.compat.axons_from(metagraph, uids)",
     ),
     Rule(
         "TWM014",
@@ -196,9 +198,23 @@ RULES: Mapping[str, Rule] = _table(
     Rule(
         "TWM023",
         "tensor methods on metagraph values",
+        "auto",
+        "compat.Metagraph values are plain ints and lists: .item() / .tolist() "
+        "are dropped (wrap in numpy.array(...) where an array is needed)",
+    ),
+    Rule(
+        "TWM024",
+        "template BaseValidatorNeuron",
+        "auto",
+        "from tensorwire.compat import TemplateValidatorAdapter as "
+        "BaseValidatorNeuron (the kit runs the loop, scores and weights)",
+    ),
+    Rule(
+        "TWM025",
+        "bt.logging configuration",
         "manual",
-        "compat.Metagraph values are plain ints and lists: drop .item() / "
-        ".tolist(), or wrap in numpy.array(...)",
+        "remove it: the kit configures logging (TW_LOG_LEVEL); use the standard "
+        "logging module for anything else",
     ),
     Rule(
         "TWM100",

@@ -1,10 +1,12 @@
 import bittensor as bt
+from tensorwire.compat import Axon
 import argparse
 import os
 
 
 def check_config(cls, config: "bt.Config"):
-    bt.axon.check_config(config)
+    Axon.check_config(config)
+    # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
     bt.logging.check_config(config)
     full_path = os.path.expanduser(
         "{}/{}/{}/{}".format(
@@ -85,19 +87,23 @@ def get_config() -> "bt.Config":
     )
 
     # Adds subtensor specific arguments i.e. --subtensor.chain_endpoint ... --subtensor.network ...
+    # TW-MIGRATE: TWM008 the kit's chain gateway and MetagraphCache, or bt.Subtensor directly
     bt.subtensor.add_args(parser)
 
     # Adds logging specific arguments i.e. --logging.debug ..., --logging.trace .. or --logging.logging_dir ...
+    # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
     bt.logging.add_args(parser)
 
     # Adds wallet specific arguments i.e. --wallet.name ..., --wallet.hotkey ./. or --wallet.path ...
+    # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
     bt.wallet.add_args(parser)
 
     # Adds axon specific arguments i.e. --axon.port ...
-    bt.axon.add_args(parser)
+    Axon.add_args(parser)
 
     # Activating the parser to read any command-line inputs.
     # To print help message, run python3 template/miner.py --help
+    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
     config = bt.config(parser)
 
     # Logging captures events for diagnosis or understanding miner's behavior.

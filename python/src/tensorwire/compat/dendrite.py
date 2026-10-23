@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, TypeVar, overload
+from typing import Any, Protocol, TypeVar, overload
 
 from tensorwire.auth.signer import RequestSigner
 from tensorwire.chain.gateway import MetagraphView, NeuronView
@@ -71,13 +71,21 @@ class AxonInfo:
         )
 
 
-def axons_from(mg: MetagraphView, uids: Iterable[int] | None = None) -> list[AxonInfo]:
+class _Snapshots(Protocol):
+    def snapshot(self) -> MetagraphView: ...
+
+
+def axons_from(
+    mg: MetagraphView | _Snapshots, uids: Iterable[int] | None = None
+) -> list[AxonInfo]:
     """``[metagraph.axons[uid] for uid in uids]`` for a TensorWire metagraph.
 
-    ``uids=None`` means every neuron, in UID order. An unknown UID raises
-    ``KeyError``.
+    ``mg`` is a ``MetagraphView`` or anything with ``snapshot()`` (such as
+    ``compat.Metagraph``). ``uids=None`` means every neuron, in UID order;
+    UIDs may be numpy integers. An unknown UID raises ``KeyError``.
     """
-    by_uid = {n.uid: n for n in mg.neurons}
+    view = mg if isinstance(mg, MetagraphView) else mg.snapshot()
+    by_uid = {n.uid: n for n in view.neurons}
     chosen = sorted(by_uid) if uids is None else [int(u) for u in uids]
     return [AxonInfo.from_neuron(by_uid[uid]) for uid in chosen]
 

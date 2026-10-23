@@ -2,101 +2,127 @@
 
 Source: <https://github.com/latent-to/bittensor-subnet-template> at
 `539b77c` (MIT), copied unmodified to
-`examples/migrations/template-v10-to-v11/before/`. Ported by hand to
-`tensorwire.compat` in `after/` (Phase 2; `migrate apply` arrives in Phase 3).
+`examples/migrations/template-v10-to-v11/before/`. The port is in `after/`.
 
-**Result:** the template's miner (`forward`, `blacklist`, `priority`) and
-validator (`forward`, `reward`, `update_scores`, `set_weights`) run on
-TensorWire. `after/tests/test_template_on_tensorwire.py` starts both in
-process on FakeChain: the validator queries the miner over btauth/1, scores
-the answer (EMA 0.1 after one step), and the second step submits weights.
-`python/tests/migration/test_template_port.py` runs that test and re-scans
-the port.
+**Result: S6 = 19 changed lines of subnet code** after `tensorwire migrate
+apply` (target ≤ 50, spec 1.5). The template's miner (`forward`,
+`blacklist`, `priority`) and validator (`forward`, `reward`) run on
+TensorWire with their logic unchanged. `after/` runs on localnet from `TW_*`
+variables alone (`reports/phase-3/a/after-localnet/`): rounds over
+btauth/1, weights committed with `TW_WEIGHTS_VERSION_KEY`, and
+`tensorwire migrate status` reading both nodes. The mixed-fleet localnet
+walk-through (v10 and TensorWire nodes, rollout stages 1-4) is Engineer B's
+evidence in `reports/phase-3/b/`.
 
-## What `migrate scan` reported on `before/`
+## How it is built (golden test, spec 13.8)
 
-35 files, 212 findings: 28 auto, 182 manual, 2 risk. Template shape
-detected. The two risks:
+`after/` is exactly `before/` + `tensorwire migrate apply` +
+`hand-fixes.patch`. `python/tests/migration/test_template_golden.py` checks
+this byte for byte, and checks that a second `apply` changes nothing.
+`examples/migrations/template-v10-to-v11/golden.py s6` prints the count
+below, and `golden.py write` rebuilds the patch after `apply` or `after/`
+changes.
 
-- `template/protocol.py` TWM100: `Dummy` has no `required_hash_fields`, so a
-  v10 signature covers none of its fields.
-- `template/utils/config.py` TWM103: `--blacklist.force_validator_permit`
-  defaults to `False`.
+## What `migrate apply` did on its own
 
-Most manual findings are `bt.logging` calls (TWM007, 146 of them, many in
-`docs/stream_tutorial/`, which this port leaves alone: streaming is Phase 4).
+35 files read, 21 changed: 175 rewrites, 42 `# TW-MIGRATE:` comments.
 
-## What changed
-
-Subnet code (what a team wrote on top of the template):
-
-| File | +/- lines | Change |
+| Rule | Rewrites | What |
 |---|---|---|
-| `template/protocol.py` | +5 / −2 | `compat.Synapse`; `required_hash_fields = ("dummy_input",)` (TWM100) |
-| `neurons/miner.py` | +10 / −14 | `bt.logging` → `logging`; `Miner().run()`; `miner=` pass-through |
-| `neurons/validator.py` | +5 / −9 | same, `Validator().run()` |
-| `template/validator/forward.py` | +5 / −5 | `bt.logging` → `logging`; `await asyncio.sleep(5)` instead of `time.sleep(5)` in the coroutine |
-| `template/validator/reward.py` | +2 / −2 | `bt.logging` → `logging` |
-| `template/utils/uids.py` | +4 / −3 | type hint; `metagraph.n` is an int (TWM023) |
-| `template/__init__.py` | −1 | no `api` module |
-| `requirements.txt` | +1 | `tensorwire` |
+| TWM007 | 138 | `bt.logging.info/trace/...(...)` → `logging.info/debug/...(...)` |
+| TWM003 / TWM004 | 10 / 6 | `bt.axon(...)` → `Axon(miner=Miner.from_env())`, `bt.dendrite(wallet=w)` → `Dendrite(signer=RequestSigner(w))` |
+| TWM001 / TWM021 | 6 / 2 | `bt.Synapse`, `bt.AxonInfo` → `tensorwire.compat` |
+| TWM013 | 6 | `[self.metagraph.axons[uid] for uid in uids]` → `axons_from(self.metagraph, uids)` |
+| TWM023 | 3 | `self.metagraph.n.item()` → `self.metagraph.n` |
+| TWM012 | 2 | `process_weights_for_netuid(uids=u, weights=w, ...)` → `(u, w)` |
+| TWM024 | 2 | `from template.base.validator import BaseValidatorNeuron` → `from tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron` |
 
-That is 68 lines touched (32 added, 36 removed; 41 if each changed line is
-counted once). 32 of them are `bt.logging` lines (and the `bittensor` imports they needed) that `migrate apply`
-(Phase 3) is meant to rewrite. `forward`, `blacklist`, `priority` and
-`reward` logic is unchanged.
+`import bittensor as bt` is removed wherever nothing uses `bt` any more, and
+the new imports take its place. String annotations such as
+`"bt.metagraph.Metagraph"` become `"Metagraph"`.
 
-The template's framework (`template/base/*`, `template/utils/config.py`) was
-rewritten onto the kit, not edited:
+The 42 comments mark what a person has to do: `bt.subtensor` /
+`bt.wallet` / `bt.metagraph` / `bt.config` in the template's framework and
+in `docs/stream_tutorial/`, the v10 mocks, `bt.logging.set_config`, the
+`StreamingSynapse` tutorial (Phase 4), and the two security findings
+(`Dummy` has no `required_hash_fields`, TWM100; `force_validator_permit`
+defaults to `False`, TWM103).
 
-| File | +/- lines | Now |
-|---|---|---|
-| `template/utils/config.py` | +21 / −17 | plain `argparse` for the template's own options; wallet, chain and axon options are `TW_*` |
-| `template/base/neuron.py` | +13 / −110 | config only; the kit loads the hotkey, connects, checks registration |
-| `template/base/miner.py` | +16 / −138 | `compat.Axon(miner=Miner.from_env())`; `Metagraph.of_miner` for `self.metagraph` |
-| `template/base/validator.py` | +132 / −225 | the template's loop kept; `compat.Dendrite`, the kit's gateway and `MetagraphCache`, `WeightScheduler` for `set_weights` |
+## The hand fixes, counted (S6)
 
-Deleted, because v11 has no equivalent and the kit provides one:
-`template/mock.py` and `tests/helpers.py`, `tests/test_mock.py`,
-`tests/test_template_validator.py` (v10 `MockSubtensor` / `MockWallet` →
-TensorWire's FakeChain and fixtures; the template's own validator tests were
-placeholders), `template/api/*` (`SubnetsAPI` is gone; call the subnet with
-`compat.Dendrite`), and `template/base/utils/weight_utils.py` (v11
-`SetWeights` normalises; `compat.weights.to_mapping`). Added:
-`tests/test_template_on_tensorwire.py` (70 lines).
+Counted as in spec 1.5 (D15): `git diff` between the `apply` output and the
+final port, subnet code only. Import lines and the removal of `apply`'s own
+`# TW-MIGRATE:` markers do not count. Added and removed lines both count.
 
-`docs/stream_tutorial/` and `verify/` are untouched and still v10 code; they
-are not part of the subnet's runtime.
+| File | +/- | Counted | Why |
+|---|---|---|---|
+| `neurons/miner.py` | +3 / −7 | 9 | `Miner().run()` replaces v10's `with Miner() as miner: while True: sleep`. `miner=` pass-through for the in-process test |
+| `neurons/validator.py` | +2 / −2 | 4 | `**kit_parts` pass-through for the in-process test |
+| `template/protocol.py` | +3 / −1 | 3 | `required_hash_fields = ("dummy_input",)` (TWM100), plus a comment line and a blank line |
+| `template/validator/forward.py` | +2 / −2 | 2 | `await asyncio.sleep(5)` instead of `time.sleep(5)` in the coroutine. The template's own bug, which matters now: the kit's health endpoints share the event loop |
+| `requirements.txt` | +1 | 1 | `tensorwire` |
+| `template/__init__.py` | −1 | 0 | `from . import api` (an import line) |
+| **Total** | | **19** | |
 
-S6 (≤ 50 changed lines for a template-derived subnet) is about the subnet
-code after `migrate apply`; the hand port is at 41-68 depending on how lines
-are counted, with the logging lines as the bulk. The base classes are what
-`TemplateValidatorAdapter` (Phase 3) is meant to replace, so a team does not
-port them at all.
+Six of the 19 lines are test plumbing. Without the in-process test the port
+would be 13 lines.
+
+Reported separately, not hidden:
+
+- **Template framework** (`template/base/`, `template/utils/config.py`,
+  `template/mock.py`, `template/api/`): 1,147 counted lines. Almost all of
+  it is deleting files the kit replaces: `base/validator.py` (now
+  `TemplateValidatorAdapter`), `base/utils/weight_utils.py`, `mock.py`,
+  `api/`. The written code is `base/miner.py` (12 lines),
+  `base/neuron.py` (8) and `utils/config.py` (21 added, 25 removed). There is
+  no miner-side adapter yet, so the miner base still needs this small hand
+  port in every template-derived subnet (see "Limits").
+- **Tests**: the template's v10 mock tests are deleted (`tests/helpers.py`,
+  `test_mock.py`, `test_template_validator.py`, which were placeholders) and
+  `tests/test_template_on_tensorwire.py` (70 lines) runs the miner and the
+  validator in process on `FakeChain`.
+
+Phase 2's hand port without `apply` was 41-68 lines of subnet code, 32 of
+them logging.
 
 ## What the kit gained from this port
 
-- `compat.Metagraph` (`hotkeys`, `S`, `validator_permit`, `axons`, `n`, ...)
-  and `Metagraph.of_miner(miner)`: the template's `blacklist` and `priority`
-  read `self.metagraph.hotkeys.index(...)` and `self.metagraph.S[uid]`.
-- `ValidatorClient(timeout_s=...)` per call, for `Dendrite(..., timeout=)`.
+- Phase 2: `compat.Metagraph` (+ `of_miner`), per-call `timeout_s`, rules
+  TWM021-023.
+- Phase 3: `compat.TemplateValidatorAdapter` (the template's validator base
+  on the kit's runner: schedule, score store, weights with
+  `TW_WEIGHTS_VERSION_KEY`, v10 fallback, `/metrics`), `migrate apply`, rule
+  TWM024 (the swap) and TWM025 (`bt.logging` configuration, by hand), and
+  `axons_from` accepting a `compat.Metagraph`. `configure_logging` now drops
+  the handler that a module-level `logging.info()` silently adds before the
+  kit configures logging. Ported code does that, and every line was being
+  printed twice.
 
-## What `migrate scan` missed, and the rules added for it
+## Behaviour that changed (TemplateValidatorAdapter)
 
-| Miss | New rule |
-|---|---|
-| `from bittensor.subnets import SubnetsAPI` | `bittensor.subnets` → TWM016 |
-| `from bittensor import AxonInfo` | TWM021 (`compat.AxonInfo`) |
-| `from bittensor import NeuronInfo, PrometheusInfo, __ss58_format__` | TWM022 |
-| `self.metagraph.n.item()` (a tensor on v10, an int now) | TWM023 |
+- Steps start at most every `TW_ROUND_INTERVAL_S`. Weights follow the
+  chain's rate limit and `TW_MIN_WEIGHT_INTERVAL_BLOCKS`, not
+  `neuron.epoch_length`.
+- `update_scores` feeds the kit's EMA (`TW_SCORE_ALPHA`). Rewards are
+  clamped to [0, 1]. Miners not queried in a step keep their score; the
+  template decayed them.
+- Scores and the step count persist in `TW_STATE_DIR`
+  (`save_state` / `load_state` do nothing).
 
-Not covered by a rule, by design: `time.sleep` inside a coroutine
-(a general async bug, already in the v10 template), and strings such as
-`"bt.Config"` in type hints.
+## Limits (not covered by a rule, by design)
+
+- `time.sleep` inside a coroutine: a general async bug.
+- The miner side of the template framework (`template/base/miner.py`,
+  `neuron.py`) is ported by hand. `apply` rewrites `bt.axon` there and marks
+  `bt.wallet` / `bt.subtensor` / `bt.metagraph`. A `TemplateMinerAdapter`
+  would remove this step (open question for the PM).
+- v10's `with Miner() as miner:` main loop: the kit's miner runs in the
+  foreground (`Miner().run()`).
 
 ## Time
 
-The port was done by Engineer A (an AI engineer) in about six minutes of
-wall-clock time between commits, after the compat layer existed. That is not
-a measure of what a human team needs; the design-partner case studies (S7)
-record human time.
+`migrate apply` runs in under a second on this repository. The hand fixes
+were made by Engineer A (an AI engineer) in Phase 2 and adjusted in Phase 3;
+the wall-clock time is not a measure of what a human team needs. The
+design-partner case studies (S7) record what scan/apply missed on code
+nobody here wrote.
