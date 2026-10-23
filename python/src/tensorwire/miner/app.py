@@ -58,7 +58,7 @@ from tensorwire.miner.health import health_routes
 from tensorwire.miner.legacy import LegacyServerFactory
 from tensorwire.miner.lifecycle import Lifecycle, MinerParts
 from tensorwire.miner.pipeline import RouteEndpoint
-from tensorwire.miner.protocol import guarded_protocol
+from tensorwire.miner.protocol import MAX_HEADER_BYTES, guarded_protocol
 from tensorwire.miner.routes import Handler, Route, RouteRegistry
 from tensorwire.observability.logging import configure_logging
 from tensorwire.observability.metrics import MULTIPROC_ENV, Metrics, serve_multiprocess
@@ -69,8 +69,6 @@ __all__ = ["DEFAULT_LIMIT_CONCURRENCY", "MAX_HEADER_BYTES", "Miner", "NoSignalSe
 
 #: uvicorn ``--limit-concurrency``: connections beyond this get 503 at once.
 DEFAULT_LIMIT_CONCURRENCY = 1024
-#: Header size limit (``h11_max_incomplete_event_size``), spec 8.6.1.
-MAX_HEADER_BYTES = 16 * 1024
 _KEEP_ALIVE_S = 5
 
 _H = TypeVar("_H", bound=Handler)
@@ -226,18 +224,21 @@ class Miner:
             self._mount(app, kit_route)
         s = self.settings
         largest = max([s.max_body_bytes, *(r.max_body_bytes for r in self.routes)])
-        # add_middleware wraps: the last one added runs first (spec 5.3 steps 1-3).
+        # add_middleware wraps: the last one added runs first (spec 5.3 steps
+        # 1-3). The per-IP limit is outermost, so a flood is refused before
+        # anything else runs; it counts and logs its own refusals.
         app.add_middleware(BodySizeLimit, max_bytes=largest)
+        app.add_middleware(
+            RequestContext,
+            metrics=self.metrics,
+            log_full_hotkeys=lambda: s.log_level == "DEBUG",
+        )
         app.add_middleware(
             PreAuthRateLimit,
             limiter=_LifecycleIpLimiter(self.lifecycle),
             trusted_proxies=s.trusted_proxies,
             passthrough_on_failure=frozenset({"/healthz", "/readyz"}),
-        )
-        app.add_middleware(
-            RequestContext,
             metrics=self.metrics,
-            log_full_hotkeys=lambda: s.log_level == "DEBUG",
         )
         return app
 
@@ -304,10 +305,9 @@ class Miner:
             "server_header": False,
             "proxy_headers": False,  # the kit reads X-Forwarded-For itself
             "timeout_keep_alive": _KEEP_ALIVE_S,
-            # h11 with a request-read deadline (slowloris); the header limit
-            # below exists only for h11 (uvicorn would pick httptools).
+            # httptools with a request-read deadline (slowloris) and header
+            # limits (MAX_HEADER_BYTES); see miner/protocol.py.
             "http": guarded_protocol(s.auth_max_age_s + s.auth_allowed_skew_s),
-            "h11_max_incomplete_event_size": MAX_HEADER_BYTES,
             "limit_concurrency": DEFAULT_LIMIT_CONCURRENCY,
             "timeout_graceful_shutdown": max(1, round(s.drain_s)),
         }

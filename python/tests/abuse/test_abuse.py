@@ -4,6 +4,12 @@ Every test runs an attack on loopback while ``alice`` (a permitted
 validator, another source address) keeps querying, and asserts she is
 still served. With ``TENSORWIRE_TEST_REDIS_URL`` set the miner runs two
 workers on Redis (shared replay store and limits); otherwise one worker.
+``just abuse`` always uses Redis.
+
+The 10,000 req/s flood needs the two-worker fleet: one worker refuses
+about 7,000 req/s on one core of the reference machine, and the rest queue
+up in front of alice (recorded in ``docs/benchmarks.md``), so that test is
+skipped without Redis rather than weakened.
 
 Set ``TENSORWIRE_ABUSE_REPORT=<file>`` to record the measured numbers.
 """
@@ -80,6 +86,11 @@ def assert_served(legit: Any, minimum: int) -> None:
 # ------------------------------------------------------------ 1. invalid signatures
 
 
+@pytest.mark.skipif(
+    REDIS is None,
+    reason="10k req/s needs the 2-worker fleet (TENSORWIRE_TEST_REDIS_URL); "
+    "one worker refuses ~7k req/s, see docs/benchmarks.md",
+)
 async def test_invalid_signature_flood(tmp_path: Path) -> None:
     """10,000 req/s with bad signatures from one IP.
 

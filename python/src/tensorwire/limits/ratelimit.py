@@ -33,11 +33,17 @@ from collections.abc import Awaitable, Callable, MutableMapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
+import structlog
+
 from tensorwire.errors import RateLimited, ReplayStoreUnavailable, TWError
 from tensorwire.limits.body import send_error
+from tensorwire.observability.logging import new_request_id
+from tensorwire.observability.middleware import UNMATCHED_ROUTE
 
 if TYPE_CHECKING:
     import redis.asyncio
+
+    from tensorwire.observability.metrics import Metrics
 
 __all__ = [
     "MemoryRateLimiter",
@@ -50,6 +56,8 @@ __all__ = [
 ]
 
 IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+_log = structlog.stdlib.get_logger("tensorwire.limits")
 
 
 @dataclass(frozen=True)
@@ -376,10 +384,17 @@ class PreAuthRateLimit:
     """Layer 1: per-client-IP token bucket, before anything else is read.
 
     Rejections are 429 ``tw.rate_limited`` with ``Retry-After``, unsigned
-    (spec Appendix A). ``scope["state"]["tw_rate_layer"]`` is set to ``ip``.
+    (spec Appendix A), with a request ID in the body and ``X-TW-Request-Id``.
     A shared (Redis) limiter that cannot be reached answers 503
     ``tw.replay_store_unavailable``, except on ``passthrough_on_failure``
     paths (the health endpoints: a Redis outage must not fail liveness).
+
+    The miner installs it outermost, so a flood is refused before any other
+    layer runs. With ``metrics`` it counts its own refusals
+    (``tw_requests_total{route="unmatched"}``, ``tw_rate_limited_total{layer="ip"}``,
+    ``tw_nonce_store_errors_total``) and, instead of one access-log line per
+    refused request, logs ``ip_rate_limited`` at WARNING at most once per
+    client per ``log_interval_s`` with the number refused since.
     """
 
     def __init__(
@@ -389,36 +404,78 @@ class PreAuthRateLimit:
         limiter: RateLimiter,
         trusted_proxies: Sequence[IPNetwork] = (),
         passthrough_on_failure: frozenset[str] = frozenset(),
+        metrics: Metrics | None = None,
+        log_interval_s: float = 10.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.app = app
         self._limiter = limiter
         self._proxies = tuple(trusted_proxies)
         self._passthrough = passthrough_on_failure
+        self._log = _RefusalLog(log_interval_s, clock)
+        # Label lookups done once: a flood is counted at a few hundred ns each.
+        self._counters: dict[str, tuple[Any, ...]] = {}
+        if metrics is not None:
+            self._counters = {
+                RateLimited.code: (
+                    metrics.requests.labels(
+                        route=UNMATCHED_ROUTE, status="429", code=RateLimited.code
+                    ),
+                    metrics.rate_limited.labels(layer="ip"),
+                ),
+                ReplayStoreUnavailable.code: (
+                    metrics.requests.labels(
+                        route=UNMATCHED_ROUTE,
+                        status="503",
+                        code=ReplayStoreUnavailable.code,
+                    ),
+                    metrics.nonce_store_errors.labels(backend="redis"),
+                ),
+            }
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        error: TWError | None = None
+        error: TWError
+        client = _scope_client_ip(scope, self._proxies)
         try:
-            decision = await self._limiter.acquire(
-                _scope_client_ip(scope, self._proxies)
-            )
+            decision = await self._limiter.acquire(client)
         except ReplayStoreUnavailable as exc:  # shared limiter down: fail closed
             if scope.get("path") in self._passthrough:
                 await self.app(scope, receive, send)
                 return
-            state = scope.setdefault("state", {})
-            state["tw_store_backend"] = "redis"
             error = exc
         else:
-            if not decision.allowed:
-                state = scope.setdefault("state", {})
-                state["tw_rate_layer"] = "ip"
-                error = RateLimited(retry_after_s=decision.retry_after_s, layer="ip")
-        if error is not None:
-            await send_error(
-                send, error, request_id=state.get("request_id"), scope=scope
-            )
+            if decision.allowed:
+                await self.app(scope, receive, send)
+                return
+            error = RateLimited(retry_after_s=decision.retry_after_s, layer="ip")
+        for counter in self._counters.get(error.code, ()):
+            counter.inc()
+        self._log.refused(client, error.code)
+        await send_error(send, error, request_id=new_request_id())
+
+
+class _RefusalLog:
+    """At most one WARNING per client per interval, with the count since."""
+
+    _MAX_CLIENTS = 10_000
+
+    def __init__(self, interval_s: float, clock: Callable[[], float]) -> None:
+        self._interval = interval_s
+        self._clock = clock
+        self._seen: OrderedDict[str, list[float]] = OrderedDict()  # [last_log, n]
+
+    def refused(self, client: str, code: str) -> None:
+        now = self._clock()
+        entry = self._seen.get(client)
+        if entry is not None and now - entry[0] < self._interval:
+            entry[1] += 1
             return
-        await self.app(scope, receive, send)
+        refused = 1 if entry is None else int(entry[1]) + 1
+        self._seen[client] = [now, 0]
+        self._seen.move_to_end(client)
+        while len(self._seen) > self._MAX_CLIENTS:
+            self._seen.popitem(last=False)
+        _log.warning("ip_rate_limited", client_ip=client, code=code, refused=refused)

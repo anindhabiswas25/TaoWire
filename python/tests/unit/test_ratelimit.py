@@ -6,6 +6,7 @@ import ipaddress
 from typing import Any
 
 import pytest
+import structlog
 
 from tensorwire.errors import RateLimited
 from tensorwire.limits.ratelimit import (
@@ -15,6 +16,7 @@ from tensorwire.limits.ratelimit import (
     TokenBucket,
     client_ip,
 )
+from tensorwire.observability.metrics import Metrics
 
 
 class FakeClock:
@@ -196,14 +198,44 @@ async def test_pre_auth_limit_keys_by_client_ip() -> None:
     mw = PreAuthRateLimit(_ok, limiter=limiter)
     sent, _ = await _call(mw, client=("1.1.1.1", 5), headers=[])
     assert sent[0]["status"] == 200
-    sent, scope = await _call(mw, client=("1.1.1.1", 6), headers=[])
+    sent, _ = await _call(mw, client=("1.1.1.1", 6), headers=[])
     assert sent[0]["status"] == 429
     headers = dict(sent[0]["headers"])
     assert int(headers[b"retry-after"]) >= 1
     assert b'"tw.rate_limited"' in sent[1]["body"]
-    assert scope["state"] == {"tw_rate_layer": "ip", "tw_code": "tw.rate_limited"}
+    assert len(headers[b"x-tw-request-id"]) == 26  # a ULID, also in the body
+    assert headers[b"x-tw-request-id"] in sent[1]["body"]
     sent, _ = await _call(mw, client=("2.2.2.2", 5), headers=[])
     assert sent[0]["status"] == 200
+
+
+async def test_pre_auth_refusals_are_counted_and_logged_sparingly() -> None:
+    clock = FakeClock()
+    metrics = Metrics()
+    mw = PreAuthRateLimit(
+        _ok,
+        limiter=MemoryRateLimiter(rate=0.001, burst=1, clock=clock),
+        metrics=metrics,
+        log_interval_s=10,
+        clock=clock,
+    )
+    with structlog.testing.capture_logs() as logs:
+        for _ in range(6):  # 1 served, 5 refused
+            await _call(mw, client=("1.1.1.1", 5), headers=[])
+        clock.now += 10
+        await _call(mw, client=("1.1.1.1", 5), headers=[])  # next window
+        await _call(mw, client=("2.2.2.2", 5), headers=[])  # another client: served
+    refusals = [e for e in logs if e["event"] == "ip_rate_limited"]
+    assert [(e["client_ip"], e["refused"]) for e in refusals] == [
+        ("1.1.1.1", 1),
+        ("1.1.1.1", 5),  # 4 more in the first window + the one that logged
+    ]
+    text = metrics.render().decode()
+    assert (
+        'tw_requests_total{code="tw.rate_limited",route="unmatched",status="429"} 6.0'
+        in text
+    )
+    assert 'tw_rate_limited_total{layer="ip"} 6.0' in text
 
 
 async def test_pre_auth_limit_uses_trusted_proxy_header() -> None:

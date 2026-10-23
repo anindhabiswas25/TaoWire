@@ -14,6 +14,7 @@ import redis
 
 from tensorwire.errors import ReplayStoreUnavailable
 from tensorwire.limits.ratelimit import PreAuthRateLimit, RateDecision, RedisRateLimiter
+from tensorwire.observability.metrics import Metrics
 
 
 class FakeScript:
@@ -162,11 +163,18 @@ async def ok_app(scope: Any, receive: Any, send: Any) -> None:
 
 async def test_middleware_fails_closed_except_on_health_paths() -> None:
     lim, _, _ = limiter([redis.ConnectionError("down")] * 2)
+    metrics = Metrics()
     mw = PreAuthRateLimit(
-        ok_app, limiter=lim, passthrough_on_failure=frozenset({"/healthz"})
+        ok_app,
+        limiter=lim,
+        passthrough_on_failure=frozenset({"/healthz"}),
+        metrics=metrics,
     )
     blocked = await call(mw, "/v1/x")
     assert blocked[0]["status"] == 503
     assert b"tw.replay_store_unavailable" in blocked[1]["body"]
+    assert 'tw_nonce_store_errors_total{backend="redis"} 1.0' in (
+        metrics.render().decode()
+    )
     passed = await call(mw, "/healthz")
     assert passed[0]["status"] == 200
