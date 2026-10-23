@@ -16,6 +16,7 @@ import asyncio
 import logging
 import math
 import random
+import threading
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -781,25 +782,30 @@ class BittensorGateway:
 
         The signature is checked by opening a probe sealed locally to the same
         round, so a bad answer from a drand relay is never used. Live drand
-        threads are bounded (:data:`_TIMELOCK_THREADS`) even when one hangs
-        past ``timeout_s`` and is abandoned.
+        threads are capped at 64 by a semaphore each thread holds until it really
+        ends, also when one hangs past ``timeout_s`` and is abandoned; past the
+        cap a fetch is refused (:class:`TimelockUnavailable`), not queued.
         """
         if bt.timelock.current_round() < reveal_round:
             remaining = bt.timelock.reveal_time(reveal_round).timestamp() - time.time()
             raise TimelockNotReady(remaining)
 
         def fetch() -> str:
-            signature = str(_core.get_signature_for_round(reveal_round))
-            probe, _ = _core.encrypt_at_round(_PROBE, reveal_round)
-            if bytes(_core.decrypt_with_signature(probe, signature)) != _PROBE:
-                raise ValueError("the drand signature does not open its round")
-            return signature
+            # Held for the thread's real lifetime, also after it is abandoned.
+            if not _TIMELOCK_THREADS.acquire(blocking=False):
+                raise ValueError("too many drand fetches still running")
+            try:
+                signature = str(_core.get_signature_for_round(reveal_round))
+                probe, _ = _core.encrypt_at_round(_PROBE, reveal_round)
+                if bytes(_core.decrypt_with_signature(probe, signature)) != _PROBE:
+                    raise ValueError("the drand signature does not open its round")
+                return signature
+            finally:
+                _TIMELOCK_THREADS.release()
 
         try:
             with anyio.fail_after(timeout_s):
-                return await anyio.to_thread.run_sync(
-                    fetch, abandon_on_cancel=True, limiter=_timelock_threads()
-                )
+                return await anyio.to_thread.run_sync(fetch, abandon_on_cancel=True)
         except TimeoutError:
             raise TimelockUnavailable("drand timeout") from None
         except (
@@ -1023,15 +1029,7 @@ def _outcome(result: Any) -> TxOutcome:
 
 _PROBE = b"tensorwire drand signature check"
 #: Live drand worker threads at most (also abandoned ones that still run).
-_TIMELOCK_THREADS = 64
-_threads: anyio.CapacityLimiter | None = None
-
-
-def _timelock_threads() -> anyio.CapacityLimiter:
-    global _threads  # noqa: PLW0603 - one process-wide cap, made lazily (needs a loop)
-    if _threads is None:
-        _threads = anyio.CapacityLimiter(_TIMELOCK_THREADS)
-    return _threads
+_TIMELOCK_THREADS = threading.BoundedSemaphore(64)
 
 
 def _parse_sealed(sealed_hex: str) -> Any:

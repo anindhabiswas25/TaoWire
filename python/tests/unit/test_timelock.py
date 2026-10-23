@@ -222,14 +222,21 @@ def result(uid: int, data: Any, *, ok: bool = True) -> MinerResult:
     )
 
 
+def miner(chain: FakeChain, clock: Clock, uid: int) -> Timelock:
+    return timelock(chain, clock, own_hotkey=f"5H{uid}")
+
+
 async def test_open_results(chain: FakeChain, clock: Clock) -> None:
     tl = timelock(chain, clock)
-    good = await tl.seal_response(Answer(value=4), reveal_in=3)
-    wrong_model = await tl.seal_response(Task(question="?"), reveal_in=3)
-    late = await tl.seal_response(Answer(value=5), reveal_in="1h")
+    good = await miner(chain, clock, 1).seal_response(Answer(value=4), reveal_in=3)
+    parsed = await miner(chain, clock, 2).seal_response(Answer(value=4), reveal_in=3)
+    wrong_model = await miner(chain, clock, 4).seal_response(
+        Task(question="?"), reveal_in=3
+    )
+    late = await miner(chain, clock, 7).seal_response(Answer(value=5), reveal_in="1h")
     results = {
         1: result(1, good.model_dump_json().encode()),
-        2: result(2, good),  # already parsed as a SealedResponse
+        2: result(2, parsed),  # already parsed as a SealedResponse
         3: result(3, b'{"sealed": true, "ciphertext": "zz", "reveal_round": 1}'),
         4: result(4, wrong_model.model_dump_json().encode()),
         5: result(5, None, ok=False),
@@ -246,6 +253,38 @@ async def test_open_results(chain: FakeChain, clock: Clock) -> None:
     assert opened[5] is results[5]
     assert opened[6].error_code == "tw.invalid_response"
     assert (opened[7].ok, opened[7].error_code) == (False, "tw.timelock_unavailable")
+
+
+async def test_a_sealed_answer_is_bound_to_its_miner(
+    chain: FakeChain, clock: Clock
+) -> None:
+    """Security review: a copied ciphertext is not the copier's answer."""
+    tl = timelock(chain, clock)
+    honest = await miner(chain, clock, 1).seal_response(Answer(value=4), reveal_in=3)
+    copied = {
+        2: result(2, honest.model_dump_json().encode())
+    }  # only the copier sent it
+    opened = await tl.open_results(copied, Answer, timeout_s=30)
+    assert opened[2].error_code == "tw.invalid_response"
+    both = {
+        1: result(1, honest.model_dump_json().encode()),
+        3: result(3, honest.model_dump_json().encode()),  # the same ciphertext twice
+    }
+    opened = await tl.open_results(both, Answer, timeout_s=30)
+    assert [opened[u].error_code for u in (1, 3)] == ["tw.invalid_response"] * 2
+    with pytest.raises(RuntimeError, match="own_hotkey"):
+        await tl.seal_response(Answer(value=1))  # a validator's Timelock
+
+
+async def test_a_stale_challenge_is_refused_without_a_fetch(
+    chain: FakeChain, clock: Clock
+) -> None:
+    tl = timelock(chain, clock)
+    challenge = await tl.seal_challenge(Task(question="old"), reveal_in=3)
+    clock.now += 600  # revealed ten minutes ago: outside the cache window
+    with pytest.raises(TimelockMalformed):
+        await tl.open_challenge(challenge, Task)
+    assert chain.calls["timelock_signature"] == 0
 
 
 async def test_settings_and_limits(chain: FakeChain, tw_env: Any) -> None:
@@ -366,10 +405,10 @@ async def test_open_results_refuses_answers_sealed_before_the_query(
     chain: FakeChain, clock: Clock
 ) -> None:
     tl = timelock(chain, clock)
-    old = await tl.seal_response(Answer(value=1), reveal_in=3)  # sealed earlier
+    old = await miner(chain, clock, 1).seal_response(Answer(value=1), reveal_in=3)
     clock.now += 60
     sent_at = clock.now
-    fresh = await tl.seal_response(Answer(value=2), reveal_in=3)
+    fresh = await miner(chain, clock, 2).seal_response(Answer(value=2), reveal_in=3)
     results = {
         1: result(1, old.model_dump_json().encode()),
         2: result(2, fresh.model_dump_json().encode()),

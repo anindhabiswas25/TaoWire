@@ -41,7 +41,7 @@ from __future__ import annotations
 
 import math
 import time
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any, Literal, TypeVar
@@ -83,6 +83,8 @@ _TRY_S = 10.0
 _CACHED_ROUNDS = 64
 #: Shortest wait for a beacon that lags its schedule.
 _LAG_S = 0.05
+#: A challenge whose reveal is further in the past than this is refused.
+_STALE_CHALLENGE_S = 60.0
 _UNITS = {"s": 1.0, "m": 60.0, "h": 3600.0}
 
 
@@ -122,6 +124,27 @@ class SealedResponse(BaseModel):
     reveal_round: int
 
 
+class _Bound(BaseModel):
+    """What a sealed response holds: the miner's hotkey and its answer."""
+
+    model_config = ConfigDict(frozen=True)
+
+    hotkey: str
+    answer: Any
+
+
+def _ciphertext(data: Any) -> Any:
+    """The ciphertext of a sealed answer, as given (for duplicate detection)."""
+    if isinstance(data, SealedResponse):
+        return data.ciphertext
+    if isinstance(data, (bytes, bytearray)):
+        try:
+            return SealedResponse.model_validate_json(data).ciphertext
+        except ValidationError:
+            return None
+    return None
+
+
 class Timelock:
     """Seal and open data through the chain gateway; see the module docstring."""
 
@@ -133,6 +156,7 @@ class Timelock:
         retries: int = 3,
         timeout_s: float = 30.0,
         metrics: Metrics | None = None,
+        own_hotkey: str | None = None,
         sleep: Callable[[float], Awaitable[None]] = anyio.sleep,
         clock: Callable[[], float] = time.time,
     ) -> None:
@@ -149,6 +173,8 @@ class Timelock:
         self.retries = retries
         self.timeout_s = float(timeout_s)
         self._metrics = metrics
+        self.own_hotkey = own_hotkey
+        """This process's hotkey, which ``seal_response`` binds answers to."""
         self._sleep = sleep
         self._clock = clock
 
@@ -275,6 +301,9 @@ class Timelock:
         the peer) plus ``timeout_s`` for the drand fetch.
         """
         sealed = self._gateway.timelock_parse(challenge.sealed)
+        if sealed.reveal_at_s < self._clock() - _STALE_CHALLENGE_S:
+            # an old round: no fetch outside the cache for a stale challenge
+            raise TimelockMalformed("challenge revealed too long ago")
         wait_s = max(0.0, sealed.reveal_at_s - self._clock())
         if wait_s > max_wait_s:
             self._unavailable("challenge reveal later than max_wait_s")
@@ -284,9 +313,17 @@ class Timelock:
     async def seal_response(
         self, answer: BaseModel, reveal_in: str | float = "12s"
     ) -> SealedResponse:
-        """Miner side: seal ``answer`` (its JSON) to a short reveal."""
+        """Miner side: seal ``answer`` to a short reveal, bound to this miner.
+
+        The sealed plaintext is ``{"hotkey": <this miner>, "answer": ...}``: a
+        ciphertext copied from another miner does not open as this one's
+        answer. Needs ``own_hotkey`` (``Miner.timelock`` sets it).
+        """
+        if self.own_hotkey is None:
+            raise RuntimeError("seal_response needs own_hotkey (use miner.timelock)")
+        bound = _Bound(hotkey=self.own_hotkey, answer=answer.model_dump(mode="json"))
         sealed = await self._gateway.timelock_seal(
-            answer.model_dump_json().encode(), reveal_in_s=parse_reveal_in(reveal_in)
+            bound.model_dump_json().encode(), reveal_in_s=parse_reveal_in(reveal_in)
         )
         return SealedResponse(ciphertext=sealed.hex, reveal_round=sealed.reveal_round)
 
@@ -308,8 +345,14 @@ class Timelock:
         fetch. All are opened concurrently; one signature per round.
         """
         out: dict[int, MinerResult] = dict(results)
+        seen = Counter(_ciphertext(r.data) for r in results.values() if r.ok)
 
         async def one(uid: int, result: MinerResult) -> None:
+            if seen[_ciphertext(result.data)] > 1:  # one sealed answer, several miners
+                out[uid] = replace(
+                    result, ok=False, data=None, error_code="tw.invalid_response"
+                )
+                return
             out[uid] = await self._open_result(result, model, not_before, timeout_s)
 
         async with anyio.create_task_group() as tg:
@@ -339,7 +382,10 @@ class Timelock:
             if not_before is not None and reveal.reveal_at_s < not_before:
                 raise TimelockMalformed("sealed before the query was sent")
             opened = await self.open(sealed.ciphertext, timeout_s=timeout_s)
-            return replace(result, data=model.model_validate_json(opened))
+            bound = _Bound.model_validate_json(opened)
+            if bound.hotkey != result.hotkey:
+                raise TimelockMalformed("sealed by another miner")
+            return replace(result, data=model.model_validate(bound.answer))
         except TimelockUnavailable:
             return replace(
                 result, ok=False, data=None, error_code="tw.timelock_unavailable"

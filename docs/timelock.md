@@ -64,6 +64,14 @@ async def solve(challenge: SealedChallenge, ctx) -> SealedResponse:
 
 Give the route a `timeout_s` longer than the challenge's reveal (and the
 validator a `TW_QUERY_TIMEOUT_S` longer still).
+
+`seal_response` binds the answer to the miner: the sealed plaintext is
+`{"hotkey": <the miner>, "answer": ...}`, and `open_results` refuses an answer
+sealed by another hotkey, and refuses for every UID a ciphertext that more than
+one UID returned (`tw.invalid_response`). A miner cannot pass off another
+miner's sealed answer it could not compute itself. `open_challenge` refuses a
+challenge whose reveal is more than 60 s in the past (no drand fetch for a
+round outside the cache).
 `open_challenge` waits until the reveal (at most `max_wait_s`, default 300 s,
 because the reveal time comes from the peer) and then allows `timeout_s` for
 the drand fetch.

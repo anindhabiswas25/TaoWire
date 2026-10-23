@@ -241,8 +241,9 @@ class Miner:
         on first use, after startup, with the kit's defaults.
         """
         if self._timelock is None:
+            runtime = self.lifecycle.runtime
             self._timelock = Timelock(
-                self.lifecycle.runtime.gateway, metrics=self.metrics
+                runtime.gateway, metrics=self.metrics, own_hotkey=runtime.hotkey_ss58
             )
         return self._timelock
 
