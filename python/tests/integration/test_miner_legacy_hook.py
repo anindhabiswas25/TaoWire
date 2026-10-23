@@ -18,7 +18,8 @@ from typing import Any, ClassVar
 
 import httpx
 import pytest
-from pydantic import BaseModel
+import structlog.testing
+from pydantic import BaseModel, Field
 
 from tensorwire.auth.verifier import Caller
 from tensorwire.compat.synapse import Synapse
@@ -50,6 +51,14 @@ class Req(BaseModel):
 
 class Resp(BaseModel):
     result: str
+
+
+class Scores(BaseModel):
+    """A native answer with a float field and values held under ``Any``."""
+
+    score: float = 0.0
+    meta: dict[str, Any] = Field(default_factory=dict)
+    timeout: float = 0.0  # a Synapse envelope name: still checked here
 
 
 @dataclass(frozen=True)
@@ -151,6 +160,10 @@ def tw_miner(tw_miner_kwargs: dict[str, Any], servers: list[FakeLegacyServer]) -
     async def raw(body: bytes, ctx: RouteContext) -> bytes:
         return b'{"result":"raw"}'
 
+    @miner.route("/v1/raw-model", legacy_body_hash=lambda body: "h")
+    async def raw_model(body: bytes, ctx: RouteContext) -> BaseModel:
+        return Scores.model_validate_json(body)
+
     @miner.route("/v1/plain", request=Req, response=Resp)
     async def plain(req: Req, ctx: RouteContext) -> Resp:
         return Resp(result=req.text)
@@ -233,6 +246,45 @@ async def test_body_hash_route_passes_raw_body(
     assert r.status_code == 200
     assert r.json() == {"result": "raw"}
     assert servers[0].responses[-1]["raw"] == b'{"result":"raw"}'
+
+
+@pytest.mark.parametrize(
+    ("answer", "bad_field"),
+    [
+        ('{"score": Infinity}', "score"),
+        ('{"meta": {"r": NaN}}', "meta.r"),
+        ('{"meta": {"w": [1.0, -Infinity]}}', "meta.w[1]"),
+        ('{"timeout": Infinity}', "timeout"),
+    ],
+)
+async def test_native_body_hash_model_with_non_finite_values_is_refused(
+    miner_app: Any,
+    tw_miner: Miner,
+    servers: list[FakeLegacyServer],
+    answer: str,
+    bad_field: str,
+) -> None:
+    """G4-4 (D11, 8.11.2): ``model_dump_json`` would write these as ``null``."""
+    with structlog.testing.capture_logs() as logs:
+        r = await post_v10(miner_app, "/v1/raw-model", answer.encode())
+    assert r.status_code == 500
+    assert servers[0].responses[-1]["error"].code == "tw.handler_error"
+    assert servers[0].responses[-1]["raw"] is None
+    [event] = [e for e in logs if e["event"] == "legacy_non_finite_answer"]
+    assert (event["route"], event["field"]) == ("/v1/raw-model", bad_field)
+    assert event["log_level"] == "error"
+    text = tw_miner.metrics.render().decode()
+    assert 'result="tw.handler_error"} 1.0' in text
+    assert 'result="ok"' not in text
+
+
+async def test_native_body_hash_model_with_finite_values_is_answered(
+    miner_app: Any, servers: list[FakeLegacyServer]
+) -> None:
+    body = b'{"score": 1.5, "meta": {"r": 2.0, "w": [1, 2]}}'
+    r = await post_v10(miner_app, "/v1/raw-model", body)
+    assert r.status_code == 200
+    assert r.json() == {"score": 1.5, "meta": {"r": 2.0, "w": [1, 2]}, "timeout": 0.0}
 
 
 async def test_route_without_legacy_support(

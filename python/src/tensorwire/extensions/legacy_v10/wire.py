@@ -23,7 +23,7 @@ import hashlib
 import json
 import math
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -658,7 +658,12 @@ def _non_finite_paths(value: Any, path: str) -> Iterable[tuple[str, list[Any]]]:
         yield path, [_MISSING]  # no stable position to compare: counted as changed
 
 
-def non_finite_field(synapse: BaseModel) -> str | None:
+def non_finite_field(
+    synapse: BaseModel,
+    *,
+    rendered: Any = _MISSING,
+    skip: Collection[str] = ENVELOPE_FIELDS,
+) -> str | None:
     """The first field where ``synapse`` holds an ``inf`` / ``nan`` that the
     JSON answer would turn into ``null`` (``meta.r``, ``w[0]``, ``by_uid[7]``,
     ``m['a b']``), or ``None``.
@@ -669,11 +674,18 @@ def non_finite_field(synapse: BaseModel) -> str | None:
     ``null``. The answer must never silently change a value (8.11.2), so such
     a Synapse is refused. Values in a set have no position to compare and are
     always refused.
+
+    ``rendered`` is the answer as it will be sent, parsed back (default: the
+    JSON-mode dump, which is what a Synapse answer is built from). A plain
+    model answered with ``model_dump_json()`` passes ``json.loads`` of those
+    bytes: without ``ser_json_inf_nan="constants"`` it writes even a
+    ``float`` field's ``inf`` as ``null``. ``skip`` names top-level fields not
+    checked (the Synapse envelope by default; ``()`` for a plain model).
     """
     python = synapse.model_dump()
-    json_mode: Any = None
+    json_mode: Any = None if rendered is _MISSING else rendered
     for path, keys in _non_finite_paths(
-        {k: v for k, v in python.items() if k not in ENVELOPE_FIELDS}, ""
+        {k: v for k, v in python.items() if k not in skip}, ""
     ):
         if json_mode is None:
             json_mode = synapse.model_dump(mode="json")
