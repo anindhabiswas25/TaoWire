@@ -15,7 +15,10 @@ the template's surface around it:
   from the kit's settings.
 - ``self.metagraph``, ``self.wallet`` (hotkey only), ``self.subtensor``
   (reads only), ``self.uid``, ``self.block``, ``self.step``, ``sync()``
-  (:mod:`tensorwire.compat.neuron`).
+  (:mod:`tensorwire.compat.neuron`). Before the miner serves, the first
+  read fetches one metagraph snapshot from the chain (v10's
+  ``BaseNeuron.__init__`` connected, so subnet code checks registration
+  there); once it serves, reads come from the miner's own cache.
 - ``run()`` serves until SIGINT/SIGTERM; ``with Miner() as miner:`` serves in
   the background, as v10's did. Either way ``sync()`` runs once per
   ``neuron.epoch_length`` blocks, so a subnet's ``resync_metagraph()`` (or
@@ -29,6 +32,7 @@ miner base (TWM031). Tests pass a :class:`~tensorwire.Miner` built on
 from __future__ import annotations
 
 import argparse
+import asyncio
 import signal
 import threading
 import time
@@ -37,6 +41,7 @@ from typing import Any
 import structlog
 
 from tensorwire.auth.keys import load_hotkey
+from tensorwire.chain.gateway import BittensorGateway, MetagraphView
 from tensorwire.compat.axon import Axon
 from tensorwire.compat.config import config as v10_config
 from tensorwire.compat.config import fill_defaults, fill_v10_groups
@@ -76,6 +81,7 @@ class TemplateMinerAdapter(TemplateNeuronSurface):
         self._epochs: threading.Thread | None = None
         self._last_sync_block: int | None = None
         self._restore_sigterm = False
+        self._preflight: MetagraphView | None = None
 
     # ------------------------------------------------------------ config
 
@@ -115,8 +121,39 @@ class TemplateMinerAdapter(TemplateNeuronSurface):
 
     @property
     def metagraph(self) -> Metagraph:
-        """The miner's metagraph with v10 attribute names (once it serves)."""
-        return Metagraph.of_miner(self.axon.miner)
+        """The miner's metagraph with v10 attribute names."""
+        return Metagraph(_Snapshots(self))
+
+    def snapshot(self) -> MetagraphView:
+        """The miner's current snapshot, or the pre-flight one before it serves."""
+        lifecycle = self.axon.miner.lifecycle
+        if lifecycle.ready:
+            current = lifecycle.runtime.metagraph.snapshot()
+            if current is not None:
+                return current
+        if self._preflight is None:
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                self._preflight = asyncio.run(self._fetch_once())
+            else:
+                raise RuntimeError("no metagraph yet: the miner has not started")
+        return self._preflight
+
+    async def _fetch_once(self) -> MetagraphView:
+        """One metagraph read before the miner serves (as v10's ``__init__`` did)."""
+        miner = self.axon.miner
+        parts = miner.lifecycle.parts
+        s = self.settings
+        if parts.gateway is not None:  # tests: FakeChain, shared with the miner
+            await parts.gateway.connect()
+            return await parts.gateway.metagraph(s.netuid)
+        gateway = BittensorGateway.from_settings(s, self.wallet.hotkey)
+        await gateway.connect()
+        try:
+            return await gateway.metagraph(s.netuid)
+        finally:
+            await gateway.close()
 
     @property
     def wallet(self) -> HotkeyWallet:
@@ -139,9 +176,7 @@ class TemplateMinerAdapter(TemplateNeuronSurface):
     @property
     def subtensor(self) -> SubtensorView:
         """The chain reads template code makes, from the miner's metagraph."""
-        return SubtensorView(
-            self.settings, self.metagraph.snapshot, lambda: self.metagraph
-        )
+        return SubtensorView(self.settings, self.snapshot, lambda: self.metagraph)
 
     @property
     def uid(self) -> int:
@@ -249,3 +284,13 @@ class TemplateMinerAdapter(TemplateNeuronSurface):
         if self._restore_sigterm:
             signal.signal(signal.SIGTERM, signal.SIG_DFL)
             self._restore_sigterm = False
+
+
+class _Snapshots:
+    """The adapter's snapshots for ``compat.Metagraph`` (pre-flight, then live)."""
+
+    def __init__(self, adapter: TemplateMinerAdapter) -> None:
+        self._adapter = adapter
+
+    def snapshot(self) -> MetagraphView:
+        return self._adapter.snapshot()

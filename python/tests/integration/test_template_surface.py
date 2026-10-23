@@ -119,6 +119,26 @@ async def test_miner_adapter_syncs_once_per_epoch(
         assert (m.resyncs, m.step) == (1, 1)
 
 
+def test_miner_reads_the_chain_before_it_serves(
+    tw_miner_kwargs: dict[str, Any], fake_chain: FakeChain
+) -> None:
+    """v10's BaseNeuron.__init__ checked registration: one pre-flight read."""
+    m = TemplateMiner(miner=Miner(**tw_miner_kwargs))
+    assert m.subtensor.is_hotkey_registered(hotkey_ss58=BOB.ss58)
+    assert m.uid == m.metagraph.hotkeys.index(BOB.ss58)
+    block = m.block
+    fake_chain.advance(5)
+    assert m.block == block  # the pre-flight snapshot, until the miner serves
+
+
+async def test_in_async_code_the_miner_reads_after_it_starts(
+    tw_miner_kwargs: dict[str, Any],
+) -> None:
+    m = TemplateMiner(miner=Miner(**tw_miner_kwargs))
+    with pytest.raises(RuntimeError, match="has not started"):
+        _ = m.uid
+
+
 def _real_ports(kwargs: dict[str, Any]) -> tuple[dict[str, Any], int]:
     port = _free_port()
     settings = kwargs["settings"].model_copy(
