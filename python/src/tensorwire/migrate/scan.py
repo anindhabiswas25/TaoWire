@@ -408,6 +408,10 @@ class _Visitor(cst.CSTVisitor):
         full = self.full_name(node)
         if "weight_utils" in full:
             rule = "TWM012"
+        elif (
+            full.rsplit(".", 1)[-1] in ("add_args", "check_config") and rule != "TWM007"
+        ):
+            rule = "TWM006"  # bt.axon.add_args(parser), bt.wallet.add_args(...)
         elif rule == "TWM007" and full.rsplit(".", 1)[-1] not in LOG_LEVELS:
             rule = "TWM025"  # bt.logging.set_config(...), bt.logging(...), ...
         self.add(node, rule, full)

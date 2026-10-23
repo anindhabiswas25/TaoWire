@@ -316,6 +316,9 @@ class _Rewriter(cst.CSTTransformer):
             return updated_node
         if compat in ("Axon", "Dendrite") and self._is_class_base(original_node):
             return updated_node  # a custom Axon/Dendrite subclass: TWM019, by hand
+        parent = self.get_metadata(ParentNodeProvider, original_node, None)
+        if isinstance(parent, cst.Attribute) and parent.value is original_node:
+            return updated_node  # bt.axon.add_args(...): v10 config, TWM006
         self.need_compat.add(compat)
         rule = {"Synapse": "TWM001", "AxonInfo": "TWM021", "Axon": "TWM003"}.get(
             compat, "TWM004"

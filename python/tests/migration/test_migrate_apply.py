@@ -211,6 +211,9 @@ def test_manual_shapes_are_kept_and_marked() -> None:
         """
     )
     assert "class MyAxon(bt.axon):" in out
+    config = run("import bittensor as bt\nbt.axon.add_args(parser)\n")
+    assert "bt.axon.add_args(parser)" in config
+    assert f"{MARKER} TWM006 " in config
     assert f"{MARKER} TWM019 " in out
     assert "d = bt.dendrite()" in out
     assert f"{MARKER} TWM004 " in out  # could not be rewritten safely

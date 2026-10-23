@@ -1392,20 +1392,19 @@ index 633b177..2881a7b 100644
          """
          Deserialize the dummy output. This method retrieves the response from
 diff --git a/template/utils/config.py b/template/utils/config.py
-index 8648f1c..1ba8c0d 100644
+index 3bcde1e..1ba8c0d 100644
 --- a/template/utils/config.py
 +++ b/template/utils/config.py
-@@ -19,8 +19,7 @@
+@@ -19,7 +19,7 @@
  import os
  import subprocess
  import argparse
 -import bittensor as bt
--from tensorwire.compat import Axon
 +from types import SimpleNamespace
  from .logging import setup_events_logger
  
  
-@@ -42,16 +41,11 @@ def is_cuda_available():
+@@ -41,16 +41,11 @@ def is_cuda_available():
      return "cpu"
  
  
@@ -1425,7 +1424,7 @@ index 8648f1c..1ba8c0d 100644
              config.netuid,
              config.neuron.name,
          )
-@@ -63,11 +57,9 @@ def check_config(cls, config: "bt.Config"):
+@@ -62,11 +57,9 @@ def check_config(cls, config: "bt.Config"):
  
      if not config.neuron.dont_save_events:
          # Add custom event logger for the events.
@@ -1438,7 +1437,7 @@ index 8648f1c..1ba8c0d 100644
  
  
  def add_args(cls, parser):
-@@ -75,7 +67,12 @@ def add_args(cls, parser):
+@@ -74,7 +67,12 @@ def add_args(cls, parser):
      Adds relevant arguments to the parser for operation.
      """
  
@@ -1452,7 +1451,7 @@ index 8648f1c..1ba8c0d 100644
  
      parser.add_argument(
          "--neuron.device",
-@@ -144,7 +141,6 @@ def add_miner_args(cls, parser):
+@@ -143,7 +141,6 @@ def add_miner_args(cls, parser):
          default="miner",
      )
  
@@ -1460,17 +1459,18 @@ index 8648f1c..1ba8c0d 100644
      parser.add_argument(
          "--blacklist.force_validator_permit",
          action="store_true",
-@@ -256,13 +252,13 @@ def config(cls):
+@@ -255,14 +252,13 @@ def config(cls):
      Returns the configuration object specific to this miner or validator after adding relevant arguments.
      """
      parser = argparse.ArgumentParser()
--    # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
+-    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
 -    bt.wallet.add_args(parser)
--    # TW-MIGRATE: TWM008 the kit's chain gateway and MetagraphCache, or bt.Subtensor directly
+-    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
 -    bt.subtensor.add_args(parser)
 -    # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
 -    bt.logging.add_args(parser)
--    Axon.add_args(parser)
+-    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
+-    bt.axon.add_args(parser)
 -    cls.add_args(parser)
 -    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
 -    return bt.config(parser)
