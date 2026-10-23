@@ -23,7 +23,7 @@ a vulnerability, see `SECURITY.md` at the repository root.
 | 1 | Replay across processes or hosts | Redis replay store required when `TW_WORKERS > 1` or `TW_INSTANCE_COUNT > 1`; the miner refuses to start with a per-process store; a Redis outage fails closed (503 `tw.replay_store_unavailable`) | `tests/integration/test_miner_process.py`, `test_redis_nonce_store.py`, `tests/unit/test_nonce_store.py`; replay storm across 2 workers never served twice: `tests/abuse/test_abuse.py::test_replay_storm` |
 | 2 | Hashing a re-serialised body | Signatures are verified on the raw bytes before parsing; handlers only see verified bytes | integration test 1 (`test_miner_requests.py`), `tests/property/test_auth_properties.py` |
 | 3 | Decoded path used as the signed target | The raw request target (`raw_path` + query) is what is verified | `tests/unit/test_miner_app.py`, property tests; conformance P4 (Phase 5) |
-| 4 | Clock drift | NTP check at startup and on a schedule; `/readyz` reports `clock_skew`; `tensorwire doctor` checks it | `tests/unit/test_clock_guard.py`, `tests/integration/test_miner_lifecycle.py` |
+| 4 | Clock drift and clock steps | NTP check at startup and on a schedule; `/readyz` reports `clock_skew`; `tensorwire doctor` checks it. Replay stores keep at least `2 × (max_age + allowed_skew)`; the memory store forgets a pair only when both clocks agree; a backwards wall-clock step larger than the margin fails closed for `retention` seconds (503 `tw.replay_store_unavailable`, `/readyz` `clock_step`), D21 | `tests/unit/test_clock_guard.py`, `tests/integration/test_miner_lifecycle.py`; D21: `tests/unit/test_clock_step.py` (memory and Redis, injected clocks), `tests/integration/test_redis_nonce_store.py` (real Redis), `tests/integration/test_miner_pipeline.py::test_backwards_clock_step_fails_closed`, `tests/unit/test_config.py::test_nonce_retention_covers_twice_the_window` |
 | 5 | Unbound receiver | Miners always require `X-Bittensor-Receiver` to be their own hotkey; the signer refuses an empty receiver | `tests/unit/test_signer.py`, `tests/unit/test_verifier.py` |
 | 6 | Transport retries resend a signed request | The validator client uses `retries=0`; its own retries sign afresh with a new nonce | `tests/unit/test_validator_client.py::test_the_default_transport_never_retries`, `::test_each_attempt_is_signed_afresh_and_bound_to_the_miner` |
 | 7 | Authenticated is not authorised | Strict caller policy (registered + permit) by default; staged metagraph staleness (below) | `tests/unit/test_policy.py`, `tests/unit/test_chain_metagraph_cache.py`, `tests/integration/test_miner_requests.py` |
@@ -83,6 +83,38 @@ invalid requests/s from one IP cost the miner 1.45-1.50 cores with 2 workers,
 and a permitted validator kept p99 < 71 ms (`docs/benchmarks.md`). One worker
 cannot absorb that rate on the reference machine. Run several workers (with
 Redis) if you expect it.
+
+## Replay stores and clock steps (spec 8.4.3-8.4.4, D21)
+
+Freshness (4.3 step 3) is judged on the miner's wall clock, but replay
+stores forget a pair after `retention` on their own clock (the monotonic
+clock for the memory store, Redis' clock for `SET NX PX`). If NTP steps the
+miner's wall clock **back** by more than `retention − (max_age +
+allowed_skew)`, a nonce the store has already forgotten could look fresh
+again and be replayed. Three rules close this:
+
+- **2× retention.** Every store must keep pairs for at least
+  `2 × (TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S)` (24 s with the
+  defaults; the default `TW_NONCE_RETENTION_S=60` gives a 48 s margin). A
+  shorter setting refuses to start, for memory and Redis stores alike, and
+  for the v10 bridge.
+- **Memory store: both clocks.** A pair is forgotten only when `retention`
+  has passed on the monotonic clock **and** its nonce is older than
+  `retention` on the wall clock.
+- **Clock-step guard.** Every authenticated request (before the store is
+  consulted) and the 10-minute clock check compare `time.time() −
+  time.monotonic()` with the previous value. A drop larger than the margin
+  is a backwards step: the miner logs `clock_step_detected` at ERROR, sets
+  `tw_clock_step_seconds`, and for `retention` seconds answers every
+  authenticated request with **503 `tw.replay_store_unavailable`** and
+  `/readyz` with 503 `clock_step`. Then normal service resumes: by then
+  every nonce from before the step is outside the freshness window. This
+  covers the Redis store too, which cannot see a step on the miner. (The
+  alternative of `PXAT nonce + retention` was rejected: it ties expiry to
+  Redis' clock and does not cover a step on the miner.)
+
+Unauthenticated requests are refused by the earlier checks as before; the
+window does not open the miner to anything, it only refuses work.
 
 ## Metagraph staleness (spec 8.5.1)
 

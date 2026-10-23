@@ -37,7 +37,7 @@ import structlog
 from pydantic import BaseModel
 
 from tensorwire import crypto
-from tensorwire.auth.nonce_store import NonceStore
+from tensorwire.auth.nonce_store import NonceStore, check_retention_margin
 from tensorwire.auth.verifier import DEFAULT_VERIFY_THREADS, Caller
 from tensorwire.config import LEGACY_MAX_HORIZON_DAYS
 from tensorwire.errors import HandlerError, LegacyAuthFailed, LegacyDisabled, TWError
@@ -84,8 +84,8 @@ class LegacyServer:
 
     ``signer`` is the miner's hotkey: requests must be signed for it, and
     authenticated answers carry its v10 axon signature. ``store`` is the
-    miner's replay store; its retention must cover ``max_age +
-    allowed_skew``. ``until`` is ``TW_LEGACY_V10_UNTIL``: it must lie after
+    miner's replay store; its retention must be at least ``2 x (max_age +
+    allowed_skew)`` (D21). ``until`` is ``TW_LEGACY_V10_UNTIL``: it must lie after
     today and at most 180 days ahead (D4); from that day on every v10
     request gets 410 ``tw.legacy_disabled``.
     """
@@ -116,8 +116,7 @@ class LegacyServer:
         for name, value in (("max_age", max_age), ("allowed_skew", allowed_skew)):
             if not value > 0:
                 raise ValueError(f"{name} must be a positive number of seconds")
-        if store.retention < max_age + allowed_skew:
-            raise ValueError("nonce store retention too short")  # fact A3
+        check_retention_margin(store.retention, max_age, allowed_skew)  # A3, D21
         if not 0 < external_port <= 65535:
             raise ValueError("external_port must be 1-65535")
         self._signer = signer

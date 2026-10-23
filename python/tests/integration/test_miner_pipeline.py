@@ -331,6 +331,46 @@ async def test_replay_store_outage_is_503_and_counted(
         await client.aclose()
 
 
+async def test_backwards_clock_step_fails_closed(
+    tw_miner_kwargs: dict[str, Any], tw_clock: FakeClock
+) -> None:
+    """G4-3 (spec 8.4.3-8.4.4, D21): a step back cannot reopen a nonce."""
+    miner = Miner(**tw_miner_kwargs)
+
+    @miner.route(STRICT, request=Ping, response=Pong)
+    async def strict_route(req: Ping, ctx: RouteContext) -> Pong:
+        return pong(req, ctx)
+
+    async with miner.running() as app:
+        client = SignedClient(app, receiver_ss58=BOB.ss58, clock_ns=tw_clock.now_ns)
+        body = b'{"n": 1}'
+        headers = {
+            **client.sign("POST", STRICT, body),
+            "content-type": "application/json",
+        }
+        r = await client.send_raw("POST", STRICT, content=body, headers=headers)
+        assert r.status_code == 200
+        tw_clock.advance(61)  # past the 60 s retention on both clocks
+        tw_clock.step_wall(-55)  # NTP steps back: the nonce is 6 s old again
+        r = await client.send_raw("POST", STRICT, content=body, headers=headers)
+        assert (r.status_code, code_of(r)) == (503, "tw.replay_store_unavailable")
+        r = await client.post(STRICT, json={"n": 2})  # any authenticated request
+        assert (r.status_code, code_of(r)) == (503, "tw.replay_store_unavailable")
+        ready = await client.http.get("/readyz")
+        assert (ready.status_code, ready.json()["reasons"]) == (503, ["clock_step"])
+        sample = miner.metrics.registry.get_sample_value
+        assert sample("tw_clock_step_seconds") == pytest.approx(55)
+        assert sample("tw_nonce_store_errors_total", {"backend": "memory"}) == 2
+        tw_clock.advance(60)  # `retention` seconds later service resumes
+        r = await client.post(STRICT, json={"n": 3})
+        assert r.status_code == 200
+        r = await client.send_raw("POST", STRICT, content=body, headers=headers)
+        assert (r.status_code, code_of(r)) == (401, "tw.auth_stale")
+        ready = await client.http.get("/readyz")
+        assert ready.status_code == 200
+        await client.aclose()
+
+
 # ---------------------------------------------------------------- health & metrics
 
 

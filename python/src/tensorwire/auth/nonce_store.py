@@ -10,7 +10,11 @@ are synchronous.
   more than one worker or instance serves the same hotkey.
 
 Every store exposes ``retention`` so the verifier can refuse a store whose
-memory is shorter than the freshness window (fact A3).
+memory is too short: at least **twice** the freshness window
+``max_age + allowed_skew`` (fact A3, D21; :func:`check_retention_margin`).
+The difference is the margin a backwards wall-clock step may use before
+:class:`~tensorwire.auth.clock.ClockStepGuard` fails closed
+(:class:`StepGuardedNonceStore`).
 """
 
 from __future__ import annotations
@@ -27,7 +31,19 @@ from tensorwire.errors import ReplayStoreUnavailable
 if TYPE_CHECKING:
     import redis
 
-__all__ = ["MemoryNonceStore", "NonceStore", "RedisNonceStore"]
+    from tensorwire.auth.clock import ClockStepGuard
+
+__all__ = [
+    "RETENTION_FACTOR",
+    "MemoryNonceStore",
+    "NonceStore",
+    "RedisNonceStore",
+    "StepGuardedNonceStore",
+    "check_retention_margin",
+]
+
+#: A store must remember pairs for at least this many freshness windows (D21).
+RETENTION_FACTOR = 2
 
 
 @runtime_checkable
@@ -50,20 +66,51 @@ def _check_retention(retention: float) -> float:
     return float(retention)
 
 
+def check_retention_margin(
+    retention: float, max_age: float, allowed_skew: float
+) -> float:
+    """Return the store's margin, ``retention - (max_age + allowed_skew)``.
+
+    Raises ``ValueError`` when ``retention < 2 x (max_age + allowed_skew)``
+    (spec 8.4.3, D21): with less, a small backwards wall-clock step could
+    reopen a nonce the store has already forgotten.
+    """
+    window = max_age + allowed_skew
+    if not retention >= RETENTION_FACTOR * window:
+        raise ValueError(
+            "nonce store retention too short: it must be at least "
+            f"{RETENTION_FACTOR} x (max_age + allowed_skew) = "
+            f"{RETENTION_FACTOR * window:g} s"
+        )
+    return retention - window
+
+
 class MemoryNonceStore:
     """Single-process store with time-based expiry.
 
-    Same semantics as ``bittensor.http_auth.InMemoryNonceStore``, with an
-    injectable monotonic clock for tests. Memory is bounded by the number of
+    Same semantics as ``bittensor.http_auth.InMemoryNonceStore``, with
+    injectable clocks for tests. Memory is bounded by the number of
     *verified* requests per retention window, because the verifier only
     stores after the signature checks out.
+
+    A pair is forgotten only when ``retention`` has passed on the monotonic
+    ``clock`` **and** its nonce is more than ``retention`` old on the wall
+    clock (``wall_ns``), spec 8.4.3 / D21. Freshness is judged on the wall
+    clock, so a backwards step (NTP) could otherwise make a forgotten nonce
+    fresh again.
     """
 
     def __init__(
-        self, retention: float = 60.0, *, clock: Callable[[], float] = time.monotonic
+        self,
+        retention: float = 60.0,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        wall_ns: Callable[[], int] = time.time_ns,
     ) -> None:
         self._retention = _check_retention(retention)
+        self._retention_ns = int(self._retention * 1e9)
         self._clock = clock
+        self._wall_ns = wall_ns
         self._seen: set[tuple[str, int]] = set()
         self._expiry: deque[tuple[float, tuple[str, int]]] = deque()
         self._lock = threading.Lock()
@@ -79,7 +126,12 @@ class MemoryNonceStore:
             return len(self._seen)
 
     def _expire(self, now: float) -> None:
-        while self._expiry and self._expiry[0][0] <= now:
+        wall = self._wall_ns()
+        while (
+            self._expiry
+            and self._expiry[0][0] <= now
+            and wall - self._expiry[0][1][1] > self._retention_ns
+        ):
             self._seen.discard(self._expiry.popleft()[1])
 
     def check_and_store(self, hotkey_ss58: str, nonce_ns: int) -> bool:
@@ -153,3 +205,52 @@ class RedisNonceStore:
     def close(self) -> None:
         """Close the connection pool."""
         self._r.close()
+
+
+class StepGuardedNonceStore:
+    """A store that fails closed while a :class:`ClockStepGuard` window is open.
+
+    Every ``check_and_store`` first runs ``guard.check()``. During the
+    window after a backwards wall-clock step it raises
+    :class:`ReplayStoreUnavailable` (503) instead of consulting ``inner``:
+    the store may have forgotten nonces that look fresh again (D21). The
+    store is only consulted after the signature verifies, so only
+    authenticated requests see the 503. ``ping`` and ``close`` reach
+    ``inner`` when it has them.
+    """
+
+    def __init__(self, inner: NonceStore, guard: ClockStepGuard) -> None:
+        self._inner = inner
+        self._guard = guard
+
+    @property
+    def inner(self) -> NonceStore:
+        """The wrapped store."""
+        return self._inner
+
+    @property
+    def guard(self) -> ClockStepGuard:
+        """The clock-step guard."""
+        return self._guard
+
+    @property
+    def retention(self) -> float:
+        """Seconds an accepted pair is remembered (the inner store's)."""
+        return self._inner.retention
+
+    def check_and_store(self, hotkey_ss58: str, nonce_ns: int) -> bool:
+        """The inner store's answer; :class:`ReplayStoreUnavailable` in the window."""
+        if self._guard.check():
+            raise ReplayStoreUnavailable()
+        return self._inner.check_and_store(hotkey_ss58, nonce_ns)
+
+    def ping(self) -> bool:
+        """Readiness: the inner store's ``ping`` (True when it has none)."""
+        ping = getattr(self._inner, "ping", None)
+        return True if ping is None else bool(ping())
+
+    def close(self) -> None:
+        """Close the inner store when it can be closed."""
+        close = getattr(self._inner, "close", None)
+        if close is not None:
+            close()

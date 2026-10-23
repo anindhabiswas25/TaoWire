@@ -18,6 +18,7 @@ miner port. Label values never contain hotkeys or IP addresses.
 | `tw_metagraph_refresh_failures_total` | counter | | Failed refreshes |
 | `tw_metagraph_degraded` | gauge | | 0 fresh, 1 degraded, 2 known callers only |
 | `tw_clock_offset_seconds` | gauge | | NTP offset (NaN when unknown) |
+| `tw_clock_step_seconds` | gauge | | Size of the last backwards wall-clock step that opened the fail-closed window (D21); 0 when none since start |
 | `tw_nonce_store_errors_total` | counter | `backend` | Replay-store outages (503 `tw.replay_store_unavailable`) |
 | `tw_unsafe_settings_active` | gauge | `name` | 1 per active setting that weakens a default |
 | `tw_legacy_v10_requests_total` | counter | `direction`, `result` | Legacy v10 bridge traffic |
@@ -32,7 +33,8 @@ The legacy and validator metrics are registered by every process and filled
 by the components that use them.
 
 Suggested alerts: `tw_metagraph_degraded >= 1` for 15 minutes,
-`tw_clock_offset_seconds` above 0.5 s, any increase of
+`tw_clock_offset_seconds` above 0.5 s, `tw_clock_step_seconds` above 0 (or
+the `clock_step_detected` log event), any increase of
 `tw_nonce_store_errors_total`, `tw_unsafe_settings_active` present in
 production.
 

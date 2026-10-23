@@ -38,7 +38,7 @@ import anyio
 import anyio.to_thread
 from bittensor import http_auth
 
-from tensorwire.auth.nonce_store import NonceStore
+from tensorwire.auth.nonce_store import NonceStore, check_retention_margin
 from tensorwire.crypto import public_key_from_ss58, scheme_name
 from tensorwire.errors import AuthFailed
 
@@ -121,8 +121,9 @@ class RequestVerifier:
     """Verifies btauth/1 requests addressed to ``self_hotkey``.
 
     ``store`` must remember accepted nonces for at least
-    ``max_age + allowed_skew`` seconds (fact A3); a shorter store is refused
-    here, at startup. ``now_ns`` replaces the wall clock (tests pass
+    ``2 x (max_age + allowed_skew)`` seconds (fact A3, spec 8.4.3, D21); a
+    shorter store is refused here, at startup, whatever its kind. ``now_ns``
+    replaces the wall clock (tests pass
     :class:`tensorwire.testing.clock.FakeClock`). ``limiter`` bounds the
     threads doing signature checks.
     """
@@ -141,8 +142,7 @@ class RequestVerifier:
         for name, value in (("max_age", max_age), ("allowed_skew", allowed_skew)):
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f"{name} must be a positive number of seconds")
-        if getattr(store, "retention", 0) < max_age + allowed_skew:
-            raise ValueError("nonce store retention too short")  # fact A3
+        check_retention_margin(getattr(store, "retention", 0), max_age, allowed_skew)
         self._self = self_hotkey
         self._store = store
         self._max_age = float(max_age)

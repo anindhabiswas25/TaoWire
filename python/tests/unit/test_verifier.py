@@ -7,10 +7,11 @@ import time
 from typing import Any
 
 import anyio
+import fakeredis
 import pytest
 from bittensor import http_auth, sp_core
 
-from tensorwire.auth.nonce_store import MemoryNonceStore
+from tensorwire.auth.nonce_store import MemoryNonceStore, RedisNonceStore
 from tensorwire.auth.verifier import RequestVerifier
 from tensorwire.errors import AuthFailed, ReplayStoreUnavailable
 from tensorwire.testing.clock import FakeClock
@@ -279,10 +280,18 @@ def test_non_canonical_nonce_is_malformed(
 # ---------------------------------------------------------------- construction
 
 
-def test_retention_shorter_than_window_is_refused() -> None:
+def test_retention_shorter_than_twice_the_window_is_refused() -> None:
+    # spec 8.4.3, D21: retention >= 2 x (max_age + allowed_skew), any store.
     with pytest.raises(ValueError, match="retention too short"):
-        RequestVerifier(BOB.ss58, MemoryNonceStore(11.9), max_age=10, allowed_skew=2)
-    RequestVerifier(BOB.ss58, MemoryNonceStore(12), max_age=10, allowed_skew=2)
+        RequestVerifier(BOB.ss58, MemoryNonceStore(23.9), max_age=10, allowed_skew=2)
+    with pytest.raises(ValueError, match="retention too short"):
+        RequestVerifier(BOB.ss58, MemoryNonceStore(12), max_age=10, allowed_skew=2)
+    redis_store = RedisNonceStore(
+        "redis://unused", retention=23.9, client=fakeredis.FakeRedis()
+    )
+    with pytest.raises(ValueError, match="retention too short"):
+        RequestVerifier(BOB.ss58, redis_store, max_age=10, allowed_skew=2)
+    RequestVerifier(BOB.ss58, MemoryNonceStore(24), max_age=10, allowed_skew=2)
 
 
 def test_store_without_retention_is_refused() -> None:
