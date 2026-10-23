@@ -30,6 +30,7 @@ __all__ = [
     "crypto_type_from_scheme",
     "is_bytes_wrapped_signature",
     "is_weak_public_key",
+    "keypair_from_seed",
     "keypair_from_uri",
     "public_key_from_ss58",
     "scheme_name",
@@ -244,6 +245,17 @@ def keypair_from_uri(uri: str, *, crypto_type: int = CRYPTO_SR25519) -> Keypair:
     """
     scheme_name(crypto_type)
     return Keypair.create_from_uri(uri, crypto_type=crypto_type)
+
+
+def keypair_from_seed(seed: bytes, *, crypto_type: int = CRYPTO_SR25519) -> Keypair:
+    """A keypair from a 32-byte secret seed (sr25519 mini-secret or ed25519 seed).
+
+    For the public dev keys pinned in ``conformance/vectors`` (tests only).
+    """
+    scheme_name(crypto_type)
+    if len(seed) != 32:
+        raise ValueError("a secret seed is 32 bytes")
+    return Keypair.create_from_seed(seed, crypto_type=crypto_type)
 
 
 # ed25519 curve constants (RFC 8032 5.1): -x^2 + y^2 = 1 + d x^2 y^2 mod p.

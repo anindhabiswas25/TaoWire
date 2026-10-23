@@ -37,6 +37,9 @@ node_modules/
 
 # Rust
 target/
+rust/fuzz/corpus/
+rust/fuzz/artifacts/
+rust/fuzz/coverage/
 
 # Editors / OS
 .idea/

@@ -1,0 +1,476 @@
+{
+ "schema_version": 1,
+ "description": "btauth/1 sr25519 requests pre-signed by the Python reference (schnorrkel, context b'substrate'). Signatures are randomized: every verifier must accept each one, and its own signatures must be accepted by the Python verifier (live interop, spec 13.5).",
+ "keys": {
+  "alice_sr25519": {
+   "uri": "//Alice",
+   "scheme": "sr25519",
+   "secret_seed_hex": "e5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a",
+   "public_key_hex": "d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+   "ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+  },
+  "bob_sr25519": {
+   "uri": "//Bob",
+   "scheme": "sr25519",
+   "secret_seed_hex": "398f0c28f98885e046333d4a41c19cee4c37368a9832c6502f6cfd182e2aef89",
+   "public_key_hex": "8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48",
+   "ss58": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+  },
+  "alice_ed25519": {
+   "uri": "//Alice",
+   "scheme": "ed25519",
+   "secret_seed_hex": "abf8e5bdbe30c65656c0a3cbd181ff8a56294a69dfedd27982aace4a76909115",
+   "public_key_hex": "88dc3417d5058ec4b4503e0c12ea1a0a89be200fe98922423d4334014fa6b0ee",
+   "ss58": "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+  },
+  "bob_ed25519": {
+   "uri": "//Bob",
+   "scheme": "ed25519",
+   "secret_seed_hex": "3b7b60af2abcd57ba401ab398f84f4ca54bd6b2140d2503fbcf3286535fe3ff1",
+   "public_key_hex": "d17c2d7823ebf260fd138f2d7e27d114c0145d968b5ff5006125f2414fadae69",
+   "ss58": "5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E"
+  }
+ },
+ "vectors": [
+  {
+   "id": "R1",
+   "description": "Appendix C golden request, //Alice -> //Bob",
+   "kind": "verify_sr25519",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x6a1ffc1b5e752a575784953b790050207321cfc41e8e5a93ab4d71a83c775527e2056bf0af3b0eb92bba8b1b2fd4223f8f114fba63ead0d543cd46080507ac89"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "R2",
+   "description": "//Bob -> //Alice, empty-body GET",
+   "kind": "verify_sr25519",
+   "inputs": {
+    "self_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "GET",
+    "target": "/",
+    "body_base64": "",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x84271f13d7fcd0288d2350725a6a96af4603d1e5110dc99060f47d1b2d11aa7d27265461ea67dc6f1dc34c837e3d6851d9dc6f6a629705d4aefa1205b6a11088"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nGET\n/\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n1752076800000000000\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   }
+  },
+  {
+   "id": "R3",
+   "description": "//Alice, unicode body",
+   "kind": "verify_sr25519",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJ0IjoiR3LDvMOfZSDinJMifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0xf66c9d0e836ea897c11a9fa98a16610c8df298f39722faba0dee6feca34c5a3e11fa9a0b787d732f25215c12e653c335c32d4a7bb63d30c93e5d16c8c775f288"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\nae5d44dfd5370ca937fa5091194a985d5492ed510b86266019108e9e49910b7f\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "R4",
+   "description": "//Bob -> //Alice, percent-encoded target",
+   "kind": "verify_sr25519",
+   "inputs": {
+    "self_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/a%20b?x=%2F",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0xb4368174975c4cc1d152f18e7fbf8d72debbed54c73002f10bb257bf17afdb275591211145477d549f991330e5074621f7b5bbcc729131daf830c7822e8ed384"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/a%20b?x=%2F\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   }
+  },
+  {
+   "id": "R5",
+   "description": "//Alice, empty query kept",
+   "kind": "verify_sr25519",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/p?",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x929d23312278add5587fb9509c9734a755cc3323d7d505af2ada15fdc42bc11bd15e2459fadf7964785f8e298b9f6f69e3467a640506741144712468c204f480"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/p?\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "R6",
+   "description": "//Bob -> //Alice, 4 KiB body",
+   "kind": "verify_sr25519",
+   "inputs": {
+    "self_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eA==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0xeaafb7474dba5087059ddab068eb917e0cbeb7f128e504e564466b15bc915f56d85d23fa5e0f912e527a51e14f8906dac20c66b02eca439aa3714707f4fbf884"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\na2e659dacb4691e887ac0139f8893d04764ee197d70fb73d3190d56113d18e3e\n1752076800000000000\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   }
+  },
+  {
+   "id": "R7",
+   "description": "//Alice, DELETE",
+   "kind": "verify_sr25519",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "DELETE",
+    "target": "/item/1",
+    "body_base64": "",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x3249b670fc8c9a947cbd8ec947b3310c0ebc102c4b646cfb11712a6919aa54066f958632eb71edad07fb67f07b3ebed27e7277034083ce7b68762f24a481da88"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nDELETE\n/item/1\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "R8",
+   "description": "//Bob -> //Alice, nonce = now - 9 s",
+   "kind": "verify_sr25519",
+   "inputs": {
+    "self_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076791000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x2afca86cc85c5780ad7c0db8796ae9c873ba2164e5d428e278dca494748b0b4a98f74bd90c55206f68fd98337d8cdbe1180fc94fbd376ea39281d32b9c102f8f"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076791000000000\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   }
+  },
+  {
+   "id": "R9",
+   "description": "//Alice, nonce = now + 1 s",
+   "kind": "verify_sr25519",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076801000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x8c44567edd20da5305a144a6ed86da6de5491e81a04139bdaf9ff8348e8785093c48986d7317495f31e8ea9e6d936951b47e7d8787772cc2bdb1da4208950b89"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076801000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "R10",
+   "description": "//Bob -> //Alice, binary body",
+   "kind": "verify_sr25519",
+   "inputs": {
+    "self_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "//79/Pv6+fj39vX08/Lx8O/u7ezr6uno5+bl5OPi4eDf3t3c29rZ2NfW1dTT0tHQz87NzMvKycjHxsXEw8LBwL++vby7urm4t7a1tLOysbCvrq2sq6qpqKempaSjoqGgn56dnJuamZiXlpWUk5KRkI+OjYyLiomIh4aFhIOCgYB/fn18e3p5eHd2dXRzcnFwb25tbGtqaWhnZmVkY2JhYF9eXVxbWllYV1ZVVFNSUVBPTk1MS0pJSEdGRURDQkFAPz49PDs6OTg3NjU0MzIxMC8uLSwrKikoJyYlJCMiISAfHh0cGxoZGBcWFRQTEhEQDw4NDAsKCQgHBgUEAwIBAA==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x243ee99c00876a2539099fa70e6d4e0d626520ae405ae0d6dfb42749bef5d27dbeb3d9d1f8bb9b889c06c17be1d10bfd9aa803bdcecbf4595b9f94acceccd48d"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\ncd6816b77f68d70001fc3eaa4d42bdd67cb5973b3151cc5292ecc02a3daac6ab\n1752076800000000000\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   }
+  }
+ ]
+}

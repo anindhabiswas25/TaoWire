@@ -1,0 +1,56 @@
+[package]
+name = "tensorwire-btauth"
+version = "0.1.0-dev"
+edition = "2021"
+rust-version = "1.80"
+license = "Apache-2.0"
+description = "btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets (TensorWire)"
+readme = "README.md"
+keywords = ["bittensor", "sr25519", "ed25519", "authentication"]
+categories = ["authentication", "cryptography"]
+publish = false # not published until the PM's go-ahead (spec 18.4)
+
+[features]
+default = []
+axum = ["dep:axum", "dep:tower", "dep:http-body-util"]
+client = ["dep:reqwest"]
+redis = ["dep:redis"]
+
+[dependencies]
+schnorrkel = { version = "0.11.5", default-features = false, features = ["std", "getrandom"] }
+ed25519-dalek = "2.2"
+sha2 = "0.10"
+blake2 = "0.10"
+bs58 = "0.5"
+hex = "0.4"
+thiserror = "2"
+serde_json = "1"
+axum = { version = "0.8", optional = true, default-features = false, features = ["tokio", "http1", "original-uri"] }
+tower = { version = "0.5", optional = true, default-features = false }
+http-body-util = { version = "0.1", optional = true }
+reqwest = { version = "0.12", optional = true, default-features = false, features = ["rustls-tls"] }
+redis = { version = "0.32", optional = true, default-features = false, features = ["tokio-comp", "connection-manager"] }
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "io-util"] }
+tower = { version = "0.5", features = ["util"] }
+futures-util = { version = "0.3", default-features = false }
+axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "original-uri", "json"] }
+
+[[test]]
+name = "conformance"
+path = "tests/conformance.rs"
+
+[[example]]
+name = "interop"
+required-features = ["axum", "client"]
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+required-features = ["axum", "client", "redis"]
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"

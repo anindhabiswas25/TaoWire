@@ -1,0 +1,336 @@
+{
+ "schema_version": 1,
+ "description": "btauth/1 ed25519 request signatures (RFC 8032, deterministic). Sign inputs.signed_payload_utf8 with keys[inputs.key] and compare with expected.signature; the headers must also verify.",
+ "keys": {
+  "alice_sr25519": {
+   "uri": "//Alice",
+   "scheme": "sr25519",
+   "secret_seed_hex": "e5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a",
+   "public_key_hex": "d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+   "ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+  },
+  "bob_sr25519": {
+   "uri": "//Bob",
+   "scheme": "sr25519",
+   "secret_seed_hex": "398f0c28f98885e046333d4a41c19cee4c37368a9832c6502f6cfd182e2aef89",
+   "public_key_hex": "8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48",
+   "ss58": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+  },
+  "alice_ed25519": {
+   "uri": "//Alice",
+   "scheme": "ed25519",
+   "secret_seed_hex": "abf8e5bdbe30c65656c0a3cbd181ff8a56294a69dfedd27982aace4a76909115",
+   "public_key_hex": "88dc3417d5058ec4b4503e0c12ea1a0a89be200fe98922423d4334014fa6b0ee",
+   "ss58": "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+  },
+  "bob_ed25519": {
+   "uri": "//Bob",
+   "scheme": "ed25519",
+   "secret_seed_hex": "3b7b60af2abcd57ba401ab398f84f4ca54bd6b2140d2503fbcf3286535fe3ff1",
+   "public_key_hex": "d17c2d7823ebf260fd138f2d7e27d114c0145d968b5ff5006125f2414fadae69",
+   "ss58": "5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E"
+  }
+ },
+ "vectors": [
+  {
+   "id": "E1",
+   "description": "Appendix C golden request, ed25519 //Alice -> //Bob",
+   "kind": "sign_ed25519",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x1a6b631988bf1f7ea093ab9d5acf61f05c316d0b0e428b24b487b75a5f6ee0e1a56a26918fdf871b6cf09437e6588023a4ce423cf622621b2a7feee17612f704"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "key": "alice_ed25519"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu",
+    "signature": "0x1a6b631988bf1f7ea093ab9d5acf61f05c316d0b0e428b24b487b75a5f6ee0e1a56a26918fdf871b6cf09437e6588023a4ce423cf622621b2a7feee17612f704"
+   }
+  },
+  {
+   "id": "E2",
+   "description": "//Bob signs an empty-body GET with a query",
+   "kind": "sign_ed25519",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "GET",
+    "target": "/health?full=1",
+    "body_base64": "",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x057387037ecdc00cc9aee7a3917f893a183365be4d205dd0a56b3d6f21b18054f8b866e351b14731e18a04d29af73e16ecd66d5a87fe7a89c9245d3bd5d6520c"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nGET\n/health?full=1\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n1752076800000000000\n5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "key": "bob_ed25519"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E",
+    "signature": "0x057387037ecdc00cc9aee7a3917f893a183365be4d205dd0a56b3d6f21b18054f8b866e351b14731e18a04d29af73e16ecd66d5a87fe7a89c9245d3bd5d6520c"
+   }
+  },
+  {
+   "id": "E3",
+   "description": "//Alice, unicode body",
+   "kind": "sign_ed25519",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/q",
+    "body_base64": "eyJxIjoibmHDr3ZlIGNhZsOpIOKYlSJ9",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0xdb9629ba9b2e9cdd801c3e626c03e699ca2df7098ee922fef187061b12a5729c8a23db2ec5add999678820d9b99ef0bf4e25a41175480315f305428594c8a20e"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/q\na236add0a13abda5a6e0c3983a2254521e9d3010ca3d590b7f182ca1d2c94c4c\n1752076800000000000\n5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "key": "alice_ed25519"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu",
+    "signature": "0xdb9629ba9b2e9cdd801c3e626c03e699ca2df7098ee922fef187061b12a5729c8a23db2ec5add999678820d9b99ef0bf4e25a41175480315f305428594c8a20e"
+   }
+  },
+  {
+   "id": "E4",
+   "description": "//Bob, binary body (all 256 byte values)",
+   "kind": "sign_ed25519",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/upload",
+    "body_base64": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn+AgYKDhIWGh4iJiouMjY6PkJGSk5SVlpeYmZqbnJ2en6ChoqOkpaanqKmqq6ytrq+wsbKztLW2t7i5uru8vb6/wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t/g4eLj5OXm5+jp6uvs7e7v8PHy8/T19vf4+fr7/P3+/w==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0xb977a9aabe8e6bd224f1405502564393e902934c30c3c7e4d27bedc0d0475d7a837cb08a0da8272266a38524296fd20ae284c46d28548abaa2d9e05727eacd0b"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/upload\n40aff2e9d2d8922e47afd4648e6967497158785fbd1da870e7110266bf944880\n1752076800000000000\n5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "key": "bob_ed25519"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E",
+    "signature": "0xb977a9aabe8e6bd224f1405502564393e902934c30c3c7e4d27bedc0d0475d7a837cb08a0da8272266a38524296fd20ae284c46d28548abaa2d9e05727eacd0b"
+   }
+  },
+  {
+   "id": "E5",
+   "description": "//Alice, percent-encoded target",
+   "kind": "sign_ed25519",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/a%20b/c?x=%2F&y=1",
+    "body_base64": "e30=",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0xa05b305273b547a9e54f9b94bd34e7ff8eceb520b65ad645034d3b33966c65af303d94ffa6239df27c00f8e1ec9da6e1ae5a0357d92991970cd1d7fc1eb37b0a"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/a%20b/c?x=%2F&y=1\n44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a\n1752076800000000000\n5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "key": "alice_ed25519"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu",
+    "signature": "0xa05b305273b547a9e54f9b94bd34e7ff8eceb520b65ad645034d3b33966c65af303d94ffa6239df27c00f8e1ec9da6e1ae5a0357d92991970cd1d7fc1eb37b0a"
+   }
+  },
+  {
+   "id": "E6",
+   "description": "//Bob -> //Alice (receiver //Alice sr25519), PUT",
+   "kind": "sign_ed25519",
+   "inputs": {
+    "self_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "PUT",
+    "target": "/item/7",
+    "body_base64": "eyJ2IjoxfQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x3d8859b56e3238349ed8838cd68760ced9aa045bc47bbdb53cb0e8cc935e72b2fa0ba2e864c461ef3f5b188507bdfd4e801ce7a4048254b5662285bbb4e86801"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPUT\n/item/7\nafbf9d0f3560b0fd7795e81c42a0a79ee6b6fc67e064f77826aee642cad28d91\n1752076800000000000\n5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "key": "bob_ed25519"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E",
+    "signature": "0x3d8859b56e3238349ed8838cd68760ced9aa045bc47bbdb53cb0e8cc935e72b2fa0ba2e864c461ef3f5b188507bdfd4e801ce7a4048254b5662285bbb4e86801"
+   }
+  }
+ ]
+}
