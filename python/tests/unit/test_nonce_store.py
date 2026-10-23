@@ -182,3 +182,19 @@ def test_redis_extra_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "redis", None)
     with pytest.raises(RuntimeError, match=r"tensorwire\[redis\]"):
         RedisNonceStore("redis://x")
+
+
+def test_memory_store_survives_a_wall_clock_step_back() -> None:
+    """A backwards wall-clock step must not make a forgotten nonce fresh again.
+
+    Freshness is judged on the wall clock; the pair stays until its nonce is
+    older than the retention there too (Go/Rust MemoryStore do the same).
+    """
+    mono, wall = [0.0], [1_000 * 10**9]
+    nonce = wall[0]
+    store = MemoryNonceStore(12, clock=lambda: mono[0], wall_ns=lambda: wall[0])
+    assert store.check_and_store("hk", nonce)
+    mono[0], wall[0] = 20.0, nonce + 5 * 10**9  # 20 s passed, wall stepped back 15 s
+    assert not store.check_and_store("hk", nonce)
+    mono[0], wall[0] = 21.0, nonce + 13 * 10**9
+    assert store.check_and_store("hk", nonce)

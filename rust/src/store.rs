@@ -4,6 +4,8 @@ use std::pin::Pin;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::nonce::wall_clock_ns;
+
 /// The replay store could not be reached; the request is refused with
 /// `tw.replay_store_unavailable` (fail closed).
 #[derive(Debug, Clone, thiserror::Error)]
@@ -29,6 +31,11 @@ struct Seen {
 
 /// A [`NonceStore`] for one process. Several processes or hosts serving one
 /// hotkey need a shared store (`redis_store`).
+///
+/// A pair is forgotten only when the retention has passed on the monotonic
+/// clock **and** its nonce is more than the retention old on the wall clock:
+/// freshness is judged on the wall clock, so a backwards step (NTP) could
+/// otherwise make a forgotten nonce fresh again and let a replay through.
 pub struct MemoryStore {
     retention: Duration,
     seen: Mutex<Seen>,
@@ -46,10 +53,16 @@ impl MemoryStore {
         Self { retention, seen: Mutex::new(Seen::default()) }
     }
 
-    /// Records the pair at `now`; `false` if it was already recorded.
-    pub fn check_and_store_at(&self, hotkey: &str, nonce: u64, now: Instant) -> bool {
+    /// Records the pair at monotonic `now` and wall-clock `wall_ns`; `false`
+    /// if it was already recorded.
+    pub fn check_and_store_at(&self, hotkey: &str, nonce: u64, now: Instant, wall_ns: u64) -> bool {
+        let retention = u64::try_from(self.retention.as_nanos()).unwrap_or(u64::MAX);
         let mut seen = self.seen.lock().unwrap_or_else(|e| e.into_inner());
-        while seen.queue.front().is_some_and(|(at, _)| *at <= now) {
+        while seen
+            .queue
+            .front()
+            .is_some_and(|(at, (_, n))| *at <= now && wall_ns.saturating_sub(*n) > retention)
+        {
             if let Some((_, key)) = seen.queue.pop_front() {
                 seen.set.remove(&key);
             }
@@ -76,7 +89,7 @@ impl MemoryStore {
 
 impl NonceStore for MemoryStore {
     fn check_and_store<'a>(&'a self, hotkey: &'a str, nonce: u64) -> StoreFuture<'a> {
-        let fresh = self.check_and_store_at(hotkey, nonce, Instant::now());
+        let fresh = self.check_and_store_at(hotkey, nonce, Instant::now(), wall_clock_ns());
         Box::pin(std::future::ready(Ok(fresh)))
     }
 

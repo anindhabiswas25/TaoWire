@@ -123,7 +123,7 @@ func TestNonceSourceIsStrictlyIncreasing(t *testing.T) {
 }
 
 func TestMemoryStoreExpires(t *testing.T) {
-	now := time.Unix(0, 0)
+	now := time.Unix(0, 1)
 	s := NewMemoryStore(10*time.Second, func() time.Time { return now })
 	ctx := context.Background()
 	if ok, _ := s.CheckAndStore(ctx, "a", 1); !ok {
@@ -490,5 +490,29 @@ func TestHugeSenderIsRefusedBeforeDecoding(t *testing.T) {
 	}
 	if d := time.Since(start); d > 100*time.Millisecond {
 		t.Fatalf("took %v", d)
+	}
+}
+
+// A backwards wall-clock step must not make a forgotten nonce fresh again:
+// the pair stays until its nonce is stale on the wall clock too.
+func TestMemoryStoreSurvivesWallClockStepBack(t *testing.T) {
+	start := time.Unix(1000, 0)
+	now := start
+	s := NewMemoryStore(12*time.Second, func() time.Time { return now })
+	nonce := uint64(start.UnixNano())
+	ctx := context.Background()
+	if ok, _ := s.CheckAndStore(ctx, "a", nonce); !ok {
+		t.Fatal("first")
+	}
+	// 20 s later on the monotonic clock, but the wall clock was stepped back
+	// 15 s: the nonce is only 5 s old, so it must still be remembered.
+	now = start.Add(5 * time.Second)
+	s.queue[0].at = start.Add(12 * time.Second).Add(-20 * time.Second)
+	if ok, _ := s.CheckAndStore(ctx, "a", nonce); ok {
+		t.Fatal("replay accepted after a wall-clock step back")
+	}
+	now = start.Add(13 * time.Second)
+	if ok, _ := s.CheckAndStore(ctx, "a", nonce); !ok {
+		t.Fatal("stale on both clocks: forgotten")
 	}
 }

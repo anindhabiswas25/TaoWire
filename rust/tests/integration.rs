@@ -98,16 +98,29 @@ fn nonces_strictly_increase_across_threads() {
 #[test]
 fn memory_store_expires() {
     let s = MemoryStore::new(Duration::from_secs(10));
-    let t0 = Instant::now();
+    let (t0, w0) = (Instant::now(), 1u64);
+    let sec = 1_000_000_000u64;
     assert!(s.is_empty());
-    assert!(s.check_and_store_at("a", 1, t0));
-    assert!(!s.check_and_store_at("a", 1, t0));
-    assert!(s.check_and_store_at("b", 1, t0));
+    assert!(s.check_and_store_at("a", 1, t0, w0));
+    assert!(!s.check_and_store_at("a", 1, t0, w0));
+    assert!(s.check_and_store_at("b", 1, t0, w0));
     assert_eq!(s.len(), 2);
-    assert!(s.check_and_store_at("a", 1, t0 + Duration::from_secs(11)));
+    assert!(s.check_and_store_at("a", 1, t0 + Duration::from_secs(11), w0 + 11 * sec));
     assert_eq!(s.len(), 1);
     assert_eq!(NonceStore::retention(&s), Duration::from_secs(10));
     assert!(format!("{s:?}").contains("10s"));
+}
+
+/// A backwards wall-clock step must not make a forgotten nonce fresh again.
+#[test]
+fn memory_store_survives_a_wall_clock_step_back() {
+    let s = MemoryStore::new(Duration::from_secs(12));
+    let (t0, sec) = (Instant::now(), 1_000_000_000u64);
+    let nonce = 1_000 * sec;
+    assert!(s.check_and_store_at("a", nonce, t0, nonce));
+    // 20 s later on the monotonic clock, wall clock stepped back 15 s: 5 s old.
+    assert!(!s.check_and_store_at("a", nonce, t0 + Duration::from_secs(20), nonce + 5 * sec));
+    assert!(s.check_and_store_at("a", nonce, t0 + Duration::from_secs(21), nonce + 13 * sec));
 }
 
 #[test]

@@ -27,6 +27,11 @@ type expiry struct {
 
 // MemoryStore is a NonceStore for one process. Several processes or hosts
 // serving one hotkey need a shared store (redisstore).
+//
+// A pair is forgotten only when Retention has passed on the monotonic clock
+// AND its nonce is more than Retention old on the wall clock. Freshness is
+// judged on the wall clock, so a backwards wall-clock step (NTP) could
+// otherwise make a forgotten nonce fresh again and let a replay through.
 type MemoryStore struct {
 	retention time.Duration
 	now       func() time.Time
@@ -56,8 +61,9 @@ func (s *MemoryStore) Len() int {
 }
 
 func (s *MemoryStore) expire(now time.Time) {
+	wall := now.UnixNano()
 	i := 0
-	for i < len(s.queue) && !s.queue[i].at.After(now) {
+	for i < len(s.queue) && !s.queue[i].at.After(now) && wall-int64(s.queue[i].key.nonce) > int64(s.retention) {
 		delete(s.seen, s.queue[i].key)
 		i++
 	}

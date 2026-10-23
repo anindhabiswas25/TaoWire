@@ -53,17 +53,28 @@ def _check_retention(retention: float) -> float:
 class MemoryNonceStore:
     """Single-process store with time-based expiry.
 
-    Same semantics as ``bittensor.http_auth.InMemoryNonceStore``, with an
-    injectable monotonic clock for tests. Memory is bounded by the number of
+    Same semantics as ``bittensor.http_auth.InMemoryNonceStore``, with
+    injectable clocks for tests. Memory is bounded by the number of
     *verified* requests per retention window, because the verifier only
     stores after the signature checks out.
+
+    A pair is forgotten only when ``retention`` has passed on the monotonic
+    ``clock`` **and** its nonce is more than ``retention`` old on the wall
+    clock (``wall_ns``). Freshness is judged on the wall clock, so a backwards
+    step (NTP) could otherwise make a forgotten nonce fresh again.
     """
 
     def __init__(
-        self, retention: float = 60.0, *, clock: Callable[[], float] = time.monotonic
+        self,
+        retention: float = 60.0,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        wall_ns: Callable[[], int] = time.time_ns,
     ) -> None:
         self._retention = _check_retention(retention)
+        self._retention_ns = int(self._retention * 1e9)
         self._clock = clock
+        self._wall_ns = wall_ns
         self._seen: set[tuple[str, int]] = set()
         self._expiry: deque[tuple[float, tuple[str, int]]] = deque()
         self._lock = threading.Lock()
@@ -79,7 +90,12 @@ class MemoryNonceStore:
             return len(self._seen)
 
     def _expire(self, now: float) -> None:
-        while self._expiry and self._expiry[0][0] <= now:
+        wall = self._wall_ns()
+        while (
+            self._expiry
+            and self._expiry[0][0] <= now
+            and wall - self._expiry[0][1][1] > self._retention_ns
+        ):
             self._seen.discard(self._expiry.popleft()[1])
 
     def check_and_store(self, hotkey_ss58: str, nonce_ns: int) -> bool:
