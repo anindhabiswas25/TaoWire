@@ -5,13 +5,14 @@ Python core · btauth/1 native · v10 → v11 migration (compat layer, two-way b
 
 | Field | Value |
 |---|---|
-| Document version | 1.6 |
+| Document version | 1.7 |
 | Changes in 1.1 | Migration of existing v10 subnets is a first-class goal: new Section 10b, two-way legacy bridge (8.11), `tensorwire migrate` CLI, migration rollout runbook, success criterion S6, phase plan updated |
 | Changes in 1.2 | SDK version range instead of an exact pin (3, 18); staged metagraph staleness instead of a 15-minute hard stop (8.5.1); product metrics (1.6); relationship with the core team (1.7); sustainability and maintenance (Section 20) |
 | Changes in 1.3 | Phase 0–1 findings: protocol tag is a u8, default 87 (D1); stake units and `total_stake_tao` (D2, 2, 8.3); v10 marker (D3, 8.11.3); write retries and `set_weights` meaning (8.3); stricter shape rules (4.3); localnet facts (14.2, 14.5); 8.11.1 rewritten from captured vectors (by Engineer B) |
 | Changes in 1.4 | Phase 2 findings: component dependencies without a cycle (5.2); one time budget per query incl. the v10 fallback (8.8); v10 end-date wording, axon-signature scope, non-finite floats in v10 answers (8.11.2-8.11.3); `https-if-tls-published` refused until TLS ships (8.6); days-remaining gauge kept current (8.11); compat additions (10b.2); how S6 is counted (1.5, 13.8); `tw.legacy_auth_failed` covers unparseable bodies (Appendix A) |
 | Changes in 1.5 | Phase 3 finding F1 (Engineer B, rollout walk-through): no-downgrade vs the stage 2 rollback. A signed on-chain protocol-tag change away from `TW_PROTOCOL_TAG` clears the hotkey's protocol memory (D16; 8.11.3 step 5, 10b.5 stage 2 rollback, integration test 13) |
 | Changes in 1.6 | Phase 3 gate: benchmarks count with Redis reached directly (D17, 13.7); S6 counts hand-written changes in customised template bases (D18, 1.5); sender must be 48 characters before base58 decoding (D19, 4.3); weak public keys refused, ADR-0010 accepted (D20, 4.3); nonce-store expiry vs wall-clock steps, fail-closed window (D21, 8.4.3-8.4.4); Python verifier strict on `<Bytes>` too (D22, A10, 11.7); Go toolchain, module path and dalek v2 (D23, 11.4-11.5) |
+| Changes in 1.7 | Phase 3 re-gate and Phase 4 set-up: one partner subnet closes S6 for Phase 3 (D24, 17); D22's cost accepted (D25); `go 1.22` + x/crypto until 1.0 (D26, 18.4); retention ≥ 2 × window in the config table and `tw_clock_step_seconds` (D27, 12.2, Appendix B); `required_hash_fields` changes break a mixed fleet (D28, 10b.5); streaming rules and settings (D29, 9.2, 12.1, 13.4, 13.6); timelock behind the gateway, settings and `tw.timelock_unavailable` (D30, 8.10, 12.3, Appendix A); TLS modes, pinning and `tw.tls_pin_mismatch` (D31, 8.7.2, 12.2, 16.3); expired timelocked commits are re-planned (D32, 8.9); `StreamingSynapse` over the v10 wire not supported (D33, 10b.3); `compat.Subtensor` facade (D34, 10b.2.6); Phase 4 tasks and exit criteria (17) |
 | Date | 23 October 2026 |
 | Target SDK | `bittensor>=11.3.0,<12` (baseline verified against 11.3.0, stable, released 7 Oct 2026; see Section 18.3) |
 | Target protocol | `btauth/1` (hotkey-signed HTTP, defined by the Bittensor v11 docs) |
@@ -1242,7 +1243,9 @@ def parse_axon(s: str | None) -> Endpoint | None: ...
 #   private/loopback ranges unless TW_ALLOW_PRIVATE_AXONS=1 (needed on localnet).
 ```
 
-Scheme selection: the subnet declares `TW_SCHEME_POLICY` = `http` | `https` | `https-if-tls-published`. In the third mode the validator uses HTTPS for miners that published with `ServeAxonTls`, after checking the published key (Section 16.3). Until TLS support ships (Phase 4), `https-if-tls-published` is **refused at startup** with a `StartupError` naming the setting: a validator that asked for pinned TLS must never run on plain HTTP without knowing it.
+Scheme selection: the subnet declares `TW_SCHEME_POLICY` = `http` | `https` | `https-if-tls-published`. In the third mode the validator uses HTTPS for miners that published with `ServeAxonTls`, after checking the published key (Section 16.3). Until TLS support ships (Phase 4), `https-if-tls-published` is **refused at startup** with a `StartupError` naming the setting: a validator that asked for pinned TLS must never run on plain HTTP without knowing it. That refusal is lifted only in the commit that ships tested pinning and the accepted ADR-0011 (16.3, D31).
+
+Per mode (D31): `http` — plain HTTP to every miner. `https` — HTTPS to every miner; the certificate's public key is pinned against the published `ServeAxonTls` key when one exists, otherwise normal CA verification applies; a miner reachable only over HTTP fails with `tw.connect_error`. `https-if-tls-published` — pinned HTTPS for miners with a published key, plain HTTP for miners without one. In every mode a pin mismatch is `tw.tls_pin_mismatch` and the kit **never falls back to HTTP** for a miner that published a key.
 
 **Protocol tag.** `ServeAxon.protocol` is a subnet-defined number stored on chain (default 4). TensorWire publishes `protocol=TW_PROTOCOL_TAG` (default `87`, 0x57 "W"). The on-chain field is a **u8** (0–255; larger values fail to encode), so collisions with other subnets' values are possible; it only weakens the M1 count and the 8.11.3 hint, never security (decision D1). Validators may filter to miners advertising it. Document this; it is advisory, not security.
 
@@ -1344,6 +1347,7 @@ Schedule:
 2. Update the score store: per-UID EMA, `s = α·new + (1−α)·s`, `α = TW_SCORE_ALPHA` (default 0.1). Reset a UID's score when its hotkey changes (deregistration and re-registration; detect via the `uid → hotkey` map).
 3. Weight setting: when `blocks_since_last_update ≥ weights_rate_limit` (read from chain, re-read each tempo) **and** at least `TW_MIN_WEIGHT_INTERVAL_BLOCKS` (default 100) have passed, submit `SetWeights(weights={uid: score})` for UIDs with score > 0, with `version_key=TW_WEIGHTS_VERSION_KEY`. Plan first (`client.plan`); if warnings mention clipping, log them.
 4. On `rate_limited`: wait the number of blocks in `remediation` (parse) or one tempo, then retry. On `not_registered` / `not_authorized`: alert and stop setting weights (keep querying).
+   **Expired timelocked commits (decision D32).** When a timelocked commit fails with `expired` or `too_early` (including the chain's `InvalidRevealRound`), the scheduler plans again against the current block (`client.plan`, a new extrinsic with a new reveal round) and submits it. At most 3 such attempts per weight window; then log `weights_commit_replan_exhausted`, count it in `tw_validator_weight_submissions_total{ok="false",code=...}` and wait for the next window. The same signed extrinsic is never resent (8.3).
 5. If all scores are zero, do not submit (avoid burning weights); log `tw.no_scores`.
 
 Score store (`scores.py`): SQLite file `TW_STATE_DIR/scores.db`, WAL mode.
@@ -1374,6 +1378,9 @@ Implementation:
 - `seal(data: bytes, reveal_in: str) -> str` (hex) and `open(hex: str, *, wait: bool, timeout: float) -> bytes`.
 - **drand cache:** `decrypt` hits the drand HTTP API. Wrap it with a process-wide limiter (default 8 concurrent) and retries (3, backoff). Decrypt in a worker thread (blocking call).
 - Response models gain a `sealed: bool` flag. Scoring receives decrypted data or a `tw.timelock_unavailable` error.
+- **Boundary (decision D30).** `bt.timelock` is called only from `chain/gateway.py` (`ChainGateway.timelock_seal` / `timelock_open`; `FakeChain` implements both with a fake round clock). ADR-0001 stays as it is: no new module imports `bittensor`. `extensions/timelock.py` owns the limiter, retries, worker thread and the API above.
+- Settings: `TW_TIMELOCK_CONCURRENCY` (default 8), `TW_TIMELOCK_RETRIES` (default 3), `TW_TIMELOCK_TIMEOUT_S` (default 30). drand HTTP 429 / 5xx / timeouts after the retries → `tw.timelock_unavailable` with a WARNING and `tw_timelock_open_total{result="unavailable"}`; never an unbounded wait.
+- Tests use the fake backend. Tests that call the real drand API carry the pytest marker `drand` and are not part of `just test`; keep such runs short (the localnet chain shares the same public endpoint and already gets HTTP 429).
 
 ### 8.11 Two-way legacy v10 bridge (`extensions/legacy_v10/`)
 
@@ -1521,7 +1528,13 @@ For token-by-token responses:
 - `digest` = sha256 over the concatenation of each chunk's exact `data` bytes (UTF-8, without the `data: ` prefix or trailing newlines), in order.
 - The `tw-end` signature uses the `twresp/1` payload with the status line set to `200` and the body-hash line set to `digest`. Headers `X-TW-Resp-Hotkey` / `X-TW-Resp-Crypto` are sent at stream start.
 - The validator accumulates the digest while consuming. A missing or invalid `tw-end` → the whole stream is `tw.bad_response_signature`.
-- Limits: `max_stream_s` (default 60), `max_stream_bytes` (default 4 MiB), idle timeout between events (default 10 s).
+- Limits: `max_stream_s` (default 60), `max_stream_bytes` (default 4 MiB), idle timeout between events (default 10 s). Settings `TW_STREAM_MAX_S` (1–600), `TW_STREAM_MAX_BYTES` (1 KiB–64 MiB), `TW_STREAM_IDLE_S` (1–120), per-route overrides allowed; both the miner and the validator enforce them (D29).
+
+Rules (decision D29):
+- **Miner.** The whole 5.3 pipeline (body cap, rate limits, verify, replay, policy, per-hotkey limit) runs before the first byte; failures there are ordinary signed or unsigned JSON errors (Appendix A), not streams. A handler exception, a limit hit or a drain during the stream ends it **without** `tw-end` (never a trailer over partial data), logs `stream_aborted` (route, reason) and counts `tw_stream_aborted_total{reason}`.
+- **Validator.** Rejected as `tw.bad_response_signature` for the whole stream: missing, invalid or duplicate `tw-end`; any event after `tw-end`; `count` ≠ chunks received; digest mismatch; `X-TW-Resp-*` headers missing at stream start. Time limits → `tw.timeout`; byte limit → `tw.response_too_large`; a chunk whose `data` is not JSON → `tw.invalid_response`. Unknown event names and SSE comments are ignored (they are not part of the digest).
+- **Unverified until the end.** The client may hand chunks to the caller as they arrive, but marked unverified; only the final result says `response_verified=True`. Scoring must use the final result. The 8.8 time budget covers the whole stream.
+- The SSE parser reads untrusted bytes: Hypothesis property tests (13.3) and stream abuse tests (13.6) are required.
 
 ---
 
@@ -1638,6 +1651,10 @@ The template's `BaseValidatorNeuron` loop (forward → reward → `update_scores
 
 v11 `SetWeights` already normalises, clips and quantises (Section 3.5), so `process_weights_for_netuid` and `convert_weights_and_uids_for_emit` are no longer needed. `compat.weights.to_mapping(uids, weights) -> dict[int, float]` converts the template's parallel arrays (numpy or lists) into the mapping `SetWeights` accepts. That is the only re-wrapped v10 helper.
 
+#### 10b.2.6 `compat.Subtensor` (decision D34)
+
+A v10-shaped facade for the `subtensor` calls that template-derived and non-template subnets make, so they don't hand-write a chain helper (data-universe: ~49 lines). Everything goes through the gateway (ADR-0001). Reads: `metagraph(netuid)` (the pinned compat `Metagraph`), `block`, `get_current_block()`, `get_block_hash(block)`, `get_uid_for_hotkey_on_subnet(hotkey, netuid)`, `is_hotkey_registered(...)`, `get_commitment(netuid, uid)` and the other read calls the case studies show are needed. Writes: only `commit(...)` (commitments) and the writes the kit already performs (`set_weights`, `serve_axon` go to the kit scheduler / lifecycle). Any other write raises `NotImplementedError` naming the v11 replacement; `migrate scan` flags those calls. Hotkey-signed only; never a coldkey.
+
 ### 10b.3 What the compat layer does not cover
 
 Handled by `migrate scan` reports and the v11 migration guide, not by wrappers:
@@ -1648,9 +1665,11 @@ Handled by `migrate scan` reports and the v11 migration guide, not by wrappers:
 | `bt.logging` | Standard `logging` / kit structlog setup |
 | `bt.subtensor(...)`, `bt.metagraph(...)`, `metagraph.sync()` | Kit `MetagraphCache` / gateway, or `bt.Subtensor` directly |
 | `subtensor.set_weights(...)` | Kit weight scheduler, or `bt.SetWeights` |
+| Other `subtensor` reads and commitments | `compat.Subtensor` (10b.2.6) |
 | `subtensor.serve_axon(...)` | Kit lifecycle (automatic) |
 | `bt.Tensor` fields | Serialize with the ML library |
 | Custom `Axon` subclasses, monkeypatched `Dendrite` | Manual port |
+| `StreamingSynapse` between a v10 peer and a TensorWire peer (v10 wire) | Not supported (D33). Streaming works TensorWire ↔ TensorWire over 9.2 only. A v10 Dendrite streaming to a TensorWire miner gets the v10-shaped `tw.invalid_request` answer; `migrate scan` flags `StreamingSynapse` use with this mixed-fleet limit. Move streaming routes after stage 2 of the rollout |
 
 ### 10b.4 `tensorwire migrate`
 
@@ -1681,7 +1700,7 @@ Each stage has an entry check, an exit check and a rollback. The owner decides w
 | 3. Push stragglers | Upgraded validators already send a higher `TW_WEIGHTS_VERSION_KEY` (set in the stage 1 release). The owner now raises the subnet's weights-version hyperparameter to that value, so v10 validators can no longer set weights | No v10 inbound traffic for one tempo (`tw_legacy_v10_requests_total{direction="inbound"}` flat) | Lower the version key again |
 | 4. End the transition | Remove `TW_LEGACY_V10_UNTIL` and set `TW_LEGACY_V10_CLIENT=off` | Legacy counters at zero | Re-enable with a new end date |
 
-Rules: validators always move first; the legacy end dates should fall within roughly 4–6 weeks of stage 1; miners that never upgrade are simply scored as failures once stage 4 ends.
+Rules: validators always move first; the legacy end dates should fall within roughly 4–6 weeks of stage 1; miners that never upgrade are simply scored as failures once stage 4 ends. **Changing a Synapse's `required_hash_fields`** (for example the `TWM100` fix) changes the v10 body hash, so it breaks a mixed fleet: ship that change to all peers at once, or after stage 4 (D28).
 
 ### 10b.6 Proving it
 
@@ -1920,6 +1939,9 @@ All settings are environment variables with the prefix `TW_` (Pydantic Settings;
 | `TW_PROTOCOL_TAG` | `87` | stored in `ServeAxon.protocol`; 0–255 (u8 on chain) |
 | `TW_SCHEME_POLICY` | `http` | `http` \| `https` \| `https-if-tls-published` |
 | `TW_ALLOW_PRIVATE_AXONS` | `0` | set `1` on localnet only |
+| `TW_STREAM_MAX_S` | `60` | 1–600; whole-stream limit (9.2) |
+| `TW_STREAM_MAX_BYTES` | `4194304` | 1 KiB–64 MiB (9.2) |
+| `TW_STREAM_IDLE_S` | `10` | 1–120; gap between events (9.2) |
 
 ### 12.2 Miner
 
@@ -1935,7 +1957,7 @@ All settings are environment variables with the prefix `TW_` (Pydantic Settings;
 | `TW_WORKERS` | `1` | uvicorn workers |
 | `TW_AUTH_MAX_AGE_S` | `10` | 2–60 |
 | `TW_AUTH_ALLOWED_SKEW_S` | `2` | 0.5–10 |
-| `TW_NONCE_RETENTION_S` | `60` | must be ≥ max_age + skew |
+| `TW_NONCE_RETENTION_S` | `60` | must be ≥ 2 × (max_age + skew); refused at startup otherwise (D21, D27) |
 | `TW_MAX_BODY_BYTES` | `1048576` | per-route override |
 | `TW_RATE_IP_PER_S` / `TW_RATE_IP_BURST` | `50` / `100` | |
 | `TW_RATE_HOTKEY_PER_S` / `TW_RATE_HOTKEY_BURST` | `20` / `40` | |
@@ -1948,7 +1970,8 @@ All settings are environment variables with the prefix `TW_` (Pydantic Settings;
 | `TW_DRAIN_S` | `10` | |
 | `TW_LEGACY_V10_UNTIL` | empty | ISO date; accepts v10 Dendrite requests until then (8.11.2) |
 | `TW_COMPAT_MAX_QUEUE` | `256` | admission queue per route when `priority_fn` is used (10b.2.2) |
-| `TW_TLS_CERT_FILE` / `TW_TLS_KEY_FILE` | empty | HTTPS directly from uvicorn |
+| `TW_TLS_CERT_FILE` / `TW_TLS_KEY_FILE` | empty | HTTPS directly from uvicorn; both or neither; the key file must not be group/world readable; the miner publishes the certificate's public key with `ServeAxonTls` (16.3) |
+| `TW_TLS_PUBLISHED_CERT_FILE` | empty | proxy mode: the public certificate the reverse proxy presents, published with `ServeAxonTls`; mutually exclusive with `TW_TLS_CERT_FILE` |
 | `TW_UNSAFE_ALLOW_MEMORY_NONCE_MULTIWORKER` | `0` | do not use in production |
 
 ### 12.3 Validator
@@ -1969,6 +1992,9 @@ All settings are environment variables with the prefix `TW_` (Pydantic Settings;
 | `TW_QUERY_VALIDATORS` | `0` | include permit holders in selection |
 | `TW_LEGACY_V10_CLIENT` | `off` | `auto` = reach v10 miners too (8.11.3) |
 | `TW_LEGACY_V10_CLIENT_UNTIL` | empty | ISO date; required when `auto`; refuse to start if in the past |
+| `TW_TIMELOCK_CONCURRENCY` | `8` | 1–64; process-wide drand limiter (8.10) |
+| `TW_TIMELOCK_RETRIES` | `3` | 0–10 |
+| `TW_TIMELOCK_TIMEOUT_S` | `30` | 1–300 |
 
 ### 12.4 Sidecar
 
@@ -2031,7 +2057,7 @@ Use `httpx.ASGITransport` against the real miner app with `FakeChain`:
 8. Oversized body → 413 before verification (assert the verifier was not called).
 9. Handler timeout → 504.
 10. Validator client against 3 fake miners (one slow, one returning a bad signature, one good) → correct `MinerResult`s.
-11. Streaming route: valid trailer accepted; tampered chunk rejected.
+11. Streaming route: valid trailer accepted; tampered chunk rejected; also reordered, dropped and extra chunks, a tampered or duplicate trailer, events after the trailer and a missing trailer (handler error mid-stream) are rejected as `tw.bad_response_signature` (9.2, D29).
 12. Legacy v10 bridge, server side: a request built from `legacy_v10.json` vectors is accepted on a `compat.Synapse` route (body hash computed by the kit), answered in v10 shape, and rejected after the end date; replay and caller policy still apply.
 13. Legacy v10 bridge, client side: against a fake v10 Axon, `auto` falls back to v10 once and remembers it; a miner that has answered over btauth/1 is never downgraded by a v10-shaped answer alone; after its on-chain protocol tag moves from `TW_PROTOCOL_TAG` to another value (FakeChain re-serve), the next query reaches it over v10; re-probe switches an upgraded miner back.
 14. Compat layer: the template's `Dummy` Synapse, `forward`, `blacklist` and `priority` functions run unchanged on `compat.Axon`; `compat.Dendrite` returns the v10 result shapes, including `dendrite.status_code` on timeout.
@@ -2046,6 +2072,7 @@ Use `httpx.ASGITransport` against the real miner app with `FakeChain`:
 - 10,000 requests/s with invalid signatures from one IP → IP limiter kicks in, CPU < 2 cores, valid validator traffic still served (p99 < 200 ms).
 - Slowloris (slow headers/body) → connections closed by timeouts.
 - 100 MB body → 413 without allocating it.
+- Streams (D29): a slow-drip stream (one byte per idle period) and an endless stream are cut by the validator at the limits; a client that opens many streams and never reads them does not stall the miner for other validators.
 
 ### 13.7 Benchmark targets (`tensorwire bench`)
 
@@ -2301,6 +2328,7 @@ A configuration that weakens any row above must use a variable whose name starts
 - Plain HTTP is acceptable for integrity because both requests (btauth) and responses (twresp) are signed. It does not give confidentiality. Subnets with private payloads must use HTTPS.
 - Options: (a) uvicorn with `TW_TLS_CERT_FILE`/`TW_TLS_KEY_FILE`; (b) a reverse proxy (Caddy/nginx) terminating TLS. With a proxy, the proxy must pass the original request target and body unchanged (no path normalization, no body re-encoding), and `TW_TRUSTED_PROXIES` must be set.
 - `ServeAxonTls` publishes a compact key (1 algorithm byte + ≤ 64-byte public key), not an X.509 certificate. In `https-if-tls-published` mode, the validator pins the miner's TLS public key against the published one. The exact algorithm-byte meaning must be confirmed in Phase 4 against the chain source (`serve_axon_tls` in `pallets/subtensor`) and recorded in an ADR before enabling this mode.
+- **Phase 4 rules (decision D31).** The ADR is ADR-0011 (`docs/adr/0011-serve-axon-tls-key-format.md`), with the subtensor commit read, what the installed SDK sends, and a localnet publish-and-read-back. Only key types the ADR documents are published or accepted; anything else is a `StartupError` (miner) or treated as "no usable key" with a WARNING (validator; in `https` mode that miner fails, it is never reached over HTTP). Pinning compares the leaf certificate's public key with the published key; CA trust is not used for pinned miners. A miner that rotates its certificate must re-publish before serving the new one; until then validators refuse it (`tw.tls_pin_mismatch`). Test certificates are generated at test time and never committed. Reverse proxies: the docs and `deploy/` examples (Caddy, nginx) keep the request target and body byte-for-byte; a test shows that a path-normalising proxy makes requests fail verification.
 
 ### 16.4 Host hardening (documented, not enforced)
 
@@ -2379,9 +2407,16 @@ Exit criteria:
 
 ### Phase 4 — Extensions (2 weeks)
 
-Tasks: streaming (9.2) including `compat.StreamingSynapse`, timelock (8.10), TLS modes (16.3) including the ADR on `ServeAxonTls` key format.
+Tasks: streaming (9.2) including `compat.StreamingSynapse`, timelock (8.10), TLS modes (16.3) including the ADR on `ServeAxonTls` key format. Carried over from the Phase 3 gate: G5-1 (`compat.Subtensor`, 10b.2.6, and the data-universe recount), G5-2 (re-planned timelocked commits, D32), G5-3 (`just check` never silently uses a stale Go tool).
 
-Exit criteria: integration test 11 passes; streaming works on localnet, including a v10-style `StreamingSynapse` on `compat`.
+Exit criteria:
+- Integration test 11 passes; streaming works on localnet, including a v10-style `StreamingSynapse` on `compat`.
+- Sealed challenge and sealed response work on localnet; drand failure paths tested with the fake backend.
+- ADR-0011 accepted with evidence; each TLS mode tested on localnet, including a mismatched pinned key being rejected.
+- The localnet weight-reveal end-to-end test passes 5 runs in a row (G5-2).
+- Phase 3 results hold: golden test, template S6 and llm-detection S6 unchanged or better; data-universe S6 measured and recorded (D24: not a gate criterion).
+
+D24 (Phase 3): one design-partner subnet meeting S6 with a localnet mixed fleet closes "at least one design-partner subnet ported".
 
 ### Phase 5 — Multi-language (3–4 weeks)
 
@@ -2439,6 +2474,7 @@ Do this for every stable 11.x release, within **2 weeks** of it shipping (Sectio
 4. Generate SHA-256 checksums for all artifacts; sign the checksum file (Sigstore `cosign sign-blob` or GPG).
 5. Publish: PyPI, npm (`--provenance` once CI exists), crates.io. Record artifact hashes in the GitHub release.
 6. Smoke test installs from the public registries on a clean machine.
+7. Before 1.0 only (D26): raise the Go module directive and `golang.org/x/crypto` / `x/sys` to versions with no govulncheck findings, and re-check the Rust `ed25519-dalek` choice (11.5).
 
 When CI/CD is added later, move these exact steps into workflows and switch PyPI/npm to trusted publishing.
 
@@ -2545,7 +2581,7 @@ Announce it at least 3 months ahead; mark the packages as "maintenance ended" on
 | `tw.legacy_auth_failed` | 401 | v10 signature, hash, freshness or replay check failed, or the body does not parse into the route's Synapse | no |
 | `tw.legacy_disabled` | 410 | v10 request after `TW_LEGACY_V10_UNTIL` | no |
 
-Client-side only (in `MinerResult.error_code`): `tw.timeout`, `tw.connect_error`, `tw.http_<status>`, `tw.bad_response_signature`, `tw.response_too_large`, `tw.invalid_response`, `tw.no_axon`.
+Client-side only (in `MinerResult.error_code`): `tw.timeout`, `tw.connect_error`, `tw.http_<status>`, `tw.bad_response_signature`, `tw.response_too_large`, `tw.invalid_response`, `tw.no_axon`, `tw.tls_pin_mismatch` (the miner's TLS key differs from its published `ServeAxonTls` key, 16.3), `tw.timelock_unavailable` (a sealed response or challenge could not be opened: drand unreachable or rate-limited after retries, or not revealed within `TW_TIMELOCK_TIMEOUT_S`, 8.10).
 
 Chain outcomes (`TxOutcome.code`) use `bt.ErrorCode` values unchanged (Section 3.5).
 
@@ -2564,6 +2600,7 @@ Chain outcomes (`TxOutcome.code`) use `bt.ErrorCode` values unchanged (Section 3
 | `tw_metagraph_refresh_failures_total` | counter | — |
 | `tw_metagraph_degraded` | gauge | — (0 fresh, 1 degraded, 2 known-callers-only) |
 | `tw_clock_offset_seconds` | gauge | — |
+| `tw_clock_step_seconds` | gauge | — (size of the last backwards wall-clock step detected, D21) |
 | `tw_nonce_store_errors_total` | counter | `backend` |
 | `tw_unsafe_settings_active` | gauge | `name` |
 | `tw_legacy_v10_requests_total` | counter | `direction` (`inbound`/`outbound`), `result` |
@@ -2573,6 +2610,9 @@ Chain outcomes (`TxOutcome.code`) use `bt.ErrorCode` values unchanged (Section 3
 | `tw_validator_miner_results_total` | counter | `ok`, `code` |
 | `tw_validator_weight_submissions_total` | counter | `ok`, `code` |
 | `tw_validator_last_weights_block` | gauge | — |
+| `tw_stream_aborted_total` | counter | `side` (`miner`/`validator`), `reason` |
+| `tw_timelock_open_total` | counter | `result` (`ok`/`not_ready`/`unavailable`) |
+| `tw_tls_pin_failures_total` | counter | — |
 
 Label values never include hotkeys or IPs (cardinality and privacy).
 
