@@ -263,6 +263,22 @@ RULES: Mapping[str, Rule] = _table(
         "bt.logging.check_config(...) removed: defaults come from TW_* settings",
     ),
     Rule(
+        "TWM032",
+        "bt.logging set-up statement",
+        "auto",
+        "removed: the kit configures logging (TW_LOG_LEVEL); bare "
+        "bt.logging(...), bt.logging.set_debug(...), set_trace, enable_* ... "
+        "statements have nothing left to do",
+    ),
+    Rule(
+        "TWM033",
+        "bt.Wallet(config=c)",
+        "auto",
+        "v11's constructor: bt.Wallet(name=c.wallet.name, hotkey=c.wallet.hotkey, "
+        "path=c.wallet.path) (the subnet's own wallet use; the kit loads its "
+        "hotkey from TW_WALLET_*)",
+    ),
+    Rule(
         "TWM100",
         "Synapse without required_hash_fields",
         "risk",

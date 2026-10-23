@@ -375,6 +375,20 @@ bt.<group>.add_args(parser) -> add_v10_args(parser, "<group>"), bt.config(parser
 
 See [v10 config calls](#v10-config-calls-twm031). Other shapes (extra arguments, `bt.config` used as a value) stay TWM006.
 
+<a id="twm032"></a>
+### TWM032: bt.logging set-up statement (`auto`)
+
+Removed: the kit configures logging (TW_LOG_LEVEL); bare bt.logging(...), bt.logging.set_debug(...), set_trace, enable_* ... statements have nothing left to do.
+
+Only bare statements go; any other use of `bt.logging` that is not a log call (assigning `bt.logging.trace` to patch it, for example) stays TWM025.
+
+<a id="twm033"></a>
+### TWM033: bt.Wallet(config=c) (`auto`)
+
+V11's constructor: bt.Wallet(name=c.wallet.name, hotkey=c.wallet.hotkey, path=c.wallet.path) (the subnet's own wallet use; the kit loads its hotkey from TW_WALLET_*).
+
+v11's `Wallet` reads the coldkey only when your code asks for it (`wallet.coldkey`); `wallet.get_coldkeypub()` is the `wallet.coldkeypub` property in v11.
+
 <a id="twm100"></a>
 ### TWM100: Synapse without required_hash_fields (`risk`)
 

@@ -68,6 +68,7 @@ from tensorwire.migrate.scan import (
     ANNOTATION_COMPAT,
     CONFIG_GROUPS,
     LOG_LEVELS,
+    LOGGING_SETUP,
     is_axons_list,
     is_metagraph_tensor_call,
     python_files,
@@ -412,6 +413,10 @@ class _Rewriter(cst.CSTTransformer):
         config_call = self._config_call(original_node, updated_node, head, last)
         if config_call is not None:
             return config_call
+        if head in self.bt and last in ("Wallet", "wallet"):
+            wallet = self._wallet_call(original_node, updated_node)
+            if wallet is not None:
+                return wallet
         if head.rpartition(".")[2] == "logging" and self._is_bt_path(head, 1):
             return self._logging_call(updated_node, last)
         if head in self.bt and last in ("axon", "Axon"):
@@ -454,33 +459,87 @@ class _Rewriter(cst.CSTTransformer):
             )
         return None
 
-    def _is_config_check(self, statement: cst.BaseStatement) -> bool:
-        """A bare ``bt.<group>.check_config(...)`` statement (TWM031)."""
+    def _wallet_call(self, original: cst.Call, updated: cst.Call) -> cst.Call | None:
+        """TWM033: ``bt.Wallet(config=c)`` -> v11's ``bt.Wallet(name=..., ...)``."""
+        if not (
+            len(original.args) == 1
+            and original.args[0].keyword is not None
+            and original.args[0].keyword.value == "config"
+        ):
+            return None
+        config = updated.args[0].value
+        func = original.func
+        if not isinstance(func, cst.Attribute):  # pragma: no cover - head was checked
+            return None
+        self.rewrites["TWM033"] += 1
+
+        def part(name: str) -> cst.Attribute:
+            return cst.Attribute(
+                value=cst.Attribute(value=config, attr=cst.Name("wallet")),
+                attr=cst.Name(name),
+            )
+
+        names = ("name", "hotkey", "path")
+        return cst.Call(
+            func=func.with_changes(attr=cst.Name("Wallet")),
+            args=[
+                _kwarg(n, part(n)).with_changes(
+                    comma=cst.Comma(whitespace_after=cst.SimpleWhitespace(" "))
+                    if n != names[-1]
+                    else cst.MaybeSentinel.DEFAULT
+                )
+                for n in names
+            ],
+        )
+
+    def _removed_statement(self, statement: cst.BaseStatement) -> str | None:
+        """The rule a bare statement is removed by: ``bt.<group>.check_config(...)``
+        (TWM031) or a ``bt.logging`` set-up call (TWM032); else ``None``."""
         if not (
             isinstance(statement, cst.SimpleStatementLine) and len(statement.body) == 1
         ):
-            return False
+            return None
         small = statement.body[0]
         if not (isinstance(small, cst.Expr) and isinstance(small.value, cst.Call)):
-            return False
+            return None
         parts = (_dotted(small.value.func) or "").split(".")
-        return (
-            len(parts) == 3
-            and parts[0] in self.bt
-            and parts[1] in CONFIG_GROUPS
-            and parts[2] == "check_config"
-        )
+        if not parts or parts[0] not in self.bt:
+            return None
+        if len(parts) == 3 and parts[1] in CONFIG_GROUPS and parts[2] == "check_config":
+            return "TWM031"
+        if parts[1:] == ["logging"] or (
+            len(parts) == 3 and parts[1] == "logging" and parts[2] in LOGGING_SETUP
+        ):
+            return "TWM032"
+        return None
+
+    def _without_removed(
+        self, body: Sequence[cst.BaseStatement]
+    ) -> list[cst.BaseStatement] | None:
+        kept: list[cst.BaseStatement] = []
+        for statement in body:
+            rule = self._removed_statement(statement)
+            if rule is None:
+                kept.append(statement)
+            else:
+                self.rewrites[rule] += 1
+        return None if len(kept) == len(body) else kept
 
     def leave_IndentedBlock(  # noqa: N802 - libcst API
         self, _original: cst.IndentedBlock, updated_node: cst.IndentedBlock
     ) -> cst.IndentedBlock:
-        body = [s for s in updated_node.body if not self._is_config_check(s)]
-        if len(body) == len(updated_node.body):
+        body = self._without_removed(updated_node.body)
+        if body is None:
             return updated_node
-        self.rewrites["TWM031"] += len(updated_node.body) - len(body)
         return updated_node.with_changes(
             body=body or [cst.SimpleStatementLine(body=[cst.Pass()])]
         )
+
+    def leave_Module(  # noqa: N802 - libcst API
+        self, _original: cst.Module, updated_node: cst.Module
+    ) -> cst.Module:
+        body = self._without_removed(updated_node.body)
+        return updated_node if body is None else updated_node.with_changes(body=body)
 
     def _is_bt_path(self, dotted: str, depth: int) -> bool:
         parts = dotted.split(".")

@@ -122,6 +122,16 @@ REWRITES: dict[str, tuple[str, str]] = {
         "        self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)\n"
         "    def log_step(self):\n        pass\n",
     ),
+    "TWM032": (
+        "import bittensor as bt\nimport os\nbt.logging.set_debug(True)\n"
+        "def f(c):\n    bt.logging(config=c, logging_dir=c.path)\n",
+        "import os\ndef f(c):\n    pass\n",
+    ),
+    "TWM033": (
+        "import bittensor as bt\nw = bt.Wallet(config=self.config)\n",
+        "import bittensor as bt\nw = bt.Wallet(name=self.config.wallet.name, "
+        "hotkey=self.config.wallet.hotkey, path=self.config.wallet.path)\n",
+    ),
     "TWM024": (
         "# base\nfrom template.base.validator import BaseValidatorNeuron\n",
         "# base\nfrom tensorwire.compat import TemplateValidatorAdapter as "
@@ -207,8 +217,6 @@ def test_bittensor_import_stays_while_used_and_markers_are_added() -> None:
 
         class Miner:
             def __init__(self):
-                {MARKER} TWM025 {RULES["TWM025"].replacement}
-                bt.logging.set_config(config=self.config.logging)
                 {MARKER} TWM008 {RULES["TWM008"].replacement}
                 self.subtensor = bt.subtensor(config=self.config)
                 logging.info("ready")

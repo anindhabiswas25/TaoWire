@@ -61,7 +61,7 @@ index e049c37..b8578b4 100644
      # Logging captures events for diagnosis or understanding miner's behavior.
      config.full_path = os.path.expanduser(
 diff --git a/docs/stream_tutorial/miner.py b/docs/stream_tutorial/miner.py
-index 8018b98..cdc68b8 100644
+index 65c184b..cdc68b8 100644
 --- a/docs/stream_tutorial/miner.py
 +++ b/docs/stream_tutorial/miner.py
 @@ -11,7 +11,7 @@ from starlette.types import Send
@@ -73,7 +73,22 @@ index 8018b98..cdc68b8 100644
  from transformers import GPT2Tokenizer
  from typing import List, Dict, Tuple, Union, Callable, Awaitable
  
-@@ -81,8 +81,9 @@ class StreamMiner(ABC):
+@@ -31,8 +31,13 @@ class StreamMiner(ABC):
+ 
+         self.prompt_cache: Dict[str, Tuple[str, int]] = {}
+ 
++        # Activating Bittensor's logging with the set configurations.
++        # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
++        bt.logging.set_config(config=self.config.logging)
++
+         # Wallet holds cryptographic information, ensuring secure transactions and communication.
+-        self.wallet = wallet or bt.Wallet(name=self.config.wallet.name, hotkey=self.config.wallet.hotkey, path=self.config.wallet.path)
++        # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
++        self.wallet = wallet or bt.wallet(config=self.config)
+         logging.info(f"Wallet {self.wallet}")
+ 
+         # subtensor manages the blockchain connection, facilitating interaction with the Bittensor blockchain.
+@@ -76,8 +81,9 @@ class StreamMiner(ABC):
          self.lock = asyncio.Lock()
          self.request_timestamps: Dict = {}
  
@@ -84,7 +99,7 @@ index 8018b98..cdc68b8 100644
          ...
  
      @classmethod
-@@ -275,7 +276,8 @@ class StreamMiner(ABC):
+@@ -270,7 +276,8 @@ class StreamMiner(ABC):
  
  
  class StreamingTemplateMiner(StreamMiner):
@@ -94,7 +109,7 @@ index 8018b98..cdc68b8 100644
          """
          Returns the configuration object specific to this miner.
  
-@@ -287,7 +289,8 @@ class StreamingTemplateMiner(StreamMiner):
+@@ -282,7 +289,8 @@ class StreamingTemplateMiner(StreamMiner):
          """
          parser = argparse.ArgumentParser(description="Streaming Miner Configs")
          self.add_args(parser)
@@ -552,7 +567,7 @@ index 564d794..473cf75 100644
 -        # TW-MIGRATE: TWM009 the kit's MetagraphCache (refreshes itself); compat.Metagraph for hotkeys / S / validator_permit
 -        self.metagraph.sync(subtensor=self.subtensor)
 diff --git a/template/base/neuron.py b/template/base/neuron.py
-index 29a2785..a264771 100644
+index 8ad3b9c..a264771 100644
 --- a/template/base/neuron.py
 +++ b/template/base/neuron.py
 @@ -16,32 +16,30 @@
@@ -595,7 +610,7 @@ index 29a2785..a264771 100644
          check_config(cls, config)
  
      @classmethod
-@@ -52,68 +50,17 @@ class BaseNeuron(ABC):
+@@ -52,21 +50,10 @@ class BaseNeuron(ABC):
      def config(cls):
          return config(cls)
  
@@ -617,12 +632,8 @@ index 29a2785..a264771 100644
 +        self.config = config or self.config()
          self.check_config(self.config)
  
--        # Set up logging with the provided configuration.
--        # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
--        bt.logging.set_config(config=self.config.logging)
--
          # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
-         self.device = self.config.neuron.device
+@@ -74,41 +61,6 @@ class BaseNeuron(ABC):
  
          # Log the configuration for reference.
          logging.info(self.config)
@@ -642,8 +653,7 @@ index 29a2785..a264771 100644
 -                self.config.netuid, subtensor=self.subtensor
 -            )
 -        else:
--            # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
--            self.wallet = bt.wallet(config=self.config)
+-            self.wallet = bt.Wallet(name=self.config.wallet.name, hotkey=self.config.wallet.hotkey, path=self.config.wallet.path)
 -            # TW-MIGRATE: TWM008 the kit's chain gateway and MetagraphCache, or bt.Subtensor directly
 -            self.subtensor = bt.subtensor(config=self.config)
 -            self.metagraph = self.subtensor.metagraph(self.config.netuid)
@@ -665,7 +675,7 @@ index 29a2785..a264771 100644
          self.step = 0
  
      @abstractmethod
-@@ -124,58 +71,6 @@ class BaseNeuron(ABC):
+@@ -119,58 +71,6 @@ class BaseNeuron(ABC):
      def run(self):
          ...
  
@@ -2091,3 +2101,15 @@ index b48adce..0000000
 -        # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
 -        with self.assertLogs(bt.logging, level="WARNING") as cm:
 -            self.neuron.update_scores(rewards, self.miner_uids)
+diff --git a/verify/generate.py b/verify/generate.py
+index a285082..da930a5 100644
+--- a/verify/generate.py
++++ b/verify/generate.py
+@@ -7,6 +7,7 @@ import bittensor
+ 
+ 
+ def main(args):
++    # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
+     wallet = bittensor.Wallet(name=args.name)
+     keypair = wallet.coldkey
+ 

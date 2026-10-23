@@ -77,7 +77,7 @@ FIXTURES: dict[str, tuple[str, str]] = {
         "axons = axons_from(view, uids)\n",
     ),
     "TWM014": (
-        "import bittensor as bt\nw = bt.wallet(config=c)\n",
+        "import bittensor as bt\nw = bt.wallet()\n",
         "from tensorwire.auth.keys import load_hotkey\nk = load_hotkey(p, n, h)\n",
     ),
     "TWM015": (
@@ -121,7 +121,7 @@ FIXTURES: dict[str, tuple[str, str]] = {
         "from template.base.miner import BaseMinerNeuron\n",
     ),
     "TWM025": (
-        "import bittensor as bt\nbt.logging.set_config(config=c)\n",
+        "import bittensor as bt\noriginal = bt.logging.trace\n",
         "import logging\nlogging.basicConfig()\n",
     ),
     "TWM027": (
@@ -145,6 +145,14 @@ FIXTURES: dict[str, tuple[str, str]] = {
         "def check(c):\n    bt.logging.check_config(c)\n",
         "from tensorwire.compat import add_v10_args, config\n"
         "add_v10_args(parser, 'wallet')\nc = config(parser)\n",
+    ),
+    "TWM032": (
+        "import bittensor as bt\nbt.logging.set_debug(True)\nbt.logging(config=c)\n",
+        "import bittensor as bt\nlevel = bt.logging.set_debug\n",
+    ),
+    "TWM033": (
+        "import bittensor as bt\nw = bt.Wallet(config=c)\n",
+        "import bittensor as bt\nw = bt.Wallet(name='a', hotkey='b', path='/p')\n",
     ),
     "TWM100": (
         "class Ask(Synapse):\n    question: str\n    answer: str | None = None\n",
@@ -276,13 +284,13 @@ def test_negative_fixture(rule: str) -> None:
         ("w = convert_weights_and_uids_for_emit(u, w)\n", "TWM012"),
         ("from bittensor.subnets import SubnetsAPI\n", "TWM016"),
         ("uids = self.metagraph.uids.tolist()\n", "TWM023"),
-        ("import bittensor as bt\nbt.logging(config=c)\n", "TWM025"),
-        ("import bittensor as bt\nbt.logging.set_trace(True)\n", "TWM025"),
+        ("import bittensor as bt\nbt.logging(config=c)\n", "TWM032"),
+        ("import bittensor as bt\nbt.logging.set_trace(True)\n", "TWM032"),
         ("from bittensor import logging\n", "TWM025"),
         ("import bittensor as bt\nbt.logging.trace('x')\n", "TWM007"),
         ("from .base.validator import BaseValidatorNeuron as B\n", "TWM024"),
         # B's data-universe misses (2026-10-23)
-        ("import bittensor as bt\nw = bt.Wallet(config=self.config)\n", "TWM014"),
+        ("import bittensor as bt\nw = bt.Wallet(config=self.config)\n", "TWM033"),
         ("import bittensor as bt\ns = bt.Subtensor(config=self.config)\n", "TWM008"),
         ("import bittensor as bt\ndef f(m: bt.Metagraph): ...\n", "TWM009"),
         ("import bittensor as bt\ndef f(s: bt.Subtensor): ...\n", "TWM008"),

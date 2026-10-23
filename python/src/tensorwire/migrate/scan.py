@@ -116,6 +116,15 @@ ANNOTATION_COMPAT: dict[str, str] = {
     "Config": "Config",
     "config": "Config",
 }
+#: ``bt.logging.<name>(...)`` set-up calls a bare statement may make (TWM032).
+LOGGING_SETUP = frozenset(
+    {
+        "set_debug", "set_trace", "set_info", "set_warning", "set_default",
+        "set_console", "set_config", "enable_debug", "enable_trace", "enable_info",
+        "enable_warning", "enable_default", "enable_third_party_loggers",
+        "disable_third_party_loggers", "on", "off",
+    }
+)  # fmt: skip
 #: ``bt.<group>.add_args(parser)`` -> ``add_v10_args(parser, "<group>")`` (TWM031).
 CONFIG_GROUPS: dict[str, str] = {
     "wallet": "wallet",
@@ -462,6 +471,12 @@ class _Visitor(cst.CSTVisitor):
         if self.v10_config_call(node, attr, full):
             self.add(node, "TWM031", full)
             return
+        if self.logging_setup_statement(node, attr, full):
+            self.add(node, "TWM032", full)
+            return
+        if self.v10_wallet_call(node, attr):
+            self.add(node, "TWM033", full)
+            return
         rule = ATTRIBUTE_RULES.get(attr)
         if rule is None:
             rule = self.v10_shaped(node, attr, full)
@@ -500,6 +515,43 @@ class _Visitor(cst.CSTVisitor):
             )
         return False
 
+    def _bare_call(self, node: cst.Attribute) -> cst.Call | None:
+        """The call ``node`` makes when it is a whole expression statement."""
+        whole = self.outermost(node)
+        call = self.get_metadata(ParentNodeProvider, whole, None)
+        if not (isinstance(call, cst.Call) and call.func is whole):
+            return None
+        parent = self.get_metadata(ParentNodeProvider, call, None)
+        return call if isinstance(parent, cst.Expr) else None
+
+    def logging_setup_statement(
+        self, node: cst.Attribute, attr: str, full: str
+    ) -> bool:
+        """``bt.logging(...)`` / ``bt.logging.set_debug(...)`` as a bare statement."""
+        if attr != "logging":
+            return False
+        parts = full.split(".")
+        if len(parts) == 2:
+            return self._bare_call(node) is not None
+        return (
+            len(parts) == 3
+            and parts[2] in LOGGING_SETUP
+            and (self._bare_call(node) is not None)
+        )
+
+    def v10_wallet_call(self, node: cst.Attribute, attr: str) -> bool:
+        """``bt.Wallet(config=c)`` / ``bt.wallet(config=c)``: TWM033."""
+        if attr not in ("Wallet", "wallet"):
+            return False
+        call = self.get_metadata(ParentNodeProvider, node, None)
+        return (
+            isinstance(call, cst.Call)
+            and call.func is node
+            and len(call.args) == 1
+            and call.args[0].keyword is not None
+            and call.args[0].keyword.value == "config"
+        )
+
     def v10_shaped(self, node: cst.Attribute, attr: str, full: str) -> str | None:
         """The rule for a ``bt.<name>`` v11 also has (or none): only v10-shaped
         uses of ``Wallet`` / ``Metagraph`` / ``Subtensor``, and the catch-all."""
@@ -509,6 +561,18 @@ class _Visitor(cst.CSTVisitor):
             return None
         if full.rsplit(".", 1)[-1] in ("add_args", "check_config", "config"):
             return "TWM006"
+        if attr == "Wallet" and not self._annotation_depth:
+            call = self.get_metadata(ParentNodeProvider, node, None)
+            if (
+                isinstance(call, cst.Call)
+                and call.func is node
+                and all(
+                    a.keyword is not None
+                    and a.keyword.value in ("name", "hotkey", "path")
+                    for a in call.args
+                )
+            ):
+                return None  # bt.Wallet(name=..., hotkey=..., path=...): v11
         if attr != "Subtensor" or self._annotation_depth:
             return _RENAMED_V10[attr]
         parent = self.get_metadata(ParentNodeProvider, node, None)
