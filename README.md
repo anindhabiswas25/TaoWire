@@ -2,7 +2,8 @@
 
 **A production-grade networking starter kit for Bittensor v11 subnets, and the migration path for existing v10 subnets.**
 
-> Status: pre-release (Phase 0, foundations). Nothing is published yet. "TensorWire" is a working name.
+> Status: pre-release (Phase 3: hardening, performance and migration tooling). Nothing is
+> published yet. "TensorWire" is a working name.
 
 Bittensor v11 removed `Axon`, `Dendrite` and `Synapse`. What is left is `btauth/1` (hotkey-signed
 HTTP), `ServeAxon` and the metagraph. TensorWire fills the gap in between, securely by default:
@@ -19,8 +20,18 @@ HTTP), `ServeAxon` and the metagraph. TensorWire fills the gap in between, secur
 
 ## Quickstart
 
-Coming in Phase 2 (`tensorwire init`). For development of the kit itself, see
+[docs/quickstart.md](docs/quickstart.md): a subnet with a miner and a validator on a local chain,
+from `tensorwire init` to weights on chain. For development of the kit itself, see
 [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Documentation
+
+- Building: [miner guide](docs/miner-guide.md), [validator guide](docs/validator-guide.md),
+  [metrics](docs/metrics.md), [security](docs/security.md), [benchmarks](docs/benchmarks.md).
+- Migrating a v10 subnet: [migration guide](docs/migration-from-v10.md) (`tensorwire migrate
+  scan` / `apply`), [rollout runbook](docs/migration-rollout.md) (`tensorwire migrate status`),
+  [case studies](docs/migrations/).
+- Protocols: [btauth/1 and twresp/1](docs/protocol/), the [legacy v10 bridge](docs/protocol/legacy-v10.md).
 
 ## Compatibility
 

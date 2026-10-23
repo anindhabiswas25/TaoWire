@@ -94,7 +94,15 @@ routes with their own policy.
 
 ## What happens to a request
 
-1. Per-IP rate limit (`TW_RATE_IP_PER_S` / `TW_RATE_IP_BURST`): 429.
+0. The HTTP layer (httptools): the request must arrive completely within
+   `TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S` of its first byte (silent and
+   slow connections are closed); request line plus headers at most 16 KiB and
+   100 fields; ambiguous framing (`Content-Length` with `Transfer-Encoding`,
+   two lengths) refused. Each of these answers 400 and closes the connection.
+1. Per-IP rate limit (`TW_RATE_IP_PER_S` / `TW_RATE_IP_BURST`): 429. This is
+   the outermost layer, so a flood costs as little as possible. Refusals are
+   counted in the metrics and logged as one `ip_rate_limited` WARNING per
+   client per 10 s with the count, not one line per request.
 2. Body size cap, declared and streamed: 413, before any signature work.
 3. Route lookup: 404 / 405.
 4. Metagraph check: with `TW_METAGRAPH_STRICT=1` and a snapshot past its max

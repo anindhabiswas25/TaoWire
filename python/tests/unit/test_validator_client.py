@@ -104,6 +104,26 @@ async def test_other_statuses_are_not_retried(status: int) -> None:
     assert len(seen) == 1
 
 
+async def test_redirects_are_not_followed() -> None:
+    """Spec 16.1 row 16: a redirect would send the signed request elsewhere."""
+    vc, seen = make(
+        lambda r: httpx.Response(307, headers={"location": "http://203.0.113.9/x"})
+    )
+    r = await vc.query(NEURON, "/v1/x", b"{}")
+    assert (r.ok, r.error_code, len(seen)) == (False, "tw.http_307", 1)
+    await vc.aclose()
+
+
+async def test_the_default_transport_never_retries() -> None:
+    """Spec 16.1 row 6: retries happen in the kit, re-signed; httpx/httpcore
+    must not resend a signed request (no public accessor for the setting)."""
+    vc = ValidatorClient(dev_key("alice").signer())
+    transport: Any = vc._http._transport
+    assert isinstance(transport, httpx.AsyncHTTPTransport)
+    assert transport._pool._retries == 0
+    await vc.aclose()
+
+
 async def test_retry_statuses_stop_at_max_attempts() -> None:
     vc, seen = make(lambda r: httpx.Response(502), max_attempts=3)
     r = await vc.query(NEURON, "/v1/x", b"{}")
