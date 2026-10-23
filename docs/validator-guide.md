@@ -110,6 +110,13 @@ never raise for one miner's failure. Rules (spec 8.8):
   it with an error naming the setting, so a validator that asked for pinned
   TLS never runs on plain HTTP without knowing it.
 
+Streaming routes: `client.stream(...)` hands out chunks as they arrive,
+**unverified**, and ends with the `MinerResult`; `query_stream(...)` /
+`query_stream_many(...)` return results only. Score from the result:
+`response_verified=True` comes only from a valid `tw-end` trailer. The same
+time budget covers the whole stream, bounded also by `TW_STREAM_*`. See
+[streaming.md](streaming.md).
+
 Use it directly when you run your own loop:
 
 ```python

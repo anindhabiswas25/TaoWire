@@ -28,6 +28,7 @@ miner port. Label values never contain hotkeys or IP addresses.
 | `tw_validator_miner_results_total` | counter | `ok`, `code` | Miner query results |
 | `tw_validator_weight_submissions_total` | counter | `ok`, `code` | Weight submissions |
 | `tw_validator_last_weights_block` | gauge | | Block of the last successful weights |
+| `tw_stream_aborted_total` | counter | `side` (`miner`/`validator`), `reason` | Streams that ended without a valid `tw-end` (spec 9.2). Miner reasons: `handler_error`, `idle_timeout`, `max_duration`, `max_bytes`, `bad_chunk`, `cancelled` (disconnect or drain). Validator reasons: `timeout`, `too_large`, `bad_trailer`, `bad_chunk`, `transport`. See [streaming.md](streaming.md) |
 
 The legacy and validator metrics are registered by every process and filled
 by the components that use them.

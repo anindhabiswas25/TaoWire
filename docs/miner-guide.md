@@ -118,6 +118,16 @@ routes with their own policy.
 Every response carries `X-TW-Request-Id`; error bodies are
 `{"error": {"code", "message", "request_id"}}`.
 
+## Streaming routes
+
+`@miner.route(..., stream=True)` answers with Server-Sent Events and a signed
+`tw-end` trailer (spec 9.2): the handler yields chunks (JSON objects or
+arrays). The whole request path runs first, the first chunk is fetched within
+`timeout_s`, and `TW_STREAM_MAX_S` / `_MAX_BYTES` / `_IDLE_S` (or
+`stream_max_s` / `stream_max_bytes` / `stream_idle_s` per route) bound the
+stream; anything that cannot finish ends without a trailer. See
+[streaming.md](streaming.md).
+
 ## Signed responses (`twresp/1`)
 
 With `TW_SIGN_RESPONSES=1` (the default) the miner signs every 200 and every

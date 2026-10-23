@@ -53,6 +53,7 @@ __all__ = [
     "VERSION",
     "ResponseSignatureError",
     "body_digest",
+    "identity_headers",
     "response_payload",
     "sign_response",
     "verify_response",
@@ -128,6 +129,18 @@ def response_payload(
     return "\n".join(lines).encode()
 
 
+def identity_headers(signer: HotkeySigner) -> dict[str, str]:
+    """``X-TW-Resp-Version``, ``-Hotkey`` and (ed25519) ``-Crypto`` for ``signer``.
+
+    Every signed response carries them; a stream sends them at its start and
+    the signature in its ``tw-end`` trailer (spec 9.2).
+    """
+    headers = {HEADER_VERSION: VERSION, HEADER_HOTKEY: signer.ss58_address}
+    if signer.scheme == "ed25519":
+        headers[HEADER_CRYPTO] = "ed25519"
+    return headers
+
+
 def sign_response(
     signer: HotkeySigner,
     *,
@@ -151,14 +164,10 @@ def sign_response(
         status=status,
         digest=body_digest(body) if body is not None else str(digest),
     )
-    headers = {
-        HEADER_VERSION: VERSION,
-        HEADER_HOTKEY: signer.ss58_address,
+    return {
+        **identity_headers(signer),
         HEADER_SIGNATURE: signature_to_hex(signer.sign(payload)),
     }
-    if signer.scheme == "ed25519":
-        headers[HEADER_CRYPTO] = "ed25519"
-    return headers
 
 
 def _resp_headers(headers: Headers) -> dict[str, str]:

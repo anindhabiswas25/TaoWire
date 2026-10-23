@@ -17,11 +17,13 @@ if TYPE_CHECKING:
     from tensorwire.auth.signer import RequestSigner
     from tensorwire.auth.verifier import Caller
     from tensorwire.config import MinerSettings, ValidatorSettings
+    from tensorwire.extensions.streaming import StreamingReply, StreamLimits
     from tensorwire.miner.app import Miner
     from tensorwire.miner.routes import RouteContext
     from tensorwire.policy.caller import CallerPolicy
-    from tensorwire.validator.client import MinerResult, ValidatorClient
+    from tensorwire.validator.client import MinerResult, MinerStream, ValidatorClient
     from tensorwire.validator.loop import SubnetValidator, Task, ValidatorRunner
+    from tensorwire.validator.stream import UnverifiedChunk
 
 __all__ = [
     "Caller",
@@ -29,10 +31,14 @@ __all__ = [
     "Miner",
     "MinerResult",
     "MinerSettings",
+    "MinerStream",
     "RequestSigner",
     "RouteContext",
+    "StreamLimits",
+    "StreamingReply",
     "SubnetValidator",
     "Task",
+    "UnverifiedChunk",
     "ValidatorClient",
     "ValidatorRunner",
     "ValidatorSettings",
@@ -46,6 +52,10 @@ _LAZY = {
     "MinerSettings": "tensorwire.config",
     "RouteContext": "tensorwire.miner.routes",
     "MinerResult": "tensorwire.validator.client",
+    "MinerStream": "tensorwire.validator.client",
+    "StreamLimits": "tensorwire.extensions.streaming",
+    "StreamingReply": "tensorwire.extensions.streaming",
+    "UnverifiedChunk": "tensorwire.validator.stream",
     "RequestSigner": "tensorwire.auth.signer",
     "SubnetValidator": "tensorwire.validator.loop",
     "Task": "tensorwire.validator.loop",

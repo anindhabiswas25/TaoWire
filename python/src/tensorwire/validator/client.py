@@ -25,6 +25,16 @@ Rules it enforces:
   must treat it as a failed response.
 - Neurons without a usable axon are never contacted (``tw.no_axon``).
 
+Streaming routes (spec 9.2): :meth:`ValidatorClient.stream` returns a
+:class:`MinerStream` that hands out chunks as they arrive, **unverified**
+(:class:`~tensorwire.validator.stream.UnverifiedChunk`), and ends with the
+result; :meth:`~ValidatorClient.query_stream` waits for it. The same budget,
+signing and retry rules apply until the stream starts; after that there is
+no retry, and the stream limits (``stream_limits``: ``TW_STREAM_*``) and the
+remaining budget bound it. Score from the result only: it says
+``response_verified=True`` once the ``tw-end`` trailer verified. Streams use
+btauth/1 only (no v10 fallback, D33).
+
 Legacy v10 miners (spec 8.11.3, ``TW_LEGACY_V10_CLIENT=auto``): pass the
 bridge's ``legacy`` client and its ``selector``
 (``extensions.legacy_v10.client.ProtocolSelector``), which owns the
@@ -42,7 +52,7 @@ import asyncio
 import contextlib
 import json
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import AsyncGenerator, Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal, Protocol
 
@@ -59,14 +69,22 @@ from tensorwire.extensions.response_sig import (
     ResponseSignatureError,
     verify_response,
 )
+from tensorwire.extensions.streaming import StreamLimits
 from tensorwire.miner.legacy import LegacyTraffic
 from tensorwire.observability.metrics import Metrics
+from tensorwire.validator.stream import (
+    StreamFailure,
+    StreamReader,
+    UnverifiedChunk,
+    is_event_stream,
+)
 
 __all__ = [
     "RETRY_STATUSES",
     "LegacyClientLike",
     "LegacyResultLike",
     "MinerResult",
+    "MinerStream",
     "ProtocolSelectorLike",
     "ValidatorClient",
     "WireProtocol",
@@ -122,6 +140,56 @@ class MinerResult:
     """True only for a valid ``twresp/1`` signature; always False for v10."""
     status_message: str | None = None
     """The v10 Axon's status message (v10 answers only)."""
+
+
+class MinerStream:
+    """One streaming query (spec 9.2): chunks as they arrive, then the result.
+
+    Iterate it (``async for chunk in stream``) to get each chunk as an
+    :class:`~tensorwire.validator.stream.UnverifiedChunk`; nothing in a chunk
+    is trustworthy until the stream ends with a verified trailer. When the
+    iteration ends, :attr:`result` is the :class:`MinerResult`
+    (``data`` = the tuple of chunk values; ``ok`` and ``response_verified``
+    only for a stream whose ``tw-end`` matched and verified). Use it as an
+    async context manager, or call :meth:`aclose`, to stop early; the
+    connection is released either way. Never raises for the miner's failure.
+    """
+
+    def __init__(self, source: AsyncGenerator[UnverifiedChunk | MinerResult, None]):
+        self._source = source
+        self.result: MinerResult | None = None
+        """The outcome; ``None`` until the stream ended (or if it was closed early)."""
+
+    def __aiter__(self) -> MinerStream:
+        return self
+
+    async def __anext__(self) -> UnverifiedChunk:
+        if self.result is not None:
+            raise StopAsyncIteration
+        item = await anext(self._source)
+        if isinstance(item, UnverifiedChunk):
+            return item
+        self.result = item
+        await self._source.aclose()
+        raise StopAsyncIteration
+
+    async def finish(self) -> MinerResult:
+        """Read the rest of the stream and return the result."""
+        async for _ in self:
+            pass
+        if self.result is None:
+            raise RuntimeError("the stream was closed before it ended")
+        return self.result
+
+    async def aclose(self) -> None:
+        """Stop reading and release the connection."""
+        await self._source.aclose()
+
+    async def __aenter__(self) -> MinerStream:
+        return self
+
+    async def __aexit__(self, *_exc: object) -> None:
+        await self.aclose()
 
 
 class LegacyResultLike(Protocol):
@@ -233,6 +301,7 @@ class ValidatorClient:
         verify_responses: bool = True,
         scheme_policy: SchemePolicy = "http",
         max_response_bytes: int = 4 * 1024 * 1024,
+        stream_limits: StreamLimits | None = None,
         legacy: LegacyClientLike | None = None,
         selector: ProtocolSelectorLike | None = None,
         metrics: Metrics | None = None,
@@ -252,6 +321,7 @@ class ValidatorClient:
         self.verify_responses = verify_responses
         self.scheme_policy = scheme_policy
         self.max_response_bytes = max_response_bytes
+        self.stream_limits = StreamLimits() if stream_limits is None else stream_limits
         self.metrics = metrics
         self._legacy = legacy
         self._selector = selector
@@ -379,6 +449,189 @@ class ValidatorClient:
         self._count(result)
         return result
 
+    # ------------------------------------------------------------ streams
+
+    def stream(
+        self,
+        neuron: NeuronView,
+        route: str,
+        body: bytes,
+        *,
+        method: Literal["POST", "GET"] = "POST",
+        idempotent: bool = True,
+        chunk_model: type[BaseModel] | None = None,
+        timeout_s: float | None = None,
+        max_s: float | None = None,
+        max_bytes: int | None = None,
+        idle_s: float | None = None,
+    ) -> MinerStream:
+        """Start one streaming query (spec 9.2); see :class:`MinerStream`.
+
+        ``timeout_s`` is the per-attempt deadline (the budget is
+        ``max_attempts * timeout_s``, as for :meth:`query`); ``max_s``,
+        ``max_bytes`` and ``idle_s`` override :attr:`stream_limits` for this
+        call. The stream ends by the budget or ``max_s``, whichever is first.
+        """
+        timeout = self.timeout_s if timeout_s is None else float(timeout_s)
+        if timeout <= 0:
+            raise ValueError("timeout_s must be > 0")
+        limits = self.stream_limits.override(
+            max_s=max_s, max_bytes=max_bytes, idle_s=idle_s
+        )
+        return MinerStream(
+            self._stream(
+                neuron,
+                route,
+                body,
+                method=method,
+                idempotent=idempotent,
+                chunk_model=chunk_model,
+                deadline_s=timeout,
+                limits=limits,
+            )
+        )
+
+    async def query_stream(
+        self, neuron: NeuronView, route: str, body: bytes, **kw: Any
+    ) -> MinerResult:
+        """Run :meth:`stream` to the end and return its result."""
+        async with self.stream(neuron, route, body, **kw) as stream:
+            return await stream.finish()
+
+    async def query_stream_many(
+        self, neurons: Sequence[NeuronView], route: str, body: bytes, **kw: Any
+    ) -> dict[int, MinerResult]:
+        """:meth:`query_stream` for every neuron (bounded concurrency), by UID."""
+        results = await asyncio.gather(
+            *(self.query_stream(n, route, body, **kw) for n in neurons)
+        )
+        return {r.uid: r for r in results}
+
+    async def _stream(
+        self,
+        neuron: NeuronView,
+        route: str,
+        body: bytes,
+        *,
+        method: str,
+        idempotent: bool,
+        chunk_model: type[BaseModel] | None,
+        deadline_s: float,
+        limits: StreamLimits,
+    ) -> AsyncGenerator[UnverifiedChunk | MinerResult, None]:
+        async with self._semaphore:
+            result: MinerResult | None = None
+            attempts = self._stream_attempts(
+                neuron,
+                route,
+                body,
+                method=method,
+                idempotent=idempotent,
+                chunk_model=chunk_model,
+                deadline_s=deadline_s,
+                limits=limits,
+            )
+            try:
+                # aclosing: an early close releases the connection before the slot.
+                async with contextlib.aclosing(attempts):
+                    async for item in attempts:
+                        if isinstance(item, MinerResult):
+                            result = item
+                        else:
+                            yield item
+            except Exception:  # noqa: BLE001 - one miner must never break the round
+                _log.exception("query_failed", uid=neuron.uid)
+                result = _failed(neuron, "tw.internal", attempts=1)
+        if result is not None:
+            self._count(result)
+            yield result
+
+    async def _stream_attempts(
+        self,
+        neuron: NeuronView,
+        route: str,
+        body: bytes,
+        *,
+        method: str,
+        idempotent: bool,
+        chunk_model: type[BaseModel] | None,
+        deadline_s: float,
+        limits: StreamLimits,
+    ) -> AsyncGenerator[UnverifiedChunk | MinerResult, None]:
+        if neuron.axon is None:
+            yield _failed(neuron, "tw.no_axon", attempts=0)
+            return
+        budget = _Budget(self._monotonic, deadline_s, self.max_attempts)
+        url = self._url(neuron, route)
+        attempts = 0
+        while True:
+            attempts += 1
+            started = time.perf_counter()
+            attempt, response = await self._open(
+                neuron, method, url, body, budget.next_deadline(), stream=True
+            )
+            if response is not None:
+                break
+            if not (
+                attempts < self.max_attempts
+                and self._should_retry(attempt, idempotent)
+                and budget.left() > 0
+            ):
+                answered = self._to_result(neuron, attempt, attempts, None)
+                if answered.ok:  # a 200 that is not an event stream
+                    answered = replace(
+                        answered, ok=False, data=None, error_code="tw.invalid_response"
+                    )
+                yield answered
+                return
+        reader = StreamReader(
+            response,
+            limits=limits,
+            deadline=self._monotonic() + min(budget.left(), limits.max_s),
+            monotonic=self._monotonic,
+            chunk_model=chunk_model,
+            verify=self.verify_responses,
+            expected_responder=neuron.hotkey,
+            request_nonce=attempt.nonce,
+            sender_ss58=self.signer.hotkey_ss58,
+        )
+
+        def result(ok: bool, code: str | None) -> MinerResult:
+            return MinerResult(
+                uid=neuron.uid,
+                hotkey=neuron.hotkey,
+                ok=ok,
+                status=200,
+                latency_ms=(time.perf_counter() - started) * 1000,
+                data=tuple(reader.values) if ok else None,
+                error_code=code,
+                attempts=attempts,
+                response_verified=ok and self.verify_responses,
+            )
+
+        try:
+            async with contextlib.aclosing(reader.chunks()) as chunks:
+                async for chunk in chunks:
+                    yield chunk
+        except StreamFailure as failure:
+            _log.warning(
+                "stream_rejected",
+                uid=neuron.uid,
+                code=failure.code,
+                reason=failure.reason,
+            )
+            if self.metrics is not None:
+                self.metrics.stream_aborted.labels(
+                    side="validator", reason=failure.metric_reason
+                ).inc()
+            yield result(False, failure.code)
+            return
+        finally:
+            await response.aclose()
+        yield result(True, None)
+
+    # ------------------------------------------------------------ one query
+
     async def _query(
         self,
         neuron: NeuronView,
@@ -459,6 +712,25 @@ class ValidatorClient:
         body: bytes,
         deadline_s: float,
     ) -> _Attempt:
+        attempt, _ = await self._open(neuron, method, url, body, deadline_s)
+        return attempt
+
+    async def _open(
+        self,
+        neuron: NeuronView,
+        method: str,
+        url: httpx.URL,
+        body: bytes,
+        deadline_s: float,
+        *,
+        stream: bool = False,
+    ) -> tuple[_Attempt, httpx.Response | None]:
+        """One attempt: a fresh signature, the request, the whole answer.
+
+        With ``stream``, a ``200 text/event-stream`` answer is returned open
+        after its head (the caller reads and closes it); any other answer is
+        read whole as usual, and the response is ``None``.
+        """
         target = url.raw_path.decode("ascii")
         headers = self.signer.sign(
             method=method, target=target, body=body, receiver_ss58=neuron.hotkey
@@ -466,12 +738,33 @@ class ValidatorClient:
         nonce = int(headers["X-Bittensor-Nonce"])
         if body:
             headers["Content-Type"] = "application/json"
+        timeout = httpx.Timeout(deadline_s, connect=min(3.0, deadline_s))
+        if stream:
+            headers["Accept"] = "text/event-stream"
+            headers["Accept-Encoding"] = "identity"  # an encoded stream is refused
+            # No read timeout: fail_after bounds the attempt up to the head;
+            # after it, StreamReader applies the stream limits to every read.
+            timeout = httpx.Timeout(deadline_s, connect=min(3.0, deadline_s), read=None)
+        request = self._http.build_request(
+            method, url, headers=headers, content=body, timeout=timeout
+        )
         started = time.perf_counter()
         code: str | None = None
         answer: _Answer | None = None
         try:
             with anyio.fail_after(deadline_s):
-                answer = await self._send(method, url, headers, body, deadline_s)
+                response = await self._http.send(request, stream=True)
+                if (
+                    stream
+                    and response.status_code == 200
+                    and is_event_stream(response.headers)
+                ):
+                    latency = (time.perf_counter() - started) * 1000
+                    return _Attempt(None, None, nonce, latency), response
+                try:
+                    answer = await self._read(response)
+                finally:
+                    await response.aclose()
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
             code = "tw.connect_error"
         except (TimeoutError, httpx.TimeoutException):
@@ -481,37 +774,20 @@ class ValidatorClient:
         except httpx.HTTPError:
             code = "tw.invalid_response"  # protocol error or dropped mid-answer
         latency = (time.perf_counter() - started) * 1000
-        return _Attempt(answer=answer, error_code=code, nonce=nonce, latency_ms=latency)
+        return _Attempt(answer, code, nonce, latency), None
 
-    async def _send(
-        self,
-        method: str,
-        url: httpx.URL,
-        headers: dict[str, str],
-        body: bytes,
-        deadline_s: float,
-    ) -> _Answer:
-        request = self._http.build_request(
-            method,
-            url,
-            headers=headers,
-            content=body,
-            timeout=httpx.Timeout(deadline_s, connect=min(3.0, deadline_s)),
-        )
-        response = await self._http.send(request, stream=True)
-        try:
-            declared = response.headers.get("content-length", "")
-            if declared.isdigit() and int(declared) > self.max_response_bytes:
+    async def _read(self, response: httpx.Response) -> _Answer:
+        """Read a whole answer with the byte cap (``_TooLarge``)."""
+        declared = response.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > self.max_response_bytes:
+            raise _TooLarge
+        chunks: list[bytes] = []
+        size = 0
+        async for chunk in response.aiter_bytes():
+            size += len(chunk)
+            if size > self.max_response_bytes:
                 raise _TooLarge
-            chunks: list[bytes] = []
-            size = 0
-            async for chunk in response.aiter_bytes():
-                size += len(chunk)
-                if size > self.max_response_bytes:
-                    raise _TooLarge
-                chunks.append(chunk)
-        finally:
-            await response.aclose()
+            chunks.append(chunk)
         return _Answer(response.status_code, response.headers, b"".join(chunks))
 
     def _to_result(

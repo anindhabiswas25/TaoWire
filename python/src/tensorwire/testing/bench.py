@@ -34,7 +34,7 @@ from typing import Any
 import anyio.to_thread
 import httpx
 import uvicorn
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from tensorwire.auth.signer import RequestSigner
 from tensorwire.chain.axon import parse_axon
@@ -52,9 +52,11 @@ from tensorwire.validator.client import ValidatorClient
 __all__ = [
     "BENCH_NETUID",
     "BENCH_ROUTE",
+    "BENCH_STREAM_ROUTE",
     "MAX_LOAD_PROCESSES",
     "BenchRequest",
     "BenchResponse",
+    "BenchStreamRequest",
     "LoadStats",
     "auth_overhead",
     "bench_body",
@@ -74,6 +76,8 @@ __all__ = [
 
 BENCH_NETUID = 1
 BENCH_ROUTE = "/v1/bench"
+#: A streaming route (spec 9.2) for the stream abuse tests (13.6).
+BENCH_STREAM_ROUTE = "/v1/bench/stream"
 #: Load generators that can run at once. Each signs with its own permitted
 #: validator hotkey (:func:`bench_validator`), so no two processes ever sign
 #: the same nonce.
@@ -90,6 +94,13 @@ class BenchResponse(BaseModel):
     """The benchmark answer: the payload length."""
 
     n: int
+
+
+class BenchStreamRequest(BaseModel):
+    """A stream of ``chunks`` chunks of about ``size`` bytes each."""
+
+    chunks: int = Field(ge=0, le=100_000)
+    size: int = Field(ge=0, le=65_536)
 
 
 def bench_body(size: int) -> bytes:
@@ -155,6 +166,12 @@ def bench_miner(
     @miner.route(BENCH_ROUTE, request=BenchRequest, response=BenchResponse)
     async def bench(req: BenchRequest, ctx: RouteContext) -> BenchResponse:  # noqa: ARG001
         return BenchResponse(n=len(req.payload))
+
+    @miner.route(BENCH_STREAM_ROUTE, request=BenchStreamRequest, stream=True)
+    async def stream(req: BenchStreamRequest, ctx: RouteContext) -> AsyncIterator[Any]:  # noqa: ARG001
+        pad = "x" * req.size
+        for i in range(req.chunks):
+            yield {"i": i, "pad": pad}
 
     return miner
 

@@ -75,6 +75,11 @@ class Dummy(Synapse):
     required_hash_fields: ClassVar[tuple[str, ...]] = ("dummy_input",)
 
 
+class StreamDummy(Synapse):
+    dummy_input: int
+    required_hash_fields: ClassVar[tuple[str, ...]] = ("dummy_input",)
+
+
 class TextOps(Synapse):
     text: str
     op: str
@@ -134,6 +139,12 @@ def tw_miner(tw_miner_kwargs: dict[str, Any], day: list[dt.date]) -> Miner:
     async def text_ops(s: TextOps, ctx: RouteContext) -> TextOps:
         s.result = s.text.upper() * s.count
         return s
+
+    @miner.route(
+        "/StreamDummy", request=StreamDummy, legacy_synapse=StreamDummy, stream=True
+    )
+    async def stream_dummy(s: StreamDummy, ctx: RouteContext) -> AsyncIterator[Any]:
+        yield {"n": s.dummy_input}
 
     return miner
 
@@ -602,3 +613,43 @@ async def test_13_signed_tag_change_reaches_a_rolled_back_miner_over_v10(
             assert (back.ok, back.protocol) == (True, "v10")
             assert back.data.dummy_output == 6
             assert fake.v10_hits == 1
+
+
+async def test_d33_a_v10_request_to_a_streaming_route_is_invalid_request(
+    miner_app: Any, tw_miner: Miner, tw_clock: FakeClock
+) -> None:
+    """No streaming over the v10 wire (D33, 10b.3): a v10-shaped 422 at once.
+
+    The signature is broken on purpose: the refusal comes before any
+    verification work, so the answer is still 422, not 401.
+    """
+    encoded = wire.encode_request(
+        StreamDummy(dummy_input=3),
+        signer=crypto.HotkeySigner(dev_key("alice").keypair),
+        axon_hotkey=BOB,
+        axon_ip="44.1.2.3",
+        axon_port=8091,
+        nonce=tw_clock.now_ns(),
+        uuid="0f6e3a1c-0000-4000-8000-000000000002",
+        timeout=12.0,
+    )
+    headers = [
+        (k, "0x" + "00" * 64 if k == "bt_header_dendrite_signature" else v)
+        for k, v in encoded.headers
+    ]
+    verified_before = tw_miner.metrics.registry.get_sample_value(
+        "tw_auth_verify_duration_seconds_count"
+    )
+    r = await post(miner_app, "/StreamDummy", headers, encoded.body)
+    assert r.status_code == 422, r.text
+    assert r.headers["bt_header_axon_status_code"] == "422"
+    assert "text/event-stream" not in r.headers.get("content-type", "")
+    assert r.json().get("error", {}).get("code", "tw.invalid_request") == (
+        "tw.invalid_request"
+    )
+    assert (
+        tw_miner.metrics.registry.get_sample_value(
+            "tw_auth_verify_duration_seconds_count"
+        )
+        == verified_before
+    )

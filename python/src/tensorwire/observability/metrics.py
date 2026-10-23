@@ -179,6 +179,12 @@ class Metrics:
             registry=r,
             **recent,
         )
+        self.stream_aborted = Counter(
+            "tw_stream_aborted_total",
+            "Streams ended without a valid tw-end (spec 9.2).",
+            ["side", "reason"],
+            registry=r,
+        )
         self.metagraph_age.set(float("nan"))
         self.clock_offset.set(float("nan"))
 

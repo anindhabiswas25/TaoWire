@@ -12,7 +12,9 @@ rest for one route:
 [8]   per-hotkey, per-route rate limit (429)
 [9]   parse the verified raw body into the request model (422)
 [10]  the handler, with a timeout (504 / 500)
-[11]  serialize, sign the response (``twresp/1``, spec 9.1) and send
+[11]  serialize, sign the response (``twresp/1``, spec 9.1) and send; a
+      streaming route (spec 9.2) fetches its first chunk and answers with
+      SSE and a signed ``tw-end`` instead (``miner.streaming``)
 
 Cheap rejects come first; the signature check runs only after the size and
 IP limits, and the replay store is written only after the signature
@@ -56,9 +58,11 @@ from tensorwire.errors import (
 )
 from tensorwire.extensions.legacy_v10 import wire
 from tensorwire.extensions.response_sig import sign_response
+from tensorwire.extensions.streaming import StreamLimits
 from tensorwire.miner.legacy import LegacyRequestLike, LegacyServerLike
 from tensorwire.miner.lifecycle import Lifecycle, Runtime
 from tensorwire.miner.routes import Route, RouteContext
+from tensorwire.miner.streaming import StreamSlots, open_stream
 from tensorwire.observability.metrics import Metrics
 from tensorwire.observability.middleware import state_of
 
@@ -131,11 +135,13 @@ class RouteEndpoint:
         metrics: Metrics,
         *,
         legacy_only: bool = False,
+        stream_slots: StreamSlots | None = None,
     ) -> None:
         self.route = route
         self._lifecycle = lifecycle
         self._metrics = metrics
         self._legacy_only = legacy_only
+        self._stream_slots = StreamSlots() if stream_slots is None else stream_slots
 
     async def endpoint(self, request: Request) -> Response:
         """The Starlette endpoint (a bound method: Starlette passes a ``Request``)."""
@@ -217,6 +223,10 @@ class RouteEndpoint:
             self._metrics.auth_verify_duration.observe(time.perf_counter() - started)
         ctx = await self._admit(rt, state, caller, request_id)  # [7] [8]
         argument = route.parse(body)  # [9]
+        if route.stream_limits is not None:
+            return await self._stream(
+                rt, state, caller, ctx, argument, limits=route.stream_limits
+            )
         result = await self._invoke(argument, ctx)  # [10]
         content, media_type = _serialize(route, result)  # [11]
         return Response(
@@ -224,6 +234,46 @@ class RouteEndpoint:
             status_code=200,
             media_type=media_type,
             headers=self._sign(caller, 200, content),
+        )
+
+    async def _stream(
+        self,
+        rt: Runtime,
+        state: MutableMapping[str, Any],
+        caller: Caller,
+        ctx: RouteContext,
+        argument: Any,
+        *,
+        limits: StreamLimits,
+    ) -> Response:
+        """Steps [10]-[11] of a streaming route (spec 9.2)."""
+        route = self.route
+        try:
+            release = self._stream_slots.acquire(caller.hotkey_ss58)
+        except RateLimited:
+            state["tw_rate_layer"] = "hotkey"
+            raise
+        try:
+            invoked = time.perf_counter()
+            result = await self._invoke(argument, ctx)  # [10]
+        except BaseException:
+            release()
+            raise
+        # [11] SSE. One deadline: the handler call and its first chunk share
+        # timeout_s.
+        spent = time.perf_counter() - invoked
+        return await open_stream(
+            result,
+            route=route.path,
+            request_id=ctx.request_id,
+            timeout_s=max(route.timeout_s - spent, 0.001),
+            limits=limits,
+            chunk_model=route.response_model,
+            signer=rt.signer if self._lifecycle.settings.sign_responses else None,
+            caller=caller,
+            metrics=self._metrics,
+            state=state,
+            release=release,
         )
 
     async def _admit(
@@ -257,6 +307,11 @@ class RouteEndpoint:
         state["tw_protocol"] = "v10"
         if not route.accepts_legacy:
             raise LegacyAuthFailed("this route does not accept v10 requests")
+        if route.stream:
+            # D33: no streaming over the v10 wire. Refused before any
+            # verification work (no signature check, replay write or token).
+            _log.info("legacy_stream_refused", route=route.path)
+            raise InvalidRequest()
         body = await _read_body(request, route.max_body_bytes)  # [2/3]
         rt = self._lifecycle.runtime
         rt.gate.precheck()  # [5]
@@ -343,7 +398,9 @@ class RouteEndpoint:
         result: Any = None
         try:
             with anyio.move_on_after(route.timeout_s) as scope:
-                if route.is_async:
+                if route.is_async_generator:
+                    result = route.handler(argument, ctx)  # runs as it is read
+                elif route.is_async:
                     result = await route.handler(argument, ctx)
                 else:
                     call = functools.partial(route.handler, argument, ctx)

@@ -9,7 +9,9 @@ plain ``def`` (run in a worker thread) and are called as
   verified raw body. Without a request model it is the raw body (``bytes``).
 - ``ctx`` is a :class:`RouteContext`: who called and the request ID.
 
-A handler returns an instance of the response model, or ``bytes``.
+A handler returns an instance of the response model, or ``bytes``. A
+streaming route (``stream=True``, spec 9.2) returns an async iterable of
+chunks or a ``StreamingReply``; its ``response_model`` is the chunk model.
 Routes are ``POST`` by default. ``GET`` routes take no body (a non-empty
 body is rejected) but are signed like any other route.
 
@@ -32,6 +34,7 @@ from pydantic import BaseModel, ValidationError
 from tensorwire.auth.verifier import Caller
 from tensorwire.chain.gateway import NeuronView
 from tensorwire.errors import InvalidRequest
+from tensorwire.extensions.streaming import StreamLimits
 from tensorwire.policy.caller import CallerPolicy
 
 __all__ = [
@@ -85,6 +88,13 @@ class Route:
     encode: Callable[[Any], bytes] | None = None
     """Turns the handler's result into the JSON response body (default:
     ``model_dump_json`` of the response model, or the bytes as returned)."""
+    stream_limits: StreamLimits | None = None
+    """Set on a streaming route (spec 9.2): its stream limits."""
+
+    @property
+    def stream(self) -> bool:
+        """Whether the route answers with an SSE stream."""
+        return self.stream_limits is not None
 
     @property
     def accepts_legacy(self) -> bool:
@@ -95,6 +105,11 @@ class Route:
     def is_async(self) -> bool:
         """Whether the handler is a coroutine function."""
         return inspect.iscoroutinefunction(self.handler)
+
+    @property
+    def is_async_generator(self) -> bool:
+        """Whether the handler is an async generator function (a stream)."""
+        return inspect.isasyncgenfunction(self.handler)
 
     def parse(self, body: bytes) -> Any:
         """Step 9: turn the verified body into the handler's argument.
@@ -157,8 +172,9 @@ class RouteRegistry:
         legacy_synapse: type[BaseModel] | None = None,
         legacy_body_hash: Callable[[bytes], str] | None = None,
         encode: Callable[[Any], bytes] | None = None,
+        stream_limits: StreamLimits | None = None,
     ) -> Route:
-        """Validate and register a route."""
+        """Validate and register a route (``stream_limits`` makes it a stream)."""
         if self._frozen:
             raise RuntimeError("routes must be registered before miner.app is built")
         _check_path(path)
@@ -178,6 +194,10 @@ class RouteRegistry:
             raise ValueError("pass legacy_synapse or legacy_body_hash, not both")
         if method == "GET" and (legacy_synapse or legacy_body_hash):
             raise ValueError("v10 requests are POST only")
+        if stream_limits is not None and encode is not None:
+            raise ValueError("a streaming route encodes each chunk itself; no encode")
+        if stream_limits is None and inspect.isasyncgenfunction(handler):
+            raise ValueError("an async generator handler needs stream=True")
         route = Route(
             path=path,
             method=method,
@@ -190,6 +210,7 @@ class RouteRegistry:
             legacy_synapse=legacy_synapse,
             legacy_body_hash=legacy_body_hash,
             encode=encode,
+            stream_limits=stream_limits,
         )
         self._routes[path] = route
         return route

@@ -53,6 +53,7 @@ from tensorwire.chain.gateway import ChainGateway
 from tensorwire.chain.metagraph_cache import MetagraphSource
 from tensorwire.config import MinerSettings
 from tensorwire.errors import ConfigError, StartupError
+from tensorwire.extensions.streaming import StreamLimits
 from tensorwire.limits.body import BodySizeLimit
 from tensorwire.limits.ratelimit import PreAuthRateLimit, RateDecision, RateLimiter
 from tensorwire.miner.health import health_routes
@@ -61,6 +62,7 @@ from tensorwire.miner.lifecycle import Lifecycle, MinerParts
 from tensorwire.miner.pipeline import RouteEndpoint
 from tensorwire.miner.protocol import MAX_HEADER_BYTES, guarded_protocol
 from tensorwire.miner.routes import Handler, Route, RouteRegistry
+from tensorwire.miner.streaming import StreamSlots
 from tensorwire.observability.logging import configure_logging
 from tensorwire.observability.metrics import MULTIPROC_ENV, Metrics, serve_multiprocess
 from tensorwire.observability.middleware import RequestContext
@@ -150,6 +152,7 @@ class Miner:
             ),
         )
         self._app: FastAPI | None = None
+        self._stream_slots = StreamSlots()  # open streams per caller, all routes
 
     @classmethod
     def from_env(cls, env_file: str | Path | None = None, **kwargs: Any) -> Miner:
@@ -171,6 +174,10 @@ class Miner:
         legacy_synapse: type[BaseModel] | None = None,
         legacy_body_hash: Callable[[bytes], str] | None = None,
         encode: Callable[[Any], bytes] | None = None,
+        stream: bool = False,
+        stream_max_s: float | None = None,
+        stream_max_bytes: int | None = None,
+        stream_idle_s: float | None = None,
     ) -> Callable[[_H], _H]:
         """Register a protected route (decorator).
 
@@ -183,8 +190,23 @@ class Miner:
         also accepts v10 Dendrite requests (spec 8.11.2). They arrive at
         ``/<SynapseName>``; that path is mounted for them when it differs
         from ``path``. ``encode`` replaces the default response encoding.
+
+        ``stream=True`` makes it a streaming route (spec 9.2): the handler
+        returns an async iterable of chunks (JSON objects or arrays: models,
+        dicts, lists) or a ``StreamingReply``, and ``response`` is the chunk
+        model. ``stream_max_s`` / ``stream_max_bytes`` / ``stream_idle_s``
+        override ``TW_STREAM_MAX_S`` / ``_MAX_BYTES`` / ``_IDLE_S`` (same
+        ranges). ``timeout_s`` bounds the time to the first chunk.
         """
         chosen = self.default_policy if policy is None else policy
+        limits: StreamLimits | None = None
+        if stream:
+            s = self.settings
+            limits = StreamLimits.from_settings(s).override(
+                max_s=stream_max_s, max_bytes=stream_max_bytes, idle_s=stream_idle_s
+            )
+        elif (stream_max_s, stream_max_bytes, stream_idle_s) != (None, None, None):
+            raise ValueError("stream_* limits need stream=True")
 
         def register(handler: _H) -> _H:
             self.routes.add(
@@ -203,6 +225,7 @@ class Miner:
                 legacy_synapse=legacy_synapse,
                 legacy_body_hash=legacy_body_hash,
                 encode=encode,
+                stream_limits=limits,
             )
             return handler
 
@@ -250,7 +273,9 @@ class Miner:
         return app
 
     def _mount(self, app: FastAPI, route: Route) -> None:
-        endpoint = RouteEndpoint(route, self.lifecycle, self.metrics)
+        endpoint = RouteEndpoint(
+            route, self.lifecycle, self.metrics, stream_slots=self._stream_slots
+        )
         app.router.add_route(
             route.path,
             endpoint.endpoint,
@@ -266,7 +291,13 @@ class Miner:
             raise ValueError(
                 f"{alias} is both a route and the v10 path of {route.path}"
             )
-        legacy = RouteEndpoint(route, self.lifecycle, self.metrics, legacy_only=True)
+        legacy = RouteEndpoint(
+            route,
+            self.lifecycle,
+            self.metrics,
+            legacy_only=True,
+            stream_slots=self._stream_slots,
+        )
         app.router.add_route(
             alias, legacy.endpoint, methods=["POST"], include_in_schema=False
         )

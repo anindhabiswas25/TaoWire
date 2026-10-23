@@ -73,6 +73,18 @@ The miner's public port uses httptools with three extra limits:
   sender cost about 0.8-1.35 s of CPU (about 50-85 ms at the 16 KiB header
   cap). With the bound it is refused as `tw.auth_malformed` in about 10 µs
   (`reports/phase-3/gate-fix/g4-2-timing.txt`).
+- **Streams** (spec 9.2, D29; [streaming.md](streaming.md)): the whole
+  request path runs before the first byte; both ends enforce
+  `TW_STREAM_MAX_S`, `_MAX_BYTES` and `_IDLE_S`. The miner cuts a stream
+  whose reader stopped reading at `max_s` and stops the handler at once when
+  the validator disconnects; one caller hotkey may hold at most 16 open
+  streams per miner process (429 beyond). The validator cuts a one-byte drip
+  by the idle limit (measured between complete events) and an endless stream
+  by `max_s` or its time budget. Chunks are JSON objects or arrays, so the
+  signed bytes split into chunks one way only. Tests:
+  `tests/abuse/test_stream_abuse.py` (drip, endless, 40 unread streams with
+  alice served), `tests/integration/test_stream_routes.py` (test 11),
+  `tests/unit/test_streaming_client.py`, `tests/property/test_streaming_properties.py`.
 
 The per-IP limiter is the outermost layer, so a flood is refused before any
 other work. Its refusals are counted (`tw_rate_limited_total{layer="ip"}`,

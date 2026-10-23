@@ -68,6 +68,7 @@ from tensorwire.chain.metagraph_cache import (
 from tensorwire.config import ValidatorSettings
 from tensorwire.crypto import HotkeySigner
 from tensorwire.errors import ConfigError, StartupError
+from tensorwire.extensions.streaming import StreamLimits
 from tensorwire.miner.app import NoSignalServer
 from tensorwire.observability.logging import configure_logging
 from tensorwire.observability.metrics import Metrics
@@ -358,6 +359,7 @@ class ValidatorRunner:
             verify_responses=s.verify_responses,
             scheme_policy=s.scheme_policy,
             max_response_bytes=s.max_response_bytes,
+            stream_limits=StreamLimits.from_settings(s),
             legacy=legacy,
             selector=selector,
             metrics=self.metrics,

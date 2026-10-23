@@ -42,6 +42,9 @@ from tensorwire.errors import ConfigError
 __all__ = [
     "DEFAULT_PROTOCOL_TAG",
     "LEGACY_MAX_HORIZON_DAYS",
+    "STREAM_IDLE_S_RANGE",
+    "STREAM_MAX_BYTES_RANGE",
+    "STREAM_MAX_S_RANGE",
     "CommonSettings",
     "HostPort",
     "MinerSettings",
@@ -56,6 +59,13 @@ ENV_PREFIX = "TW_"
 #: Default ``ServeAxon.protocol`` tag (PM decision D1). The chain stores this
 #: field as a u8, so the range is 0-255; 0x57 is "W".
 DEFAULT_PROTOCOL_TAG = 0x57
+
+#: Allowed stream limits (spec 9.2, 12.1): ``TW_STREAM_MAX_S`` (whole
+#: stream), ``TW_STREAM_MAX_BYTES``, ``TW_STREAM_IDLE_S`` (gap between events).
+#: Per-route and per-call overrides use the same ranges.
+STREAM_MAX_S_RANGE = (1.0, 600.0)
+STREAM_MAX_BYTES_RANGE = (1024, 64 * 1024 * 1024)
+STREAM_IDLE_S_RANGE = (1.0, 120.0)
 
 #: Latest allowed legacy-bridge end date, in days after the process starts
 #: (PM decision D4): the v10 bridge is time-boxed, never "forever".
@@ -230,6 +240,16 @@ class CommonSettings(BaseSettings):
     protocol_tag: int = Field(default=DEFAULT_PROTOCOL_TAG, ge=0, le=255)
     scheme_policy: Literal["http", "https", "https-if-tls-published"] = "http"
     allow_private_axons: bool = False
+    #: Streaming limits (spec 9.2, 12.1); routes and calls may override them.
+    stream_max_s: float = Field(
+        default=60.0, ge=STREAM_MAX_S_RANGE[0], le=STREAM_MAX_S_RANGE[1]
+    )
+    stream_max_bytes: int = Field(
+        default=4_194_304, ge=STREAM_MAX_BYTES_RANGE[0], le=STREAM_MAX_BYTES_RANGE[1]
+    )
+    stream_idle_s: float = Field(
+        default=10.0, ge=STREAM_IDLE_S_RANGE[0], le=STREAM_IDLE_S_RANGE[1]
+    )
 
     def __init__(self, **values: Any) -> None:
         fields = type(self).model_fields
