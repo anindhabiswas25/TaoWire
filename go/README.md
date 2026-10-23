@@ -57,13 +57,18 @@ Full doc comments: `go doc -all ./btauth`.
 
 ## Checks
 
+`just lint`, `just test`, `just conformance` and `just audit` run these with the pinned Go SDK and
+tools (`scripts/go_tools.sh`; a missing SDK fails, missing or stale tools are built). By hand, from the
+repository root, after `./scripts/go_tools.sh ensure`:
+
 ```bash
+export PATH="$(./scripts/go_tools.sh sdk-path)/bin:$PATH" GOTOOLCHAIN=local
 cd go
 go test ./btauth -run Conformance      # every vector in conformance/vectors (except legacy_v10, Python only)
 go test -race ./...                    # unit tests; TENSORWIRE_TEST_REDIS_URL=redis://... for the Redis store
-go vet ./... && staticcheck ./...
+go vet ./... && ../scripts/go_tools.sh run staticcheck ./...
 go test ./btauth -run '^$' -fuzz FuzzVerify -fuzztime 5m
-govulncheck ./...
+../scripts/go_tools.sh run govulncheck ./...
 ```
 
 Not yet in this package: SSE streaming helpers (spec 9.2) and the sidecar client (11.6).
