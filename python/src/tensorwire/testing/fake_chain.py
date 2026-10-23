@@ -130,6 +130,7 @@ class _Neuron:
     incentive: float
     dividends: float
     last_served_block: int | None = None
+    tls_key: bytes | None = None
 
 
 @dataclass(slots=True)
@@ -352,6 +353,10 @@ class FakeChain:
         neuron.axon = axon
         neuron.axon_protocol = protocol if axon else None
 
+    def set_tls_key(self, netuid: int, hotkey: str, tls_key: bytes | None) -> None:
+        """Set ``hotkey``'s stored ``ServeAxonTls`` certificate directly (any bytes)."""
+        self._neuron_or_raise(netuid, hotkey).tls_key = tls_key
+
     def set_scores(
         self, netuid: int, hotkey: str, *, incentive: float, dividends: float
     ) -> None:
@@ -508,6 +513,14 @@ class FakeChain:
         axon = _axon_string(ip, port)
         if axon is None or not 0 <= protocol_tag <= 255:
             return _failed("invalid_argument")
+        try:
+            certificate = (
+                None
+                if tls_cert_hex is None
+                else bytes.fromhex(tls_cert_hex.removeprefix("0x"))
+            )
+        except ValueError:
+            return _failed("invalid_argument")
         if (
             neuron.last_served_block is not None
             and self._state.block - neuron.last_served_block < subnet.serving_rate_limit
@@ -516,6 +529,10 @@ class FakeChain:
         neuron.axon = axon
         neuron.axon_protocol = protocol_tag
         neuron.last_served_block = self._state.block
+        # As the chain (ADR-0011): an empty or > 65-byte certificate is not
+        # stored, the previous one stays, and the axon is served anyway.
+        if certificate is not None and 0 < len(certificate) <= 65:
+            neuron.tls_key = certificate
         self._state.publications.append(
             AxonPublication(
                 netuid=netuid,
@@ -661,6 +678,7 @@ class FakeChain:
             incentive=n.incentive,
             dividends=n.dividends,
             axon_protocol=n.axon_protocol,
+            tls_key=n.tls_key,
         )
 
     def _subnet_or_raise(self, netuid: int) -> _Subnet:

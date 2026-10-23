@@ -85,7 +85,7 @@ def test_request_ids_are_sortable_ulids() -> None:
 def test_metrics_match_appendix_b(spec_text: str) -> None:
     section = spec_text.split("## Appendix B")[1].split("## Appendix C", maxsplit=1)[0]
     rows = re.findall(r"^\| `(tw_[a-z0-9_]+)` \| (\w+) \| (.*?) \|$", section, re.M)
-    assert len(rows) == 20
+    assert len(rows) == 24  # spec v1.7
     registry = Metrics().registry
     families = {m.name: m for m in registry.collect()}
     for name, kind, labels_cell in rows:

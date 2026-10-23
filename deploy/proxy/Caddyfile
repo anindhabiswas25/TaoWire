@@ -1,0 +1,35 @@
+# TLS at Caddy in front of one TensorWire miner (spec 16.3, docs/security.md).
+#
+# The miner:  TW_BIND_HOST=127.0.0.1  TW_BIND_PORT=8091
+#             TW_EXTERNAL_PORT=8443   TW_TRUSTED_PROXIES=127.0.0.1/32
+#             TW_TLS_PUBLISHED_CERT_FILE=/etc/tensorwire/proxy/cert.pem
+# The certificate must have an Ed25519 or EC P-256 key (ADR-0011): validators
+# pin its key against the one the miner publishes with ServeAxonTls. Axons are
+# IP addresses, so the certificate is your own (self-signed is fine: the pin,
+# not a CA, is the trust anchor); no ACME.
+#
+# Requests are signed over the exact target and body. This config passes both
+# through unchanged: no rewrite, no strip_prefix, no handle_path, no encode
+# (compression) and no request-body handling. Do not add any of those.
+{
+	auto_https off
+	admin off
+}
+
+:8443 {
+	tls /etc/tensorwire/proxy/cert.pem /etc/tensorwire/proxy/key.pem {
+		protocols tls1.2 tls1.3
+	}
+	request_body {
+		max_size 1MiB # >= TW_MAX_BODY_BYTES (1048576 bytes; "1MB" would be 10^6)
+	}
+	reverse_proxy 127.0.0.1:8091 {
+		# SSE streams (spec 9.2): send each event as it is written.
+		flush_interval -1
+		# Caddy sets X-Forwarded-For to the client's address; TensorWire takes
+		# the right-most address that is not in TW_TRUSTED_PROXIES.
+		transport http {
+			read_timeout 10m # >= the longest TW_STREAM_MAX_S of your routes
+		}
+	}
+}

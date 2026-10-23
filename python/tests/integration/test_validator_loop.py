@@ -340,16 +340,17 @@ async def test_ed25519_hotkey_starts_with_the_legacy_client_off(
         assert not r.client.legacy_enabled
 
 
-async def test_tls_pinning_policy_is_refused_at_startup(
+async def test_tls_pinning_policy_starts(
     router: AppRouter, fake_chain: FakeChain, tw_clock: FakeClock, tmp_path: Path
 ) -> None:
+    """D31: allowed now that pinning is tested (integration/test_tls_modes.py)."""
     r = runner(fake_chain, tw_clock, tmp_path, router)
     r.settings = r.settings.model_copy(
         update={"scheme_policy": "https-if-tls-published"}
     )
-    with pytest.raises(StartupError, match="TW_SCHEME_POLICY=https-if-tls-published"):
-        await r.start()
-    assert r.client is None
+    async with r.running():
+        assert r.client is not None
+        assert r.client.scheme_policy == "https-if-tls-published"
 
 
 async def test_legacy_auto_without_the_bridge(

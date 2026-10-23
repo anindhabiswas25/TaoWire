@@ -30,6 +30,7 @@ miner port. Label values never contain hotkeys or IP addresses.
 | `tw_validator_last_weights_block` | gauge | | Block of the last successful weights |
 | `tw_timelock_open_total` | counter | `result` (`ok`/`not_ready`/`unavailable`) | Timelock opens (spec 8.10): `unavailable` = drand unreachable, rate-limited or failing after `TW_TIMELOCK_RETRIES`, or not revealed within the deadline. See [timelock.md](timelock.md) |
 | `tw_stream_aborted_total` | counter | `side` (`miner`/`validator`), `reason` | Streams that ended without a valid `tw-end` (spec 9.2). Miner reasons: `handler_error`, `idle_timeout`, `max_duration`, `max_bytes`, `bad_chunk`, `cancelled` (disconnect or drain). Validator reasons: `timeout`, `too_large`, `bad_trailer`, `bad_chunk`, `transport`. See [streaming.md](streaming.md) |
+| `tw_tls_pin_failures_total` | counter | — | Miners refused by the validator because the TLS key they serve is not the key they published with `ServeAxonTls`, or what they published cannot be pinned (`tw.tls_pin_mismatch`, spec 16.3). See [security.md](security.md#tls-spec-163-d31-adr-0011) |
 
 The legacy and validator metrics are registered by every process and filled
 by the components that use them.

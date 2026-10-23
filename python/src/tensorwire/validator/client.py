@@ -24,6 +24,15 @@ Rules it enforces:
   ``ok=False, error_code="tw.bad_response_signature"``, and scoring code
   must treat it as a failed response.
 - Neurons without a usable axon are never contacted (``tw.no_axon``).
+- TLS (spec 8.6, 16.3, D31, ADR-0011), per ``scheme_policy``: ``http`` uses
+  plain HTTP for everyone. ``https`` uses HTTPS for everyone: pinned to the
+  miner's published ``ServeAxonTls`` key when it has one, CA-verified when it
+  has none. ``https-if-tls-published`` pins miners with a published key and
+  uses plain HTTP for the others. A key that does not match, or a published
+  value this kit cannot pin, is ``tw.tls_pin_mismatch``
+  (``tw_tls_pin_failures_total``): not retried, never over plain HTTP, and
+  never through the v10 fallback (v10 is plain HTTP only, so it is used only
+  for miners reached over plain HTTP).
 
 Streaming routes (spec 9.2): :meth:`ValidatorClient.stream` returns a
 :class:`MinerStream` that hands out chunks as they arrive, **unverified**
@@ -52,6 +61,7 @@ import asyncio
 import contextlib
 import json
 import time
+from collections import OrderedDict
 from collections.abc import AsyncGenerator, Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal, Protocol
@@ -63,7 +73,7 @@ from pydantic import BaseModel, ValidationError
 
 from tensorwire.auth.signer import RequestSigner
 from tensorwire.chain.gateway import NeuronView
-from tensorwire.errors import ERROR_CODES, StartupError, client_http_code
+from tensorwire.errors import ERROR_CODES, client_http_code
 from tensorwire.extensions.response_sig import (
     HEADER_SIGNATURE,
     ResponseSignatureError,
@@ -72,6 +82,7 @@ from tensorwire.extensions.response_sig import (
 from tensorwire.extensions.streaming import StreamLimits
 from tensorwire.miner.legacy import LegacyTraffic
 from tensorwire.observability.metrics import Metrics
+from tensorwire.tls import TlsPinMismatch, parse_published, pinned_context
 from tensorwire.validator.stream import (
     StreamFailure,
     StreamReader,
@@ -90,6 +101,7 @@ __all__ = [
     "WireProtocol",
     "check_scheme_policy",
     "failed_result",
+    "is_pin_mismatch",
 ]
 
 WireProtocol = Literal["btauth/1", "v10"]
@@ -101,22 +113,32 @@ RETRY_STATUSES = frozenset({502, 503, 504})
 _log = structlog.stdlib.get_logger("tensorwire.validator")
 
 
-def check_scheme_policy(policy: str) -> None:
-    """Refuse a ``TW_SCHEME_POLICY`` this build cannot honour (spec 8.6, D13).
+#: Pinned connection pools kept at once, one per miner hotkey (ADR-0011).
+MAX_PINNED_CLIENTS = 4096
+#: Distinct (hotkey, key) TLS warnings remembered, so a round logs each once.
+_MAX_TLS_WARNINGS = 4096
 
-    ``https-if-tls-published`` needs TLS key pinning, which ships in Phase 4.
-    Until then it raises :class:`StartupError` instead of running on plain
-    HTTP: a validator that asked for pinned TLS must know it is not getting it.
+
+def check_scheme_policy(policy: str) -> None:
+    """Refuse an unknown ``TW_SCHEME_POLICY`` (spec 8.6, D31).
+
+    ``https-if-tls-published`` was refused until key pinning shipped with
+    ADR-0011 (D13, D31); every policy in :data:`SchemePolicy` is supported now.
     """
-    if policy == "https-if-tls-published":
-        raise StartupError(
-            "TW_SCHEME_POLICY=https-if-tls-published is not supported yet: "
-            "pinning a miner's published TLS key ships with TLS support. Use "
-            "TW_SCHEME_POLICY=http (requests and responses are signed) or "
-            "TW_SCHEME_POLICY=https (miners behind TLS)"
-        )
-    if policy not in ("http", "https"):
+    if policy not in ("http", "https", "https-if-tls-published"):
         raise ValueError(f"unknown scheme policy {policy!r}")
+
+
+def is_pin_mismatch(exc: BaseException) -> bool:
+    """Whether ``exc`` (an httpx error) was caused by :class:`TlsPinMismatch`."""
+    seen: BaseException | None = exc
+    for _ in range(8):  # httpx -> httpcore -> ssl; bounded in case of a cycle
+        if seen is None:
+            return False
+        if isinstance(seen, TlsPinMismatch):
+            return True
+        seen = seen.__cause__ or seen.__context__
+    return False
 
 
 @dataclass(frozen=True)
@@ -277,6 +299,14 @@ class _Answer:
 
 
 @dataclass(frozen=True)
+class _Target:
+    """Where and how one miner is reached: the URL and its client (D31)."""
+
+    url: httpx.URL
+    http: httpx.AsyncClient
+
+
+@dataclass(frozen=True)
 class _Attempt:
     answer: _Answer | None
     error_code: str | None
@@ -327,6 +357,19 @@ class ValidatorClient:
         self._legacy = legacy
         self._selector = selector
         self._semaphore = asyncio.Semaphore(max_concurrency)
+        self._limits = httpx.Limits(
+            max_connections=max_concurrency * 2,
+            max_keepalive_connections=max_concurrency,
+        )
+        #: Hotkey -> (its published key, the pool pinned to it or None when
+        #: the key cannot be pinned). A new key retires the old pool.
+        self._pinned: OrderedDict[str, tuple[bytes, httpx.AsyncClient | None]] = (
+            OrderedDict()
+        )
+        self._retired: set[asyncio.Task[None]] = set()
+        #: The longest a request or stream started so far can hold a pool.
+        self._longest_hold_s = timeout_s * max_attempts + self.stream_limits.max_s
+        self._tls_warned: set[tuple[str, bytes]] = set()
         self._monotonic = monotonic
         self._legacy_traffic = (
             None
@@ -337,10 +380,7 @@ class ValidatorClient:
             transport=transport
             if transport is not None
             else httpx.AsyncHTTPTransport(retries=0),  # NEVER resend a signed request
-            limits=httpx.Limits(
-                max_connections=max_concurrency * 2,
-                max_keepalive_connections=max_concurrency,
-            ),
+            limits=self._limits,
             timeout=httpx.Timeout(timeout_s, connect=min(3.0, timeout_s)),
             follow_redirects=False,  # a redirect would break the target binding
         )
@@ -348,7 +388,15 @@ class ValidatorClient:
     # ------------------------------------------------------------ lifecycle
 
     async def aclose(self) -> None:
-        """Close the HTTP connection pool."""
+        """Close the HTTP connection pools."""
+        retired = list(self._retired)
+        for task in retired:
+            task.cancel()  # each closes its pool on the way out
+        await asyncio.gather(*retired, return_exceptions=True)
+        clients = [c for _, c in self._pinned.values() if c is not None]
+        self._pinned.clear()
+        for client in clients:
+            await client.aclose()
         await self._http.aclose()
 
     async def __aenter__(self) -> ValidatorClient:
@@ -562,14 +610,18 @@ class ValidatorClient:
         if neuron.axon is None:
             yield failed_result(neuron, "tw.no_axon", attempts=0)
             return
+        self._hold(deadline_s * self.max_attempts + limits.max_s)
+        target = self._target(neuron, route)
+        if target is None:
+            yield failed_result(neuron, "tw.tls_pin_mismatch", attempts=0)
+            return
         budget = _Budget(self._monotonic, deadline_s, self.max_attempts)
-        url = self._url(neuron, route)
         attempts = 0
         while True:
             attempts += 1
             started = time.perf_counter()
             attempt, response = await self._open(
-                neuron, method, url, body, budget.next_deadline(), stream=True
+                neuron, target, method, body, budget.next_deadline(), stream=True
             )
             if response is not None:
                 break
@@ -647,8 +699,13 @@ class ValidatorClient:
     ) -> MinerResult:
         if neuron.axon is None:
             return failed_result(neuron, "tw.no_axon", attempts=0)
+        self._hold(deadline_s * self.max_attempts)
+        target = self._target(neuron, route)
+        if target is None:
+            return failed_result(neuron, "tw.tls_pin_mismatch", attempts=0)
         budget = _Budget(self._monotonic, deadline_s, self.max_attempts)
-        selector = self._selector
+        # v10 is plain HTTP only: never for a miner this policy reaches over TLS.
+        selector = self._selector if target.url.scheme == "http" else None
         if (
             selector is not None
             and legacy_synapse is not None
@@ -657,9 +714,8 @@ class ValidatorClient:
             return await self._query_v10(
                 neuron, legacy_synapse, response_model, 0, budget
             )
-        url = self._url(neuron, route)
         attempts = 1
-        last = await self._attempt(neuron, method, url, body, budget.next_deadline())
+        last = await self._attempt(neuron, target, method, body, budget.next_deadline())
         while (
             attempts < self.max_attempts
             and self._should_retry(last, idempotent)
@@ -667,7 +723,7 @@ class ValidatorClient:
         ):
             attempts += 1
             last = await self._attempt(
-                neuron, method, url, body, budget.next_deadline()
+                neuron, target, method, body, budget.next_deadline()
             )
         result = self._to_result(neuron, last, attempts, response_model)
         if selector is None or legacy_synapse is None:
@@ -686,16 +742,86 @@ class ValidatorClient:
             neuron, legacy_synapse, response_model, attempts, budget
         )
 
-    def _url(self, neuron: NeuronView, route: str) -> httpx.URL:
+    def _target(self, neuron: NeuronView, route: str) -> _Target | None:
+        """The URL and client for ``neuron`` under the scheme policy (D31).
+
+        ``None``: the miner published a TLS key this kit cannot pin, so it is
+        refused (``tw.tls_pin_mismatch``) rather than reached another way.
+        """
         if neuron.axon is None:
             raise ValueError("neuron has no axon")
+        if not route.startswith("/"):
+            raise ValueError("route must start with /")
         scheme: Literal["http", "https"] = (
             "https" if self.scheme_policy == "https" else "http"
         )
+        http = self._http
+        if self.scheme_policy != "http" and neuron.tls_key is not None:
+            pinned = self._pinned_client(neuron.hotkey, neuron.tls_key)
+            if pinned is None:
+                self._pin_failed(neuron, "tls_key_unusable")
+                return None
+            scheme, http = "https", pinned
         base = httpx.URL(neuron.axon.base_url(scheme))
-        if not route.startswith("/"):
-            raise ValueError("route must start with /")
-        return base.copy_with(raw_path=route.encode("ascii"))
+        return _Target(base.copy_with(raw_path=route.encode("ascii")), http)
+
+    def _pinned_client(self, hotkey: str, published: bytes) -> httpx.AsyncClient | None:
+        """The pool pinned to ``hotkey``'s published key; ``None`` if unpinnable."""
+        entry = self._pinned.get(hotkey)
+        if entry is not None and entry[0] == published:
+            self._pinned.move_to_end(hotkey)
+            return entry[1]
+        client: httpx.AsyncClient | None = None
+        if parse_published(published) is not None:
+            client = httpx.AsyncClient(
+                transport=httpx.AsyncHTTPTransport(
+                    verify=pinned_context(published), retries=0
+                ),
+                limits=self._limits,
+                timeout=self._http.timeout,
+                follow_redirects=False,
+            )
+        if entry is not None and entry[1] is not None:
+            self._retire(entry[1])  # the miner rotated its key
+        self._pinned[hotkey] = (published, client)
+        self._pinned.move_to_end(hotkey)
+        if len(self._pinned) > MAX_PINNED_CLIENTS:
+            _, (_, old) = self._pinned.popitem(last=False)
+            if old is not None:
+                self._retire(old)
+        return client
+
+    def _hold(self, seconds: float) -> None:
+        """Note that a request or stream may hold its pool for ``seconds``."""
+        self._longest_hold_s = max(self._longest_hold_s, seconds)
+
+    def _retire(self, client: httpx.AsyncClient) -> None:
+        """Close a replaced pool once requests that may still use it are over."""
+        grace = self._longest_hold_s
+
+        async def close() -> None:
+            try:
+                await anyio.sleep(grace)
+            finally:
+                with anyio.CancelScope(shield=True):
+                    await client.aclose()
+
+        task = asyncio.get_running_loop().create_task(close())
+        self._retired.add(task)
+        task.add_done_callback(self._retired.discard)
+
+    def _pin_failed(self, neuron: NeuronView, reason: str) -> None:
+        if self.metrics is not None:
+            self.metrics.tls_pin_failures.inc()
+        key = (neuron.hotkey, neuron.tls_key or b"")
+        if key in self._tls_warned:
+            return
+        if len(self._tls_warned) >= _MAX_TLS_WARNINGS:
+            self._tls_warned.clear()
+        self._tls_warned.add(key)
+        _log.warning(
+            "tls_pin_mismatch", uid=neuron.uid, hotkey=neuron.hotkey, reason=reason
+        )
 
     def _should_retry(self, attempt: _Attempt, idempotent: bool) -> bool:
         if attempt.error_code == "tw.connect_error":
@@ -708,19 +834,19 @@ class ValidatorClient:
     async def _attempt(
         self,
         neuron: NeuronView,
+        target: _Target,
         method: str,
-        url: httpx.URL,
         body: bytes,
         deadline_s: float,
     ) -> _Attempt:
-        attempt, _ = await self._open(neuron, method, url, body, deadline_s)
+        attempt, _ = await self._open(neuron, target, method, body, deadline_s)
         return attempt
 
     async def _open(
         self,
         neuron: NeuronView,
+        target: _Target,
         method: str,
-        url: httpx.URL,
         body: bytes,
         deadline_s: float,
         *,
@@ -732,9 +858,12 @@ class ValidatorClient:
         after its head (the caller reads and closes it); any other answer is
         read whole as usual, and the response is ``None``.
         """
-        target = url.raw_path.decode("ascii")
+        url, http = target.url, target.http
         headers = self.signer.sign(
-            method=method, target=target, body=body, receiver_ss58=neuron.hotkey
+            method=method,
+            target=url.raw_path.decode("ascii"),
+            body=body,
+            receiver_ss58=neuron.hotkey,
         )
         nonce = int(headers["X-Bittensor-Nonce"])
         if body:
@@ -746,7 +875,7 @@ class ValidatorClient:
             # No read timeout: fail_after bounds the attempt up to the head;
             # after it, StreamReader applies the stream limits to every read.
             timeout = httpx.Timeout(deadline_s, connect=min(3.0, deadline_s), read=None)
-        request = self._http.build_request(
+        request = http.build_request(
             method, url, headers=headers, content=body, timeout=timeout
         )
         started = time.perf_counter()
@@ -754,7 +883,7 @@ class ValidatorClient:
         answer: _Answer | None = None
         try:
             with anyio.fail_after(deadline_s):
-                response = await self._http.send(request, stream=True)
+                response = await http.send(request, stream=True)
                 if (
                     stream
                     and response.status_code == 200
@@ -766,7 +895,12 @@ class ValidatorClient:
                     answer = await self._read(response)
                 finally:
                     await response.aclose()
-        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
+        except httpx.ConnectError as exc:
+            code = "tw.connect_error"
+            if is_pin_mismatch(exc):
+                code = "tw.tls_pin_mismatch"
+                self._pin_failed(neuron, "key_differs")
+        except (httpx.ConnectTimeout, httpx.PoolTimeout):
             code = "tw.connect_error"
         except (TimeoutError, httpx.TimeoutException):
             code = "tw.timeout"

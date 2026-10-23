@@ -1,11 +1,12 @@
 """``tensorwire doctor``: check a miner's or validator's setup (spec 8.14).
 
 Reads the same ``TW_*`` settings as the process and checks, in order:
-Python and SDK versions, settings, the scheme policy (validator), the
-hotkey file, coldkey absence, chain reachability, registration, the
-published axon (miner) or the validator permit (validator), reachability of
-the miner's port, the clock offset, Redis, multi-worker safety and
-(validator) another process signing with the
+Python and SDK versions, settings, the scheme policy (validator), the TLS
+certificate (miner, spec 16.3), the hotkey file, coldkey absence, chain
+reachability, registration, the published axon and TLS key (miner) or the
+validator permit and the miners' published TLS keys (validator), reachability
+of the miner's port (over pinned TLS when it serves TLS), the clock offset,
+Redis, multi-worker safety and (validator) another process signing with the
 same hotkey. Each check is ``ok``, ``warn``, ``fail`` or ``skip``; the exit
 status is 1 when any check fails.
 
@@ -36,7 +37,14 @@ from tensorwire.config import CommonSettings, MinerSettings, ValidatorSettings
 from tensorwire.crypto import HotkeySigner
 from tensorwire.errors import ConfigError, StartupError
 from tensorwire.observability.logging import configure_logging
-from tensorwire.validator.client import check_scheme_policy
+from tensorwire.tls import (
+    ALG_ED25519,
+    load_published_certificate,
+    load_server_identity,
+    parse_published,
+    pinned_context,
+)
+from tensorwire.validator.client import check_scheme_policy, is_pin_mismatch
 from tensorwire.validator.lock import HotkeyLock
 
 __all__ = ["Check", "Doctor", "doctor"]
@@ -79,6 +87,8 @@ class Doctor:
         self._redis_factory = redis_factory or RedisNonceStore
         self._python = python_version or (sys.version_info[0], sys.version_info[1])
         self.checks: list[Check] = []
+        self._tls_key: bytes | None = None
+        self._tls_failed = False
 
     def add(self, name: str, status: Status, detail: str) -> Status:
         """Record one result."""
@@ -99,6 +109,8 @@ class Doctor:
             return self.checks
         if isinstance(settings, ValidatorSettings):
             self._scheme(settings)
+        elif isinstance(settings, MinerSettings):
+            self._tls(settings)
         signer = self._hotkey(settings)
         self._coldkey(settings)
         gateway = await self._chain(settings, signer)
@@ -166,6 +178,24 @@ class Doctor:
             self.add("scheme", "fail", str(exc))
             return
         self.add("scheme", "ok", s.scheme_policy)
+
+    def _tls(self, s: MinerSettings) -> None:
+        try:
+            if s.tls_cert_file is not None and s.tls_key_file is not None:
+                self._tls_key = load_server_identity(s.tls_cert_file, s.tls_key_file)
+                where = "uvicorn"
+            elif s.tls_published_cert_file is not None:
+                self._tls_key = load_published_certificate(s.tls_published_cert_file)
+                where = "reverse proxy"
+            else:
+                self.add("tls", "skip", "TW_TLS_* not set (plain HTTP)")
+                return
+        except StartupError as exc:
+            self._tls_failed = True
+            self.add("tls", "fail", str(exc))
+            return
+        kind = "Ed25519" if self._tls_key[0] == ALG_ED25519 else "ECDSA P-256"
+        self.add("tls", "ok", f"TLS at the {where}, {kind} key")
 
     def _hotkey(self, s: CommonSettings) -> HotkeySigner | None:
         try:
@@ -243,7 +273,9 @@ class Doctor:
                     f"on chain {have} protocol {me.axon_protocol}, configured {want} "
                     f"protocol {s.protocol_tag}; the miner publishes it at startup",
                 )
-        elif me.validator_permit:
+            self._published_key(me.tls_key)
+            return
+        if me.validator_permit:
             self.add("permit", "ok", "validator permit held")
         else:
             self.add(
@@ -251,22 +283,72 @@ class Doctor:
                 "warn",
                 "no validator permit yet: weight commits are accepted but do not count",
             )
+        if isinstance(s, ValidatorSettings) and s.scheme_policy != "http":
+            served = [n for n in mg.neurons if n.axon is not None]
+            published = [n.tls_key for n in served if n.tls_key is not None]
+            unusable = sum(parse_published(k) is None for k in published)
+            self.add(
+                "tls_keys",
+                "warn" if unusable else "ok",
+                f"{len(published) - unusable} of {len(served)} served axons publish "
+                f"a usable TLS key (pinned); {unusable} unusable (refused, "
+                "tw.tls_pin_mismatch)",
+            )
+
+    def _published_key(self, on_chain: bytes | None) -> None:
+        if self._tls_failed:
+            self.add("tls_published", "skip", "the TLS certificate did not load")
+            return
+        if self._tls_key is None:
+            if on_chain is not None:
+                self.add(
+                    "tls_published",
+                    "warn",
+                    "a TLS key is published but TLS is off: validators in an HTTPS "
+                    "mode refuse this miner (the chain cannot remove a key)",
+                )
+            return
+        if on_chain == self._tls_key:
+            self.add("tls_published", "ok", "the certificate's key is on chain")
+        else:
+            self.add(
+                "tls_published",
+                "warn",
+                "the key on chain is not the certificate's; the miner publishes it "
+                "at startup (until then validators refuse it)",
+            )
 
     async def _port(self, s: MinerSettings) -> None:
+        if self._tls_failed:
+            self.add("port", "skip", "the TLS certificate did not load")
+            return
         if self.probe_url is not None:
             url, what = self.probe_url, "external probe"
         else:
             host = s.external_ip
             if ":" in host:
                 host = f"[{host}]"
-            url = f"http://{host}:{s.effective_external_port}/healthz"
+            scheme = "http" if self._tls_key is None else "https"
+            url = f"{scheme}://{host}:{s.effective_external_port}/healthz"
             what = "from this host only (pass --probe-url for an outside check)"
         try:
             async with httpx.AsyncClient(
-                transport=self._transport, timeout=5.0, follow_redirects=False
+                transport=self._transport,
+                timeout=5.0,
+                follow_redirects=False,
+                # The port must serve the certificate whose key is published.
+                verify=True if self._tls_key is None else pinned_context(self._tls_key),
             ) as http:
                 r = await http.get(url)
         except httpx.HTTPError as exc:
+            if is_pin_mismatch(exc):
+                self.add(
+                    "port",
+                    "fail",
+                    f"{what}: the TLS certificate served is not the configured one "
+                    "(validators would refuse it: tw.tls_pin_mismatch)",
+                )
+                return
             self.add(
                 "port", "warn", f"{what}: {type(exc).__name__} (is the miner running?)"
             )

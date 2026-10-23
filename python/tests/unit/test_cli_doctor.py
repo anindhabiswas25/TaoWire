@@ -16,6 +16,8 @@ from tensorwire.cli.main import app
 from tensorwire.testing.fake_chain import FakeChain
 from tensorwire.testing.keys import dev_key
 from tensorwire.testing.pytest_plugin import TWEnv
+from tensorwire.testing.tls import make_certificate
+from tensorwire.tls import TlsPinMismatch, load_published_certificate
 from tensorwire.validator.lock import HotkeyLock
 
 NETUID = 3
@@ -243,7 +245,7 @@ async def test_validator(env: TWEnv, chain: FakeChain, tmp_path: Path) -> None:
     assert checks["lock"][0] == "ok"
 
 
-async def test_validator_tls_pinning_policy_fails(
+async def test_validator_tls_policies(
     env: TWEnv, chain: FakeChain, tmp_path: Path
 ) -> None:
     env.unset("external_ip")
@@ -252,13 +254,85 @@ async def test_validator_tls_pinning_policy_fails(
     d = doctor(chain, "validator")
     await d.run()
     checks = by_name(d)
-    assert d.failed
-    assert checks["scheme"][0] == "fail"
-    assert "TW_SCHEME_POLICY=https-if-tls-published" in checks["scheme"][1]
-    env.set(scheme_policy="https")
+    assert checks["scheme"] == ("ok", "https-if-tls-published")
+    assert checks["tls_keys"][0] == "ok"
+    chain.set_tls_key(NETUID, BOB.ss58, b"\x07")
+    chain.set_tls_key(NETUID, ALICE.ss58, b"\x01" + b"\x11" * 32)  # no axon
     d = doctor(chain, "validator")
     await d.run()
-    assert by_name(d)["scheme"] == ("ok", "https")
+    status, detail = by_name(d)["tls_keys"]
+    assert status == "warn"
+    assert "0 of 1 served axons" in detail  # alice serves no axon
+    assert "1 unusable" in detail
+    assert "1 unusable" in detail
+    env.set(scheme_policy="http")
+    d = doctor(chain, "validator")
+    await d.run()
+    assert by_name(d)["scheme"] == ("ok", "http")
+    assert "tls_keys" not in by_name(d)
+
+
+async def test_miner_tls_checks(env: TWEnv, chain: FakeChain, tmp_path: Path) -> None:
+    cert = make_certificate(tmp_path / "tls", kind="ed25519")
+    seen: list[str] = []
+
+    def record(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(200)
+
+    env.set(tls_cert_file=cert.cert_file, tls_key_file=cert.key_file)
+    d = doctor(chain, http_transport=httpx.MockTransport(record))
+    await d.run()
+    checks = by_name(d)
+    assert checks["tls"] == ("ok", "TLS at the uvicorn, Ed25519 key")
+    assert checks["tls_published"][0] == "warn"  # not on chain yet
+    assert seen == ["https://44.1.2.3:8091/healthz"]
+    chain.set_tls_key(NETUID, BOB.ss58, load_published_certificate(cert.cert_file))
+    d = doctor(chain)
+    await d.run()
+    assert by_name(d)["tls_published"][0] == "ok"
+
+    def mismatch(request: httpx.Request) -> httpx.Response:
+        try:
+            raise TlsPinMismatch(1, "other key")
+        except TlsPinMismatch as exc:
+            raise httpx.ConnectError("handshake", request=request) from exc
+
+    d = doctor(chain, http_transport=httpx.MockTransport(mismatch))
+    await d.run()
+    status, detail = by_name(d)["port"]
+    assert status == "fail"
+    assert "tw.tls_pin_mismatch" in detail
+
+
+async def test_miner_tls_problems(env: TWEnv, chain: FakeChain, tmp_path: Path) -> None:
+    rsa = make_certificate(tmp_path / "tls", kind="rsa")
+    env.set(tls_cert_file=rsa.cert_file, tls_key_file=rsa.key_file)
+    d = doctor(chain)
+    await d.run()
+    assert d.failed
+    checks = by_name(d)
+    assert checks["tls"][0] == "fail"
+    assert checks["tls_published"][0] == "skip"  # not "TLS is off"
+    assert checks["port"][0] == "skip"  # no plain-HTTP probe of a TLS port
+    env.unset("tls_cert_file", "tls_key_file")
+    chain.set_tls_key(NETUID, BOB.ss58, b"\x07")
+    d = doctor(chain)
+    await d.run()
+    checks = by_name(d)
+    assert checks["tls"][0] == "skip"
+    assert checks["tls_published"][0] == "warn"
+    assert "TLS is off" in checks["tls_published"][1]
+
+
+async def test_miner_behind_a_tls_proxy(
+    env: TWEnv, chain: FakeChain, tmp_path: Path
+) -> None:
+    cert = make_certificate(tmp_path / "tls")
+    env.set(tls_published_cert_file=cert.cert_file, trusted_proxies="10.0.0.0/8")
+    d = doctor(chain)
+    await d.run()
+    assert by_name(d)["tls"] == ("ok", "TLS at the reverse proxy, ECDSA P-256 key")
 
 
 def test_cli_output(env: TWEnv, monkeypatch: pytest.MonkeyPatch) -> None:

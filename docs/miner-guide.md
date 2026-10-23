@@ -192,7 +192,8 @@ again; unknown callers are never admitted on stale data. Set at least one
 `miner.run()` (or any ASGI server running `miner.app`) does, in order:
 
 1. Check the installed `bittensor` SDK; log every weakening setting at WARNING
-   (also exported as `tw_unsafe_settings_active`).
+   (also exported as `tw_unsafe_settings_active`). With TLS, check the
+   certificate and key (see [HTTPS](#https) below).
 2. Refuse to start if an **unencrypted coldkey** is readable in the wallet
    directory (`TW_REFUSE_IF_COLDKEY_PRESENT=1`, the default). Only the hotkey
    file is read: `<TW_WALLET_PATH>/<TW_WALLET_NAME>/hotkeys/<TW_WALLET_HOTKEY>`,
@@ -217,6 +218,8 @@ again; unknown callers are never admitted on stale data. Set at least one
    `TW_AUTO_SERVE_AXON=1` and `TW_AXON_PUBLISHER=1`. Re-checked every 30 min.
    If the chain answers `rate_limited`, the miner retries after the subnet's
    `serving_rate_limit` blocks (read from the chain).
+   With TLS the certificate's key is published too (`ServeAxonTls`) and read
+   back; a key the chain did not store refuses startup.
 
 The axon is published before the server starts listening, so a validator
 that reads it from the metagraph can reach the miner a moment before it
@@ -241,6 +244,31 @@ supervising process runs the startup checks once first, so a refusal still
 exits with its code (3 = not registered); then every worker starts. Metrics
 from all workers are served together on `TW_METRICS_BIND` (counters and
 histograms summed, gauges most recent).
+
+## HTTPS
+
+Validators can pin the TLS key a miner publishes on chain
+([security.md](security.md#tls-spec-163-d31-adr-0011), ADR-0011). Use an
+**Ed25519 or EC P-256** certificate (RSA keys cannot be published); a
+self-signed one is fine, the pinned key is the trust anchor:
+
+```bash
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 365 \
+  -subj "/CN=miner" -addext "subjectAltName=IP:203.0.113.7" \
+  -keyout key.pem -out cert.pem && chmod 600 key.pem
+```
+
+- TLS in the miner: `TW_TLS_CERT_FILE=cert.pem TW_TLS_KEY_FILE=key.pem`.
+- TLS at a reverse proxy: `TW_TLS_PUBLISHED_CERT_FILE=` the proxy's
+  certificate, `TW_TRUSTED_PROXIES=` its address, `TW_BIND_HOST=127.0.0.1`,
+  `TW_EXTERNAL_PORT=` the proxy's port. Start from
+  [`deploy/proxy/`](../deploy/proxy/) (Caddy, nginx): the proxy must pass the
+  request target and body unchanged, or every request fails verification.
+
+The miner publishes the key and reads it back at startup. To rotate, restart
+with the new certificate (validators refuse the new certificate until its key
+is on chain). `tensorwire doctor` checks the certificate, compares it with the
+key on chain and probes the port over pinned TLS.
 
 ## Health and metrics
 

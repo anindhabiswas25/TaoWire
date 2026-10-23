@@ -34,6 +34,7 @@ from tensorwire.chain.gateway import (
     TimelockUnavailable,
     check_sdk_surface,
     metagraph_view,
+    neuron_certificates,
 )
 
 NETUID = 2
@@ -142,6 +143,8 @@ class World:
     calls: list[str] = field(default_factory=list)
     executed: list[tuple[Any, Any, dict[str, Any]]] = field(default_factory=list)
     finalized: int = 50
+    certificates: list[Any] = field(default_factory=list)
+    certificate_blocks: list[int | None] = field(default_factory=list)
 
     def fail(self, op: str, *errors: Any) -> None:
         self.faults[op].extend(errors)
@@ -197,6 +200,14 @@ class FakeSdkClient:
             return await self.world.run("serving_rate_limit", self.world.serving)
         assert item == ("SubtensorModule", "NetworksAdded")
         return bool(await self.world.run("query", params[0] in self.world.subnets))
+
+    async def query_map(
+        self, item: tuple[str, str], params: list[int], *, block: int | None = None
+    ) -> Any:
+        assert item == ("SubtensorModule", "NeuronCertificates")
+        assert params == [NETUID]
+        self.world.certificate_blocks.append(block)
+        return await self.world.run("neuron_certificates", self.world.certificates)
 
     async def _metagraph(self, netuid: int, *, commitments: bool) -> Any:
         assert commitments is False
@@ -447,6 +458,12 @@ async def test_close_errors_are_ignored(world: World, sleeps: list[float]) -> No
 # -- reads ------------------------------------------------------------------------
 
 
+def _view(mg: Any) -> Any:
+    return metagraph_view(
+        mg, fetched_at_monotonic=0, allow_private_axons=False, certificates={}
+    )
+
+
 async def test_metagraph_view(world: World, sleeps: list[float]) -> None:
     world.metagraph = _sdk_metagraph(
         [
@@ -480,6 +497,75 @@ async def test_metagraph_view(world: World, sleeps: list[float]) -> None:
     assert mg.by_hotkey("hk1") is m
 
 
+async def test_metagraph_reads_tls_certificates(
+    world: World, sleeps: list[float]
+) -> None:
+    """ADR-0011 point 5: the SDK's text-or-hex values become algorithm + key."""
+    world.metagraph = _sdk_metagraph([_sdk_neuron(i) for i in range(8)])
+    world.certificates = [
+        ("hk0", {"algorithm": 1, "public_key": "0x" + "ab" * 32}),
+        ("hk1", {"algorithm": 2, "public_key": "\x00\x01text"}),
+        ("hk2", {"algorithm": 7, "public_key": ""}),
+        ("hk3", {"algorithm": 1, "public_key": [1, 2, 3]}),
+        ("hk4", {"algorithm": True, "public_key": "0x00"}),
+        ("hk5", {"algorithm": 300, "public_key": "0x00"}),
+        ("hk6", {"algorithm": 1, "public_key": 5}),
+        ("hk7", "junk"),
+    ]
+    gw = await _connected(world, sleeps)
+    mg = await gw.metagraph(NETUID)
+    keys = [n.tls_key for n in mg.neurons]
+    assert keys == [
+        b"\x01" + b"\xab" * 32,
+        b"\x02\x00\x01text",
+        b"\x07",
+        b"\x01\x01\x02\x03",
+        b"",  # published but unreadable: never "nothing published"
+        b"",
+        b"",
+        b"",
+    ]
+    assert world.certificate_blocks == [mg.block]
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("0xzz", b"0xzz"),  # not hex: the key's own UTF-8 bytes
+        ("0x01 02", b"0x01 02"),  # hex digits only (bytes.fromhex takes spaces)
+        ("0xabc", b"0xabc"),  # odd length
+        ("\ud800", None),  # a lone surrogate cannot be encoded
+        (b"\x01\x02", b"\x01\x02"),
+        ([1, 256], None),
+        ([True], None),
+    ],
+)
+def test_certificate_key_decoding(value: Any, expected: bytes | None) -> None:
+    rows = [("hk", {"algorithm": 1, "public_key": value})]
+    got = neuron_certificates(rows)["hk"]
+    assert got == (b"" if expected is None else b"\x01" + expected)
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [None, 42, "rows", b"rows", [("hk",)], [42], [(b"hk", {})], [("a", {}, 1)]],
+)
+def test_unexpected_certificate_rows_fail_closed(rows: Any) -> None:
+    """A row that cannot be tied to a hotkey must not read as 'nothing published'."""
+    with pytest.raises(SdkSurfaceError, match="NeuronCertificates"):
+        neuron_certificates(rows)
+
+
+async def test_unreadable_certificates_fail_the_metagraph(
+    world: World, sleeps: list[float]
+) -> None:
+    world.metagraph = _sdk_metagraph([_sdk_neuron(0)])
+    world.certificates = None  # type: ignore[assignment]
+    gw = await _connected(world, sleeps)
+    with pytest.raises(SdkSurfaceError):
+        await gw.metagraph(NETUID)
+
+
 async def test_private_axons_rejected_by_default(
     world: World, sleeps: list[float]
 ) -> None:
@@ -495,7 +581,7 @@ async def test_private_axons_rejected_by_default(
 @pytest.mark.parametrize("price", [None, 0.0, -1.0, float("nan"), float("inf")])
 def test_no_usable_price_counts_alpha_as_zero(price: float | None) -> None:
     mg = _sdk_metagraph([_sdk_neuron(0, alpha=1000.0, tao=3.0)], price=price)
-    (n,) = metagraph_view(mg, fetched_at_monotonic=0, allow_private_axons=False).neurons
+    (n,) = _view(mg).neurons
     assert n.total_stake_tao == 3.0
     assert n.alpha_stake == 1000.0
 
@@ -504,7 +590,7 @@ def test_root_subnet_alpha_is_tao() -> None:
     neuron = _sdk_neuron(0)
     neuron.alpha_stake = _balance(5.0, 0)
     mg = _sdk_metagraph([neuron], netuid=0, price=None)
-    (n,) = metagraph_view(mg, fetched_at_monotonic=0, allow_private_axons=False).neurons
+    (n,) = _view(mg).neurons
     assert n.total_stake_tao == 5.0
 
 
@@ -524,14 +610,14 @@ def test_root_subnet_alpha_is_tao() -> None:
 )
 def test_bad_raw_axon_records_give_no_protocol(axons: Any) -> None:
     mg = _sdk_metagraph([_sdk_neuron(0, axon="203.0.113.7:1")], axons=axons)
-    (n,) = metagraph_view(mg, fetched_at_monotonic=0, allow_private_axons=False).neurons
+    (n,) = _view(mg).neurons
     assert n.axon_protocol is None
 
 
 def test_raw_not_a_dict() -> None:
     mg = _sdk_metagraph([_sdk_neuron(0, axon="203.0.113.7:1")])
     mg.raw = None  # type: ignore[assignment]
-    (n,) = metagraph_view(mg, fetched_at_monotonic=0, allow_private_axons=False).neurons
+    (n,) = _view(mg).neurons
     assert n.axon_protocol is None
 
 

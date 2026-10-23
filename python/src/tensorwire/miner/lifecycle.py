@@ -4,7 +4,9 @@ Startup, in order:
 
 1. Settings are already validated (``MinerSettings``). Check the installed
    SDK; log every active weakening setting at WARNING and export
-   ``tw_unsafe_settings_active``.
+   ``tw_unsafe_settings_active``. Load the TLS certificate (``TW_TLS_*``,
+   spec 16.3): files readable, key not group/world readable and matching
+   the certificate, key type publishable (ADR-0011).
 2. Refuse to start if an unencrypted coldkey is readable in the wallet
    directory (``TW_REFUSE_IF_COLDKEY_PRESENT=1``); warn if an encrypted one
    is there. Load the hotkey only.
@@ -21,9 +23,11 @@ Startup, in order:
    ``retention`` seconds.
 6. Check the clock against NTP.
 7. Publish the axon if the on-chain one differs from
-   ``TW_EXTERNAL_IP:TW_EXTERNAL_PORT`` (only when ``TW_AUTO_SERVE_AXON=1`` and
+   ``TW_EXTERNAL_IP:TW_EXTERNAL_PORT`` or, with TLS, the published key differs
+   from the certificate's (only when ``TW_AUTO_SERVE_AXON=1`` and
    ``TW_AXON_PUBLISHER=1``). ``rate_limited`` is retried after the subnet's
-   ``serving_rate_limit`` blocks, read from the chain.
+   ``serving_rate_limit`` blocks, read from the chain. A TLS key is read back
+   after publishing; a key the chain did not store refuses startup (ADR-0011).
 8. Start background tasks: clock check (10 min), axon drift check (30 min),
    metagraph gauges.
 9. Mark ready.
@@ -65,7 +69,12 @@ from tensorwire.auth.nonce_store import (
 from tensorwire.auth.sdk_check import check_sdk
 from tensorwire.auth.verifier import RequestVerifier
 from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import BittensorGateway, ChainGateway, GatewayError
+from tensorwire.chain.gateway import (
+    BittensorGateway,
+    ChainGateway,
+    GatewayError,
+    NeuronView,
+)
 from tensorwire.chain.metagraph_cache import (
     MetagraphCache,
     MetagraphSource,
@@ -88,6 +97,7 @@ from tensorwire.miner.legacy import (
 )
 from tensorwire.observability.metrics import Metrics
 from tensorwire.policy.caller import CallerGate
+from tensorwire.tls import load_published_certificate, load_server_identity
 
 __all__ = [
     "AXON_DRIFT_INTERVAL_S",
@@ -199,6 +209,9 @@ class Lifecycle:
         self._ready = False
         self._stopping = False
         self._last_degraded_warning: float | None = None
+        #: The compact TLS key to publish (ADR-0011), or ``None`` without TLS.
+        self.tls_key: bytes | None = None
+        self._waited_for_window = False
         #: Inbound legacy v10 calls: counter, logs, days-remaining gauge.
         self.legacy_traffic = LegacyTraffic(
             metrics,
@@ -226,6 +239,7 @@ class Lifecycle:
         """Run startup steps 1-9. Raises :class:`StartupError` on refusal."""
         s = self.settings
         self._check_sdk_and_settings()
+        self.tls_key = self._load_tls()
         hotkey = self._load_keys()
         signer = HotkeySigner(hotkey)
         if self.parts.metagraph is None:
@@ -252,8 +266,12 @@ class Lifecycle:
             await self._close_chain(gateway, metagraph)
             raise
         self._runtime = runtime
-        await runtime.clock.check_async()
-        await self.sync_axon()
+        try:
+            await runtime.clock.check_async()
+            await self.sync_axon(startup=True)
+        except BaseException:
+            await self.stop()
+            raise
         self._update_gauges()
         runtime.tasks += [
             self._spawn(runtime.clock.run(), "clock"),
@@ -280,7 +298,24 @@ class Lifecycle:
         weakened = self.settings.weakened_settings()
         for name in weakened:
             _log.warning("unsafe_setting_active", setting=name)
+        s = self.settings
+        if s.legacy_v10_until is not None and (
+            s.tls_cert_file is not None or s.tls_published_cert_file is not None
+        ):
+            _log.warning(
+                "legacy_v10_with_tls",
+                hint="v10 validators connect over plain HTTP only and cannot reach "
+                "this TLS port; the bridge (TW_LEGACY_V10_UNTIL) serves no one",
+            )
         self.metrics.set_unsafe_settings(weakened)
+
+    def _load_tls(self) -> bytes | None:
+        s = self.settings
+        if s.tls_cert_file is not None and s.tls_key_file is not None:
+            return load_server_identity(s.tls_cert_file, s.tls_key_file)
+        if s.tls_published_cert_file is not None:
+            return load_published_certificate(s.tls_published_cert_file)
+        return None
 
     def _load_keys(self) -> WalletLike:
         s = self.settings
@@ -475,11 +510,14 @@ class Lifecycle:
 
     # ------------------------------------------------------------ axon
 
-    def _axon_matches(self) -> bool:
+    def _me(self) -> NeuronView | None:
         rt = self.runtime
-        s = self.settings
         mg = rt.metagraph.snapshot()
-        me = None if mg is None else mg.by_hotkey(rt.hotkey_ss58)
+        return None if mg is None else mg.by_hotkey(rt.hotkey_ss58)
+
+    def _axon_matches(self) -> bool:
+        s = self.settings
+        me = self._me()
         axon: Endpoint | None = None if me is None else me.axon
         return (
             me is not None
@@ -487,12 +525,45 @@ class Lifecycle:
             and _same_host(axon.host, s.external_ip)
             and axon.port == s.effective_external_port
             and me.axon_protocol == s.protocol_tag
+            and (self.tls_key is None or me.tls_key == self.tls_key)
         )
 
-    async def sync_axon(self) -> bool:
-        """Publish our axon if the chain shows something else. Returns in-sync."""
+    def _published_tls_key(self) -> bytes | None:
+        me = self._me()
+        return None if me is None else me.tls_key
+
+    def _reload_proxy_certificate(self) -> None:
+        """Proxy mode: pick up a certificate the proxy renewed (new key)."""
+        path = self.settings.tls_published_cert_file
+        if path is None:
+            return  # uvicorn keeps its certificate until restarted
+        try:
+            key = load_published_certificate(path)
+        except StartupError as exc:
+            _log.error("tls_certificate_unreadable", error=str(exc))
+            return  # keep publishing the last good key
+        if key != self.tls_key:
+            _log.info("tls_certificate_changed", tls_algorithm=key[0])
+            self.tls_key = key
+
+    async def sync_axon(self, *, startup: bool = False) -> bool:
+        """Publish our axon if the chain shows something else. Returns in-sync.
+
+        With TLS, a published key the chain did not store raises
+        :class:`StartupError` when ``startup``, else it is logged and the axon
+        counts as not in sync.
+        """
         rt = self.runtime
         s = self.settings
+        if not startup:
+            self._reload_proxy_certificate()
+        if startup and self.tls_key is None and self._published_tls_key() is not None:
+            _log.warning(
+                "tls_key_published_but_tls_off",
+                hint="validators in an HTTPS mode pin the published key and "
+                "refuse this plain-HTTP miner; the chain cannot remove a key, so "
+                "serve TLS and publish its key (docs/security.md)",
+            )
         if self._axon_matches():
             rt.axon_in_sync = True
             return True
@@ -504,12 +575,13 @@ class Lifecycle:
             )
             rt.axon_in_sync = False
             return False
+        tls = self.tls_key
         try:
             outcome = await rt.gateway.serve_axon(
                 s.netuid,
                 s.external_ip,
                 s.effective_external_port,
-                tls_cert_hex=None,
+                tls_cert_hex=None if tls is None else "0x" + tls.hex(),
                 protocol_tag=s.protocol_tag,
             )
         except GatewayError as exc:
@@ -521,13 +593,37 @@ class Lifecycle:
                 "axon_published",
                 external=f"{s.external_ip}:{s.effective_external_port}",
                 protocol=s.protocol_tag,
+                tls_algorithm=None if self.tls_key is None else self.tls_key[0],
                 block_hash=outcome.block_hash,
             )
-            rt.axon_in_sync = True
-            with contextlib.suppress(GatewayError):
-                await rt.metagraph.refresh_now()
-            return True
+            rt.axon_in_sync = await self._read_back(startup=startup)
+            return rt.axon_in_sync
         rt.axon_in_sync = False
+        if (
+            outcome.code == "rate_limited"
+            and startup
+            and not self._waited_for_window
+            and self._new_tls_key()
+        ):
+            self._waited_for_window = True  # once: a second limit is an error
+            # Spec 16.3: a new certificate is published before it is served.
+            # The server has not started yet; wait out the window, then retry.
+            _log.warning(
+                "serve_axon_rate_limited",
+                remediation=outcome.remediation,
+                hint="a new TLS key must be on chain before it is served; waiting",
+            )
+            if not await self._wait_serving_window():
+                raise StartupError(
+                    "could not publish the new TLS key (chain unavailable while "
+                    "waiting for the serving rate limit); retry"
+                )
+            if not await self.sync_axon(startup=True):
+                raise StartupError(
+                    "could not publish the new TLS key after the serving rate "
+                    "limit; validators would refuse this miner"
+                )
+            return True
         if outcome.code == "rate_limited":
             _log.warning("serve_axon_rate_limited", remediation=outcome.remediation)
             rt.tasks.append(self._spawn(self._retry_axon_later(), "axon_retry"))
@@ -539,7 +635,38 @@ class Lifecycle:
             )
         return False
 
-    async def _retry_axon_later(self) -> None:
+    async def _read_back(self, *, startup: bool) -> bool:
+        """After publishing: True unless a TLS key did not land on chain."""
+        rt = self.runtime
+        try:
+            await rt.metagraph.refresh_now()
+        except GatewayError as exc:
+            if self.tls_key is None:
+                return True
+            problem = f"the published TLS key could not be read back: {exc}"
+        else:
+            stored = self._published_tls_key()
+            if self.tls_key is None or stored == self.tls_key:
+                return True
+            problem = (
+                "the chain did not store the published TLS key"
+                if stored is None
+                else "the chain shows another TLS key than the one just published"
+            )
+        if startup:
+            raise StartupError(
+                f"{problem}; validators would refuse this miner (ADR-0011). Check "
+                "the certificate and retry"
+            )
+        _log.error("tls_key_not_published", problem=problem)
+        return False
+
+    def _new_tls_key(self) -> bool:
+        """Whether our TLS key is not the one on chain yet."""
+        return self.tls_key is not None and self._published_tls_key() != self.tls_key
+
+    async def _wait_serving_window(self) -> bool:
+        """Wait ``serving_rate_limit`` blocks; False if the chain failed meanwhile."""
         rt = self.runtime
         try:
             window = await rt.gateway.serving_rate_limit(self.settings.netuid)
@@ -550,8 +677,13 @@ class Lifecycle:
                 await anyio.sleep(self.parts.axon_retry_poll_s)
         except GatewayError as exc:
             _log.warning("axon_retry_deferred", error=str(exc))
-            return  # the drift check tries again later
-        await self.sync_axon()
+            return False
+        return True
+
+    async def _retry_axon_later(self) -> None:
+        if await self._wait_serving_window():
+            await self.sync_axon()
+        # else: the drift check tries again later
 
     async def _axon_drift_loop(self) -> None:
         while True:

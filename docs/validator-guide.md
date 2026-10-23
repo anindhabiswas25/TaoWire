@@ -102,13 +102,16 @@ never raise for one miner's failure. Rules (spec 8.8):
   sender. Signed error answers are verified too.
 - Neurons without a usable axon are never contacted (`tw.no_axon`); private
   and loopback axons are refused unless `TW_ALLOW_PRIVATE_AXONS=1` (localnet).
-- Scheme: `TW_SCHEME_POLICY=http` (default; requests and responses are
-  signed, but not encrypted) or `https` (every miner behind TLS).
-  `https-if-tls-published` (pin the TLS key a miner published with
-  `ServeAxonTls`) needs TLS support, which is not in this release: the
-  runner, `ValidatorClient` and `tensorwire doctor --role validator` refuse
-  it with an error naming the setting, so a validator that asked for pinned
-  TLS never runs on plain HTTP without knowing it.
+- Scheme (`TW_SCHEME_POLICY`, [security.md](security.md#tls-spec-163-d31-adr-0011)):
+  `http` (default; requests and responses are signed, but not encrypted),
+  `https` (HTTPS to every miner: pinned to the key it published with
+  `ServeAxonTls`, CA-verified when it published none) or
+  `https-if-tls-published` (pinned HTTPS for miners that published a key,
+  plain HTTP for the others). A key mismatch, or a published value the kit
+  cannot pin, is `tw.tls_pin_mismatch` (`tw_tls_pin_failures_total`): not
+  retried, never over plain HTTP, never through the v10 fallback.
+  `tensorwire doctor --role validator` counts the miners with usable and
+  unusable published keys.
 
 Streaming routes: `client.stream(...)` hands out chunks as they arrive,
 **unverified**, and ends with the `MinerResult`; `query_stream(...)` /
@@ -222,7 +225,7 @@ can end (`docs/migration-from-v10.md`).
 | `TW_MIN_WEIGHT_INTERVAL_BLOCKS` | 100 | |
 | `TW_WEIGHTS_VERSION_KEY` | 0 | must be ≥ the subnet's stored key |
 | `TW_MECHID` | 0 | |
-| `TW_SCHEME_POLICY` | http | `http` or `https`; `https-if-tls-published` is refused until TLS ships |
+| `TW_SCHEME_POLICY` | http | `http`, `https` or `https-if-tls-published` (TLS key pinning, ADR-0011) |
 | `TW_LEGACY_V10_CLIENT` | off | `auto` reaches v10 miners |
 | `TW_LEGACY_V10_CLIENT_UNTIL` | | required with `auto` |
 

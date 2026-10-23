@@ -150,6 +150,7 @@ CLIENT_ERROR_CODES: frozenset[str] = frozenset(
         "tw.invalid_response",
         "tw.no_axon",
         "tw.timelock_unavailable",
+        "tw.tls_pin_mismatch",
     }
 )
 

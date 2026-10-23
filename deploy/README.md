@@ -12,6 +12,7 @@ stack, or systemd units on a plain host.
 | `compose/localnet.yml` | Chain + Redis + miner + validator on a local chain (dev keys only) |
 | `compose/testnet-node.yml` | Your own testnet lite node for a validator host (never started by tests) |
 | `systemd/tensorwire-{miner,validator,sidecar}.service` | Hardened units for a plain Linux host |
+| `proxy/Caddyfile`, `proxy/nginx.conf` | TLS at a reverse proxy in front of a miner (spec 16.3); pass the request target and body unchanged |
 
 ## Keys: what goes where
 
@@ -171,3 +172,18 @@ The kit cannot enforce these. Check them per host.
 - [ ] Never run untrusted subnet code on a machine that holds a coldkey.
 - [ ] Firewall (spec 15.3): miners open only their miner ports to the internet. Metrics and sidecar ports stay on loopback. SSH by key only.
 - [ ] A miner with `TW_WORKERS > 1` (or several instances) has `TW_REDIS_URL` set, so replays are detected across workers.
+
+## TLS at a reverse proxy
+
+`proxy/Caddyfile` and `proxy/nginx.conf` terminate TLS on port 8443 and
+forward to a miner on `127.0.0.1:8091` with the request target and body
+unchanged, `X-Forwarded-For` appended, and SSE streams unbuffered (checked
+against `caddy:2.10.2-alpine` and `nginx:1.29.3-alpine`:
+`reports/phase-4/wp6/proxy_check.py`). The miner runs with
+`TW_BIND_HOST=127.0.0.1`, `TW_EXTERNAL_PORT=8443`,
+`TW_TRUSTED_PROXIES=127.0.0.1/32` and `TW_TLS_PUBLISHED_CERT_FILE` set to the
+proxy's certificate (Ed25519 or EC P-256), which it publishes with
+`ServeAxonTls` so validators can pin it. Do not add rewrites, path
+normalisation (`merge_slashes on`, a URI on nginx's `proxy_pass`,
+`handle_path`/`strip_prefix` in Caddy) or compression: signed requests would
+fail with 401 `tw.auth_bad_signature`. See `docs/security.md`.

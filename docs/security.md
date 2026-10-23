@@ -196,14 +196,75 @@ Watch `tw_legacy_v10_requests_total` and `tw_legacy_v10_days_remaining`
 (alert under 14 days). End the bridge as soon as the rollout allows
 (`docs/migration-rollout.md`).
 
-## TLS (spec 16.3)
+## TLS (spec 16.3, D31, ADR-0011)
 
 Plain HTTP keeps integrity, because requests and responses are both signed,
-but not confidentiality. Subnets with private payloads must use HTTPS. TLS
-termination by the kit, by a reverse proxy, and key pinning against the key a
-miner publishes with `ServeAxonTls` arrive in Phase 4.
-`TW_SCHEME_POLICY=https-if-tls-published` is refused at startup until then,
-so nobody runs without TLS believing they have it.
+but not confidentiality. Subnets with private payloads use HTTPS.
+
+**Validators** choose with `TW_SCHEME_POLICY`:
+
+| Mode | Miner published a usable key | Published, but unusable | Nothing published |
+|---|---|---|---|
+| `http` (default) | plain HTTP (keys ignored) | plain HTTP | plain HTTP |
+| `https` | HTTPS, **pinned** | refused, `tw.tls_pin_mismatch` | HTTPS, CA-verified |
+| `https-if-tls-published` | HTTPS, **pinned** | refused, `tw.tls_pin_mismatch` | plain HTTP |
+
+- *Pinned*: right after the TLS handshake, and before any request byte is sent,
+  the leaf certificate's public key must equal the key the miner published
+  with `ServeAxonTls`. CA trust, hostname and dates are not used: the on-chain
+  key is the trust anchor (axons are IP addresses). A different key is
+  `tw.tls_pin_mismatch` and counts in `tw_tls_pin_failures_total`; it is not
+  retried and the miner is **never** reached over plain HTTP instead.
+- *Usable*: algorithm byte `0x01` + 32-byte Ed25519 key, or `0x02` + 64-byte
+  ECDSA P-256 point (ADR-0011). Anything else a miner published is treated as
+  unusable (WARNING once per miner): never a reason to use plain HTTP.
+- The v10 fallback is plain HTTP only, so it is used only for miners this mode
+  reaches over plain HTTP.
+- In `https` mode a miner reachable only over plain HTTP fails with
+  `tw.connect_error`.
+
+**Miners** serve TLS in one of two ways. Either way the certificate's key
+must be Ed25519 or EC P-256 (RSA keys do not fit on chain; startup refuses
+them), and the miner publishes it with `ServeAxonTls`, then reads it back from
+the chain: the chain accepts a certificate it does not store (ADR-0011), so a
+key that did not land refuses startup.
+
+1. **uvicorn**: `TW_TLS_CERT_FILE` + `TW_TLS_KEY_FILE`. Startup refuses a
+   missing or unreadable file, a key file readable by group or others
+   (`chmod 600`), an encrypted key (no prompt is ever shown), a key that does
+   not match the certificate, and an unsupported key type. Error messages name
+   files, never their contents.
+2. **A reverse proxy** terminates TLS: `TW_TLS_PUBLISHED_CERT_FILE` is the
+   proxy's public certificate (the miner never needs the proxy's private key),
+   `TW_TRUSTED_PROXIES` must be set (startup refuses otherwise), and the
+   miner binds to loopback. The proxy **must pass the request target and body
+   byte for byte**: requests are signed over both, so a proxy that merges
+   slashes, decodes percent-encoding, rewrites paths or re-encodes bodies
+   makes every request fail with 401 `tw.auth_bad_signature`.
+   [`deploy/proxy/Caddyfile`](../deploy/proxy/Caddyfile) and
+   [`deploy/proxy/nginx.conf`](../deploy/proxy/nginx.conf) are checked to
+   do this (target, body, `X-Forwarded-For`, SSE streaming; evidence in
+   `reports/phase-4/wp6/proxy-check.txt`). The kit uses the right-most
+   `X-Forwarded-For` address that is not in `TW_TRUSTED_PROXIES` as the
+   client address (rate limits); the header is ignored from any other peer.
+
+**Rotating a certificate**: validators pin the key on chain, so a miner that
+serves a new certificate before the new key is published is refused
+(`tw.tls_pin_mismatch`) until it is. Restart the miner with the new
+certificate: it publishes and reads back the key before it opens its port
+(if `ServeAxonTls` is rate-limited, startup waits out the subnet's
+`serving_rate_limit`). In proxy mode the axon drift check (every 30 minutes)
+re-reads `TW_TLS_PUBLISHED_CERT_FILE` and publishes a renewed key; until then
+validators refuse the renewed certificate, so renew with the same key (e.g.
+certbot `--reuse-key`) or restart the miner right after renewing.
+`TW_LEGACY_V10_UNTIL` with TLS is warned about at startup: v10 validators
+connect over plain HTTP only. The chain cannot
+remove a key: a miner that turns TLS off while a key is published is refused
+by validators in the HTTPS modes (startup and `tensorwire doctor` warn).
+
+Test certificates are generated at test time (`tensorwire.testing.tls`);
+none is committed. The `tensorwire.tls` functions are listed in
+[tls.md](tls.md).
 
 ## The migration tools
 

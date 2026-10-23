@@ -383,6 +383,7 @@ class MinerSettings(CommonSettings):
     compat_max_queue: int = Field(default=256, ge=1, le=65_536)
     tls_cert_file: Path | None = None
     tls_key_file: Path | None = None
+    tls_published_cert_file: Path | None = None
     unsafe_allow_memory_nonce_multiworker: bool = False
 
     @field_validator("allow_hotkeys", "deny_hotkeys", mode="before")
@@ -426,7 +427,9 @@ class MinerSettings(CommonSettings):
     def _legacy_until(cls, value: dt.date | None) -> dt.date | None:
         return _check_end_date(value)
 
-    @field_validator("tls_cert_file", "tls_key_file", mode="after")
+    @field_validator(
+        "tls_cert_file", "tls_key_file", "tls_published_cert_file", mode="after"
+    )
     @classmethod
     def _file(cls, value: Path | None) -> Path | None:
         if value is None:
@@ -459,6 +462,17 @@ class MinerSettings(CommonSettings):
             raise ValueError(
                 "set both TW_TLS_CERT_FILE and TW_TLS_KEY_FILE, or neither"
             )
+        if self.tls_published_cert_file is not None:
+            if self.tls_cert_file is not None:
+                raise ValueError(
+                    "TW_TLS_PUBLISHED_CERT_FILE (TLS at a reverse proxy) and "
+                    "TW_TLS_CERT_FILE (TLS in uvicorn) are mutually exclusive"
+                )
+            if not self.trusted_proxies:
+                raise ValueError(
+                    "TW_TLS_PUBLISHED_CERT_FILE means a reverse proxy terminates "
+                    "TLS: set TW_TRUSTED_PROXIES to its address (spec 16.3)"
+                )
         overlap = self.allow_hotkeys & self.deny_hotkeys
         if overlap:
             raise ValueError(

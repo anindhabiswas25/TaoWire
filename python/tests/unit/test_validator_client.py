@@ -13,7 +13,6 @@ from pydantic import BaseModel
 from tensorwire.chain.axon import parse_axon
 from tensorwire.chain.gateway import NeuronView
 from tensorwire.crypto import HotkeySigner
-from tensorwire.errors import StartupError
 from tensorwire.extensions.response_sig import sign_response
 from tensorwire.observability.metrics import Metrics
 from tensorwire.testing.keys import dev_key
@@ -181,12 +180,15 @@ async def test_https_policy() -> None:
     assert seen[0].url.scheme == "https"
 
 
-def test_tls_pinning_policy_is_refused_until_tls_ships() -> None:
-    # Spec 8.6 / D13: never fall back to plain HTTP without saying so.
-    with pytest.raises(StartupError, match="TW_SCHEME_POLICY=https-if-tls-published"):
-        make(signed_answer, scheme_policy="https-if-tls-published")
-    check_scheme_policy("http")
-    check_scheme_policy("https")
+async def test_https_if_tls_published_without_a_key_is_plain_http() -> None:
+    vc, seen = make(signed_answer, scheme_policy="https-if-tls-published")
+    await vc.query(NEURON, "/v1/x", b"{}")
+    assert seen[0].url.scheme == "http"
+
+
+def test_scheme_policies() -> None:
+    for policy in ("http", "https", "https-if-tls-published"):
+        check_scheme_policy(policy)
     with pytest.raises(ValueError, match="unknown scheme policy"):
         check_scheme_policy("ftp")
 

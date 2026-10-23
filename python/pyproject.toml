@@ -30,6 +30,7 @@ dependencies = [
   "prometheus-client>=0.20",
   "typer>=0.12",
   "python-dotenv>=1.0",       # .env parsing for the unknown-TW_*-variable check
+  "cryptography>=43",         # TLS: a certificate's public key for ServeAxonTls and pinning (16.3, ADR-0011)
 ]
 
 [project.optional-dependencies]

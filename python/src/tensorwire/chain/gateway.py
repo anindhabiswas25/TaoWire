@@ -16,9 +16,10 @@ import asyncio
 import logging
 import math
 import random
+import re
 import threading
 import time
-from collections.abc import Awaitable, Callable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
@@ -103,7 +104,11 @@ class NeuronView:
     when nothing is served or the published address is rejected by
     :func:`tensorwire.chain.axon.parse_axon`. ``axon_protocol`` is the
     ``protocol`` byte published with ``ServeAxon`` (0 to 255), or ``None`` when
-    nothing is served; it is advisory, not a security signal.
+    nothing is served; it is advisory, not a security signal. ``tls_key`` is
+    the ``ServeAxonTls`` certificate the chain stores for the hotkey
+    (algorithm byte + key, ADR-0011), ``None`` when nothing is published, and
+    ``b""`` when something is published but the SDK's value cannot be read
+    (treated as unusable: never a reason to use plain HTTP).
     """
 
     uid: int
@@ -119,6 +124,7 @@ class NeuronView:
     incentive: float
     dividends: float
     axon_protocol: int | None = None
+    tls_key: bytes | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,6 +286,8 @@ _log = logging.getLogger("tensorwire.chain")
 _T = TypeVar("_T")
 
 _U8_MAX = 255
+#: Even-length hex digits only (``bytes.fromhex`` would also take spaces).
+_HEX_DIGITS = re.compile(r"(?:[0-9a-fA-F]{2})*")
 
 READ_ATTEMPTS = 5
 """Attempts per read (spec 8.3): the first try plus four retries."""
@@ -619,10 +627,20 @@ class BittensorGateway:
         mg = await self._call("metagraph", op)
         if mg is None:
             raise SubnetNotFound(f"subnet {netuid} does not exist")
+        block = int(mg.block)
+
+        async def certificates() -> Any:
+            client = await self._ensure_client()
+            return await client.query_map(
+                ("SubtensorModule", "NeuronCertificates"), [netuid], block=block
+            )
+
+        rows = await self._call("neuron_certificates", certificates)
         return metagraph_view(
             mg,
             fetched_at_monotonic=self._monotonic(),
             allow_private_axons=self._allow_private,
+            certificates=neuron_certificates(rows),
         )
 
     async def uid_for_hotkey(self, netuid: int, hotkey: str) -> int | None:
@@ -944,7 +962,11 @@ class BittensorGateway:
 
 
 def metagraph_view(
-    mg: Any, *, fetched_at_monotonic: float, allow_private_axons: bool
+    mg: Any,
+    *,
+    fetched_at_monotonic: float,
+    allow_private_axons: bool,
+    certificates: Mapping[str, bytes],
 ) -> MetagraphView:
     """Convert a ``bt.Metagraph`` into a kit-owned :class:`MetagraphView`.
 
@@ -953,12 +975,16 @@ def metagraph_view(
     is approximate (spot, no slippage). With no price (empty pool, or a price
     that is not a finite positive number) the alpha part counts as 0, so stake
     thresholds fail closed. On the root subnet (netuid 0) alpha is TAO.
+    ``certificates`` maps hotkeys to their ``NeuronView.tls_key``
+    (:func:`neuron_certificates`); it is required, because a missing entry
+    means "nothing published" (spec 16.3).
     """
     netuid = int(mg.netuid)
     price = _price(mg.price) if netuid != 0 else 1.0
     raw_axons = (mg.raw or {}).get("axons") if isinstance(mg.raw, dict) else None
     neurons = tuple(
-        _neuron_view(n, price, raw_axons, allow_private_axons) for n in mg.neurons
+        _neuron_view(n, price, raw_axons, allow_private_axons, certificates)
+        for n in mg.neurons
     )
     return MetagraphView(
         netuid=netuid,
@@ -977,7 +1003,11 @@ def _price(value: Any) -> float:
 
 
 def _neuron_view(
-    n: Any, price: float, raw_axons: Any, allow_private: bool
+    n: Any,
+    price: float,
+    raw_axons: Any,
+    allow_private: bool,
+    certificates: Mapping[str, bytes],
 ) -> NeuronView:
     alpha = float(n.alpha_stake.amount)
     tao = float(n.tao_stake.amount)
@@ -995,7 +1025,63 @@ def _neuron_view(
         incentive=float(n.incentive),
         dividends=float(n.dividends),
         axon_protocol=_axon_protocol(raw_axons, int(n.uid)) if n.axon else None,
+        tls_key=certificates.get(str(n.hotkey)),
     )
+
+
+def neuron_certificates(rows: Any) -> dict[str, bytes]:
+    """``NeuronCertificates`` rows from ``query_map`` as ``{hotkey: tls_key}``.
+
+    Each value becomes algorithm byte + key (ADR-0011 point 5). The SDK
+    decodes the key bytes as text when they are valid UTF-8 and as ``0x`` hex
+    otherwise; a value that cannot be read becomes ``b""`` (published, unusable).
+    Rows of an unexpected shape raise :class:`SdkSurfaceError`: a row that
+    cannot be tied to a hotkey must not read as "nothing published" (fail
+    closed, D31).
+    """
+    if isinstance(rows, (str, bytes)) or not isinstance(rows, Iterable):
+        raise SdkSurfaceError("NeuronCertificates: query_map did not return rows")
+    out: dict[str, bytes] = {}
+    for row in rows:
+        if (
+            not isinstance(row, Sequence)
+            or isinstance(row, (str, bytes))
+            or len(row) != 2
+            or not isinstance(row[0], str)
+        ):
+            raise SdkSurfaceError("NeuronCertificates: unexpected row shape")
+        out[row[0]] = _certificate_bytes(row[1])
+    return out
+
+
+def _certificate_bytes(value: Any) -> bytes:
+    if not isinstance(value, Mapping):
+        return b""
+    algorithm = value.get("algorithm")
+    if isinstance(algorithm, bool) or not isinstance(algorithm, int):
+        return b""
+    if not 0 <= algorithm <= _U8_MAX:
+        return b""
+    key = _key_bytes(value.get("public_key"))
+    return b"" if key is None else bytes([algorithm]) + key
+
+
+def _key_bytes(value: Any) -> bytes | None:
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value)
+    if isinstance(value, str):
+        if value.startswith("0x") and _HEX_DIGITS.fullmatch(value, 2):
+            return bytes.fromhex(value[2:])
+        try:
+            return value.encode("utf-8")
+        except UnicodeEncodeError:
+            return None
+    if isinstance(value, (list, tuple)) and all(
+        isinstance(b, int) and not isinstance(b, bool) and 0 <= b <= _U8_MAX
+        for b in value
+    ):
+        return bytes(value)
+    return None
 
 
 def _axon_protocol(raw_axons: Any, uid: int) -> int | None:

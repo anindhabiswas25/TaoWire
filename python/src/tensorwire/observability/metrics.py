@@ -185,6 +185,11 @@ class Metrics:
             ["result"],
             registry=r,
         )
+        self.tls_pin_failures = Counter(
+            "tw_tls_pin_failures_total",
+            "Miners refused because their TLS key is not the published one (16.3).",
+            registry=r,
+        )
         self.stream_aborted = Counter(
             "tw_stream_aborted_total",
             "Streams ended without a valid tw-end (spec 9.2).",
