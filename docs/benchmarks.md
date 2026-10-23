@@ -13,7 +13,7 @@ re-run them on your own hardware before you rely on them.
 | OS | Linux 7.0.0-38-generic |
 | Python | 3.12.3 |
 | Packages | tensorwire 0.1.0.dev0, bittensor 11.3.0, uvicorn 0.54.0, httptools 0.9.0, fastapi 0.159.1, starlette 1.9.0, redis-py 5.3.1 |
-| Redis | 7.4.11 in Docker (`redis:7`), published on `127.0.0.1:6379` |
+| Redis | 7.4.11 in Docker (`redis:7`), container `tw-redis` at `172.17.0.3` (direct path), also published on `127.0.0.1:6379` (docker-proxy) |
 
 The spec's reference is 4 vCPU / 8 GB. `tensorwire bench` pins the miner
 (4 uvicorn workers) to logical CPUs 0-3, which are two performance cores
@@ -23,17 +23,41 @@ miner has 4 logical CPUs. Memory is not limited; the miner used about
 
 ## Results against spec 13.7
 
-| Metric | Target | Result | |
+**What counts (D17, 13.7):** Redis reached directly (host network, Unix
+socket or the container's own IP), as in production. `just bench` /
+`tensorwire bench` find Redis that way by default and print the path
+(`redis path: direct: container tw-redis at its own IP`); a run through
+Docker's port mapping (`docker-proxy`) is printed as "extra information
+only" and is never the result.
+
+| Metric | Target | Result, Redis direct | |
 |---|---|---|---|
-| Verified requests/s (trivial handler, 1 KB body, 4 workers + Redis) | ≥ 500 | **1,339-1,825 req/s** in two `just bench` runs (60 s, 96 in flight, 0 failed; end-to-end p99 105.7 ms in the first) | met |
-| Added latency of auth + policy, p50 | ≤ 2 ms | **0.75-1.69 ms** (`just bench` and repeats); 0.77-0.92 ms with Redis reached directly | met |
-| Added latency of auth + policy, p99 | ≤ 5 ms | As configured (Redis through Docker's port mapping): **7.99, 5.63, 5.93 and 4.06 ms** in four runs, so three misses and one pass. With Redis reached directly: **4.24-4.34 ms** in three runs | **not reliably met** as configured; met with direct Redis (see below) |
-| Validator fan-out to 256 local miners, 1 KB | all done in ≤ 2 s | **0.715-0.765 s** (slowest of 5 rounds; 256 verified answers per round) | met |
+| Verified requests/s (trivial handler, 1 KB body, 4 workers + Redis) | ≥ 500 | **1,547.8 req/s** (60 s, 96 in flight, 0 failed) | met |
+| Added latency of auth + policy, p50 | ≤ 2 ms | **1.868 ms**; 1.83-1.90 ms in three more auth-only runs | met |
+| Added latency of auth + policy, p99 | ≤ 5 ms | **6.807 ms**; 6.48-6.99 ms in three more auth-only runs. Phase 3 gate on the same host, quiet: **3.755 ms** | **not met in the 2026-10-23 gate-fix run** (host busy, see below) |
+| Validator fan-out to 256 local miners, 1 KB | all done in ≤ 2 s | **0.664 s** (slowest of 5 rounds; 256 verified answers per round) | met |
 
-Raw output: `reports/phase-3/a/bench/` and, for the final run at the end of
-Phase 3 (all four targets passed that time), `reports/phase-3/a/final/just-bench.txt`.
+Raw output: `reports/phase-3/gate-fix/bench.txt` (`just bench`, eng/build
+with the G4 fixes). Earlier runs: `reports/phase-3/a/bench/`,
+`reports/phase-3/a/final/just-bench.txt`, and the Phase 3 gate's
+`bench-container-ip.txt` (all four targets met on the direct path, p99
+3.755 ms).
 
-### Why auth + policy p99 misses as configured
+**The 2026-10-23 gate-fix run was on a busy host.** During it the desktop
+shell (`gnome-shell`) used about 6 cores and the load average was 9-15 on
+16 logical CPUs, so the miner's pinned CPUs were shared. An A/B of the
+auth-only measurement, run back to back on `main` (before the G4 fixes) and
+on `eng/build`, missed on both: `main` p99 6.10-6.64 ms, `eng/build`
+6.48-6.99 ms (`reports/phase-3/gate-fix/bench-auth-ab-main-vs-eng.txt`).
+The G4 fixes add about 0.1-0.3 ms at p50: one more sr25519 verification per
+request (the `<Bytes>` check, D22) and the clock-step check. Under these
+conditions the p99 target is not met; it needs a re-run on a quiet host.
+
+**Extra information, not the result (D17):** through `docker-proxy`
+(`127.0.0.1:6379`), same hour: 1,592.2 req/s, auth p50 3.268 ms, p99
+10.422 ms, fan-out 0.761 s (`reports/phase-3/gate-fix/bench-docker-proxy.txt`).
+
+### Why the Redis path matters for p99
 
 The timed path does three Redis round trips per request: the per-IP
 bucket, the replay store, and the per-hotkey bucket. It also hands the
@@ -51,10 +75,11 @@ The tail comes from Redis access, not from the kit's own work. On this
 machine Redis is reached through Docker's userland proxy (`docker-proxy`):
 a plain `PING` has p99 **1.24 ms** through `127.0.0.1:6379` and **0.30 ms**
 to the container's own address (`172.17.0.3`). With the same container
-reached directly, auth + policy p99 is 4.24-4.34 ms in three runs, under
-the target. The target has not been loosened, and the bench has not been
-changed to hide the proxy. `just bench` still uses
-`TENSORWIRE_BENCH_REDIS_URL` (default `redis://127.0.0.1:6379/14`).
+reached directly, auth + policy p99 was 4.24-4.34 ms in three Phase 3 runs
+and 3.755 ms at the Phase 3 gate. The target has not been loosened. Since
+D17, `just bench` uses the direct path by default; set
+`TENSORWIRE_BENCH_REDIS_URL` (or `--redis-url`) to choose a Redis yourself.
+The bench prints whether that URL is direct or a `docker-proxy` mapping.
 
 What this means for operators:
 
@@ -65,8 +90,8 @@ What this means for operators:
 - With one worker and no Redis (one host, one process), the kit adds
   0.22 ms p50 and 0.91 ms p99.
 
-To reproduce the direct-Redis numbers:
-`tensorwire bench --redis-url redis://<container-ip>:6379/14 --skip throughput --skip fanout`.
+To reproduce: `just bench` (direct path found automatically), or
+`tensorwire bench --redis-url redis://<container-ip>:6379/14`.
 
 ## Abuse tests (spec 13.6)
 

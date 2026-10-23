@@ -19,6 +19,16 @@ On a machine with at least 8 CPUs the miner side is pinned to the first 4
 (``--client-cpus``), which approximates the 4 vCPU target host. Redis runs
 wherever it runs (not pinned). The report says what was used.
 
+**Redis path (spec 13.7, D17).** "Met" means Redis reached directly: host
+networking, a Unix socket or the container's own IP, not Docker's userland
+port proxy (``docker-proxy``), which adds latency a production deployment
+does not have. Without ``--redis-url`` the bench finds Redis itself: a
+running container that publishes port 6379 is reached at its own IP (when
+that answers), otherwise a Redis on 127.0.0.1:6379 is used. An explicit
+``--redis-url`` is used as given. Either way the report prints the path, and
+a run through ``docker-proxy`` is marked as extra information, not the
+13.7 result.
+
 The rate limits stay on but are raised far above the load (one IP and a few
 hotkeys send everything), so they cost their Redis round trip without
 capping throughput.
@@ -38,9 +48,11 @@ import subprocess
 import sys
 import tempfile
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import urlsplit
 
 import httpx
 import typer
@@ -52,7 +64,16 @@ from tensorwire.testing import bench as tb
 from tensorwire.testing.keys import dev_key
 from tensorwire.version import __version__
 
-__all__ = ["BenchReport", "Targets", "bench", "parse_cpus"]
+__all__ = [
+    "BenchReport",
+    "DockerRedis",
+    "RedisPath",
+    "Targets",
+    "bench",
+    "docker_redis_containers",
+    "parse_cpus",
+    "resolve_redis_path",
+]
 
 _MAX_CPU = 4096
 
@@ -130,6 +151,176 @@ def _version(package: str) -> str:
         return "not installed"
 
 
+# ------------------------------------------------------------------ redis path
+
+#: The database the bench uses on a Redis it found itself.
+BENCH_REDIS_DB = 14
+_REDIS_PORT = 6379
+#: Host addresses a published port is reached on (loopback and wildcard).
+_LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1", "0.0.0.0", "::"})  # noqa: S104
+
+
+@dataclass(frozen=True)
+class DockerRedis:
+    """A running container that serves Redis (publishes or exposes 6379)."""
+
+    name: str
+    ip: str | None
+    """The container's own address (``None`` on host networking)."""
+    published: tuple[tuple[str, int], ...]
+    """``(host_ip, host_port)`` pairs mapped to its 6379 by ``docker-proxy``."""
+    host_network: bool = False
+
+
+@dataclass(frozen=True)
+class RedisPath:
+    """Which Redis the bench uses and how it is reached (D17)."""
+
+    url: str | None
+    kind: str
+    """``direct`` (container IP, host network, Unix socket, non-Docker host
+    Redis), ``docker-proxy``, or ``none`` (no Redis: one worker, memory)."""
+    detail: str
+
+    @property
+    def counts(self) -> bool:
+        """Whether a run on this path can be the 13.7 result."""
+        return self.kind != "docker-proxy"
+
+    def describe(self) -> str:
+        """One line for the report."""
+        note = "" if self.counts else " (extra information only, not the 13.7 result)"
+        return f"redis path: {self.kind}{note}: {self.detail}"
+
+
+def docker_redis_containers(
+    run: Callable[[list[str]], str] | None = None,
+) -> list[DockerRedis]:
+    """Running Docker containers serving Redis on 6379 (empty without Docker).
+
+    ``run`` executes a ``docker`` command and returns its stdout (tests pass
+    a fake).
+    """
+    run = _docker if run is None else run
+    try:
+        ids = run(["docker", "ps", "-q"]).split()
+        if not ids:
+            return []
+        raw = run(["docker", "inspect", *ids])
+        containers = json.loads(raw)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return []
+    found: list[DockerRedis] = []
+    for c in containers if isinstance(containers, list) else []:
+        try:
+            net = c.get("NetworkSettings") or {}
+            ports = net.get("Ports") or {}
+            mode = str((c.get("HostConfig") or {}).get("NetworkMode", ""))
+            image = str((c.get("Config") or {}).get("Image", ""))
+            if f"{_REDIS_PORT}/tcp" not in ports and not (
+                mode == "host" and "redis" in image
+            ):
+                continue
+            published = tuple(
+                (str(b.get("HostIp") or "*"), int(b["HostPort"]))
+                for b in ports.get(f"{_REDIS_PORT}/tcp") or ()
+            )
+            ips = [
+                str(n.get("IPAddress"))
+                for n in (net.get("Networks") or {}).values()
+                if n.get("IPAddress")
+            ]
+            found.append(
+                DockerRedis(
+                    name=str(c.get("Name", "")).lstrip("/"),
+                    ip=ips[0] if ips else None,
+                    published=published,
+                    host_network=mode == "host",
+                )
+            )
+        except (AttributeError, KeyError, TypeError, ValueError):
+            continue
+    return found
+
+
+def _docker(cmd: list[str]) -> str:
+    return subprocess.run(  # noqa: S603 - fixed docker command, no shell
+        cmd, capture_output=True, check=True, text=True, timeout=10
+    ).stdout
+
+
+def _redis_answers(url: str) -> bool:
+    try:
+        import redis  # noqa: PLC0415 - optional extra
+
+        client = redis.Redis.from_url(url, socket_timeout=1, socket_connect_timeout=1)
+        try:
+            return bool(client.ping())
+        finally:
+            client.close()
+    except Exception:  # noqa: BLE001 - unreachable for any reason
+        return False
+
+
+def resolve_redis_path(
+    url: str | None,
+    *,
+    containers: Callable[[], list[DockerRedis]] = docker_redis_containers,
+    answers: Callable[[str], bool] = _redis_answers,
+) -> RedisPath:
+    """Find Redis for the bench, preferring the direct path (13.7, D17).
+
+    With ``url``: use it as given and say how it is reached. Without: a
+    container's own IP when it answers, else ``127.0.0.1:6379``. Returns
+    kind ``none`` when no Redis answers.
+    """
+    if url is not None:
+        return _classify(url, containers())
+    found = containers()
+    for c in found:
+        if c.host_network:
+            candidate = f"redis://127.0.0.1:{_REDIS_PORT}/{BENCH_REDIS_DB}"
+            if answers(candidate):
+                return RedisPath(
+                    candidate, "direct", f"container {c.name}, host network"
+                )
+        elif c.ip:
+            candidate = f"redis://{c.ip}:{_REDIS_PORT}/{BENCH_REDIS_DB}"
+            if answers(candidate):
+                return RedisPath(
+                    candidate, "direct", f"container {c.name} at its own IP"
+                )
+    local = f"redis://127.0.0.1:{_REDIS_PORT}/{BENCH_REDIS_DB}"
+    if answers(local):
+        return _classify(local, found)
+    return RedisPath(None, "none", "no Redis found (one worker, memory stores)")
+
+
+def _classify(url: str, containers: list[DockerRedis]) -> RedisPath:
+    parts = urlsplit(url)
+    if parts.scheme == "unix":
+        return RedisPath(url, "direct", "Unix socket")
+    host = parts.hostname or "127.0.0.1"
+    port = parts.port or _REDIS_PORT
+    for c in containers:
+        if c.ip is not None and host == c.ip:
+            return RedisPath(url, "direct", f"container {c.name} at its own IP")
+        if host in _LOOPBACK and any(p == port for _, p in c.published):
+            better = (
+                f"; direct: redis://{c.ip}:{_REDIS_PORT}{parts.path or ''}"
+                if c.ip
+                else ""
+            )
+            return RedisPath(
+                url,
+                "docker-proxy",
+                f"{host}:{port} is Docker's port mapping of container {c.name}{better}",
+            )
+        if c.host_network and host in _LOOPBACK and port == _REDIS_PORT:
+            return RedisPath(url, "direct", f"container {c.name}, host network")
+    return RedisPath(url, "direct", f"{host}:{port} (not a Docker port mapping)")
+
+
 def _redis_version(url: str | None) -> str | None:
     if url is None:
         return None
@@ -145,8 +336,9 @@ def _redis_version(url: str | None) -> str | None:
 
 
 def _environment(
-    redis_url: str | None, miner_cpus: list[int] | None, client_cpus: list[int] | None
+    redis: RedisPath, miner_cpus: list[int] | None, client_cpus: list[int] | None
 ) -> dict[str, Any]:
+    redis_url = redis.url
 
     mem_kb = 0
     try:
@@ -166,6 +358,7 @@ def _environment(
         "bittensor": _version("bittensor"),
         "uvicorn": _version("uvicorn"),
         "redis": _redis_version(redis_url),
+        "redis_path": asdict(redis),
         "miner_cpus": miner_cpus,
         "client_cpus": client_cpus,
     }
@@ -472,8 +665,11 @@ def render(report: BenchReport, targets: Targets) -> str:
         f"uvicorn {e.get('uvicorn')}, redis {e.get('redis')}",
         f"  miner CPUs {e.get('miner_cpus') or 'unpinned'}, "
         f"client CPUs {e.get('client_cpus') or 'unpinned'}",
-        "",
     ]
+    path = e.get("redis_path")
+    if path:
+        lines.append("  " + RedisPath(**path).describe())
+    lines.append("")
     if t:
         lines += [
             f"[{_mark(v['rps'])}] verified requests/s: {t['rps']} "
@@ -524,7 +720,8 @@ def bench(
         str | None,
         typer.Option(
             envvar="TENSORWIRE_BENCH_REDIS_URL",
-            help="Redis for the replay store and limiters (needed for workers > 1).",
+            help="Redis for the replay store and limiters (needed for workers > 1). "
+            "Default: found automatically, reached directly (13.7, D17).",
         ),
     ] = None,
     miner_cpus: Annotated[
@@ -555,10 +752,14 @@ def bench(
     unknown = skipped - {"throughput", "auth", "fanout"}
     if unknown:
         raise typer.BadParameter(f"unknown measurement(s): {sorted(unknown)}")
+    path = resolve_redis_path(redis_url)
+    typer.echo(path.describe(), err=True)
+    redis_url = path.url
     if workers > 1 and redis_url is None:
         raise typer.BadParameter(
-            "workers > 1 needs --redis-url (or TENSORWIRE_BENCH_REDIS_URL): "
-            "the miner refuses per-process replay stores and limits"
+            "workers > 1 needs Redis: none found; pass --redis-url (or "
+            "TENSORWIRE_BENCH_REDIS_URL). The miner refuses per-process replay "
+            "stores and limits"
         )
     body = tb.bench_body(body_bytes)
     auto_miner, auto_client = _auto_cpus()
@@ -566,7 +767,7 @@ def bench(
     c_cpus = auto_client if client_cpus == "auto" else parse_cpus(client_cpus)
     n_clients = clients or min(12, len(c_cpus) if c_cpus else 4)
     targets = Targets()
-    report = BenchReport(environment=_environment(redis_url, m_cpus, c_cpus))
+    report = BenchReport(environment=_environment(path, m_cpus, c_cpus))
     with tempfile.TemporaryDirectory(prefix="tensorwire-bench-") as tmp:
         if "throughput" not in skipped:
             typer.echo("throughput ...", err=True)

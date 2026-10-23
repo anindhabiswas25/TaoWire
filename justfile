@@ -64,11 +64,10 @@ test_redis := env_var_or_default("TENSORWIRE_TEST_REDIS_URL", "redis://127.0.0.1
 abuse: setup
     cd python && TENSORWIRE_TEST_REDIS_URL={{test_redis}} uv run pytest -m abuse tests/abuse
 
-# spec 13.7 targets; 4 workers need Redis (TENSORWIRE_BENCH_REDIS_URL, default local DB 14)
-bench_redis := env_var_or_default("TENSORWIRE_BENCH_REDIS_URL", "redis://127.0.0.1:6379/14")
-
+# spec 13.7 targets; 4 workers need Redis. Found automatically and reached directly
+# (container IP / host network, not docker-proxy; D17); TENSORWIRE_BENCH_REDIS_URL overrides
 bench:
-    cd python && uv run tensorwire bench --duration 60 --redis-url {{bench_redis}}
+    cd python && uv run tensorwire bench --duration 60
 
 audit: setup
     cd python && uv run pip-audit
