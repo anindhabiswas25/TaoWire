@@ -1,0 +1,122 @@
+# TensorWire localnet stack (spec 14.2-14.5). LOCALNET ONLY: dev wallets, public seeds.
+#
+#   docker compose -f deploy/compose/localnet.yml up -d chain redis
+#   LOCALNET_TAG=devnet@sha256:0dd5335b49ed3a20431dc404ddf375f17d2219094457f00e12c12181959f9345 \
+#     scripts/localnet_up.sh               # wallets, subnet, stake (reuses this chain)
+#   docker compose -f deploy/compose/localnet.yml --profile nodes up -d --build
+#   docker compose -f deploy/compose/localnet.yml --profile nodes down
+#
+# If scripts/localnet_up.sh started the chain itself (its default), compose does
+# not manage it: start only the nodes and Redis with
+#   docker compose -f deploy/compose/localnet.yml --profile nodes up -d --build --no-deps redis miner validator
+#
+# The chain container is `local_chain`, the name scripts/localnet_up.sh and the
+# localnet tests expect; `LOCALNET_TAG` must name the same image as below or
+# localnet_up.sh refuses to reuse it. 12 s blocks: LOCALNET_FAST_RUNTIME=False.
+#
+# The miner and validator run on host networking: the chain refuses 127.0.0.1
+# as an axon IP, so the miner serves on 127.0.0.2 (Linux), and the validator
+# reaches it there. Each node mounts only its own hotkey file, read-only; the
+# coldkeys stay in $LOCALNET_DIR. The containers run as LOCALNET_UID (default
+# 1000) because localnet_setup.py writes the dev hotkeys 0600 for the user who
+# ran it; production images run as 10001 (deploy/README.md).
+
+name: tensorwire-localnet
+
+x-node: &node
+  network_mode: host
+  user: "${LOCALNET_UID:-1000}:${LOCALNET_GID:-1000}"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs:
+    - /tmp
+    - /var/lib/tensorwire:uid=${LOCALNET_UID:-1000},gid=${LOCALNET_GID:-1000},mode=0700
+  restart: unless-stopped
+  profiles: [nodes]
+  depends_on:
+    chain:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  chain:
+    image: ghcr.io/raofoundation/subtensor-localnet:devnet@sha256:0dd5335b49ed3a20431dc404ddf375f17d2219094457f00e12c12181959f9345
+    container_name: local_chain
+    command: ["${LOCALNET_FAST_RUNTIME:-True}"]
+    ports:
+      - "127.0.0.1:9944:9944"
+      - "127.0.0.1:9945:9945"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -sf
+        - -H
+        - "Content-Type: application/json"
+        - -d
+        - '{"id":1,"jsonrpc":"2.0","method":"system_health","params":[]}'
+        - http://127.0.0.1:9944
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  redis:
+    image: redis:7.4-alpine@sha256:57e4255cc971b1c8d6f8a6ca283ac01bc3ecdd914273ef6bfaede87aaecd6541
+    # 6380, not 6379: the team's long-running tw-redis holds 6379 on dev hosts.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:${LOCALNET_REDIS_PORT:-6380}:6379"
+    # The image's own non-root user: as root its entrypoint chowns /data, which
+    # fails with every capability dropped.
+    user: "999:1000"
+    read_only: true
+    tmpfs: ["/data:uid=999,gid=1000,mode=0700"]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  miner:
+    <<: *node
+    build:
+      context: ../..
+      dockerfile: deploy/docker/miner.Dockerfile
+    image: tensorwire-miner:localnet
+    environment:
+      TW_NETWORK: ws://127.0.0.1:9944
+      TW_NETUID: "${LOCALNET_NETUID:-2}"
+      TW_WALLET_NAME: miner_py
+      TW_ALLOW_PRIVATE_AXONS: "1"
+      TW_BIND_HOST: 127.0.0.2
+      TW_BIND_PORT: "${LOCALNET_MINER_PORT:-8091}"
+      TW_EXTERNAL_IP: 127.0.0.2
+      TW_METRICS_BIND: "127.0.0.1:${LOCALNET_MINER_METRICS_PORT:-9101}"
+      # Shared nonce store (spec 8.4.3); required once TW_WORKERS > 1.
+      TW_REDIS_URL: "redis://127.0.0.1:${LOCALNET_REDIS_PORT:-6380}/0"
+    volumes:
+      - ${LOCALNET_DIR:-~/.tensorwire/localnet}/wallets/miner_py/hotkeys/default:/run/tensorwire/wallets/miner_py/hotkeys/default:ro
+
+  validator:
+    <<: *node
+    build:
+      context: ../..
+      dockerfile: deploy/docker/validator.Dockerfile
+    image: tensorwire-validator:localnet
+    environment:
+      TW_NETWORK: ws://127.0.0.1:9944
+      TW_NETUID: "${LOCALNET_NETUID:-2}"
+      TW_WALLET_NAME: validator
+      TW_ALLOW_PRIVATE_AXONS: "1"
+      TW_METRICS_BIND: "127.0.0.1:${LOCALNET_VALIDATOR_METRICS_PORT:-9102}"
+      # Permits move on a tempo-10 localnet (spec 14.2): query whoever serves.
+      TW_QUERY_VALIDATORS: "1"
+      TW_ROUND_INTERVAL_S: "3"
+      TW_MIN_WEIGHT_INTERVAL_BLOCKS: "10"
+    volumes:
+      - ${LOCALNET_DIR:-~/.tensorwire/localnet}/wallets/validator/hotkeys/default:/run/tensorwire/wallets/validator/hotkeys/default:ro

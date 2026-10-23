@@ -1,0 +1,3 @@
+# Lint deploy/ (the container health check) with the package's rules.
+extend = "../python/pyproject.toml"
+src = ["."]
