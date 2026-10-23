@@ -21,6 +21,7 @@
 //! `verify_strict`, plus an explicit weak-key refusal (ADR-0010).
 #![forbid(unsafe_code)]
 
+mod clockstep;
 mod error;
 mod keys;
 mod nonce;

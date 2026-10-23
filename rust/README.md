@@ -39,7 +39,8 @@ Validator side (feature `client`): `Client::new(Signer::new(validator_key), reqw
 | Item | What it does |
 |---|---|
 | `build_payload`, `body_sha256`, `Scheme` | The 8-line btauth/1 payload (spec 4.2) |
-| `Verifier::new(Config)`, `Verifier::verify(headers, body, method, target).await` | Spec 4.3 in order; `Caller` or `Error { code, status, .. }` (Appendix A) |
+| `Verifier::new(Config)`, `Verifier::verify(headers, body, method, target).await` | Spec 4.3 in order; `Caller` or `Error { code, status, .. }` (Appendix A). Refuses a store with retention below `2 × (max_age + allowed_skew)` (D21) |
+| `Verifier::failing_closed`, `Verifier::last_clock_step` | Clock-step guard (D21): after a backwards wall-clock step larger than the store's margin, requests get `tw.replay_store_unavailable` for the retention; report it as not-ready (`clock_step`). Tests set `Config::now_ns` and `Config::monotonic_ns` |
 | `axum::protect`, `axum::MinerAuth` | Middleware: `OriginalUri` path and query as target (percent-encoding kept, absolute form refused), `to_bytes` with the body limit (413), `Caller` and raw `Bytes` in extensions, twresp/1 on answers with a response key |
 | `Keypair::{sr25519_from_seed, ed25519_from_seed}`, `Keypair::sign` | schnorrkel (context `b"substrate"`) and ed25519-dalek 2 |
 | `Signer::sign` | Request headers with a fresh nonce every call |

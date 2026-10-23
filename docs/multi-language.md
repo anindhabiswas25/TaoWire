@@ -30,8 +30,18 @@ Bittensor SDK, in the same ways everywhere:
 | Nonce is 1 to 20 ASCII digits; 20 digits above `u64::MAX` are stale, not malformed | malformed / stale | N29–N33, N51 |
 | `X-Bittensor-Crypto` is exactly `ed25519` or `sr25519` | `tw.auth_malformed` | N7, N34–N37 |
 | Signature is hex digits only (optional `0x`); odd length is shape, wrong byte length is step 4 | `tw.auth_malformed` | N8, N9, N40–N46 |
-| Never a `<Bytes>`-wrapped signature | `tw.auth_bad_signature` | N19, N20 (Python accepts: spec 11.7) |
-| Weak public keys refused (ADR-0010) | `tw.auth_bad_signature` | N63, N64 |
+| Never a `<Bytes>`-wrapped signature, Python included (D22) | `tw.auth_bad_signature` | N19, N20 |
+| Weak public keys refused (ADR-0010, D20) | `tw.auth_bad_signature` | N63, N64 |
+
+Replay stores follow the same rules everywhere (spec 8.4.3-8.4.4, D21): a verifier refuses a store whose
+retention is below `2 × (max_age + allowed_skew)`; the memory stores forget a pair only when both the
+monotonic and the wall clock say it is old; and every verifier watches `wall − monotonic` on the requests
+that reach the replay check. A backwards wall-clock step larger than `retention − (max_age +
+allowed_skew)` makes those requests fail with `tw.replay_store_unavailable` (503) for `retention`, which
+covers Redis stores too (Redis cannot see a step on the miner). Python reports it in `/readyz`
+(`clock_step`) and `tw_clock_step_seconds`; Go has `(*Verifier).FailingClosed()` /
+`LastClockStep()`, Rust `Verifier::failing_closed()` / `last_clock_step()` for a server's readiness probe
+and metrics.
 
 ## Conformance vectors
 

@@ -40,7 +40,8 @@ answer's twresp/1 signature verified.
 | Name | What it does |
 |---|---|
 | `BuildPayload(scheme, method, target, body, nonce, sender, receiver)` | The 8-line btauth/1 payload (spec 4.2); `receiver == ""` writes `-` |
-| `NewVerifier(Config)`, `(*Verifier).Verify(ctx, http.Header, body, method, target)` | Spec 4.3 in order; returns `*Caller` or `*Error` with the Appendix A code and status |
+| `NewVerifier(Config)`, `(*Verifier).Verify(ctx, http.Header, body, method, target)` | Spec 4.3 in order; returns `*Caller` or `*Error` with the Appendix A code and status. Refuses a store with retention below `2 × (MaxAge + AllowedSkew)` (D21) |
+| `(*Verifier).FailingClosed()`, `LastClockStep()` | Clock-step guard (D21): after a backwards wall-clock step larger than the store's margin, requests get `tw.replay_store_unavailable` for the retention; report it as not-ready (`clock_step`). Tests inject `Config.NowNs` and `Config.MonotonicNs` |
 | `Middleware(MiddlewareConfig)` | `net/http` middleware: `MaxBytesReader` (413), target = `r.RequestURI` (absolute form refused), verify, handler; signs answers with twresp/1 when `ResponseKey` is set |
 | `CallerFrom(ctx)`, `BodyFrom(ctx)` | The verified caller and the raw body inside a protected handler |
 | `NewSr25519FromSeed`, `NewEd25519FromSeed`, `(*Keypair).Sign` | Hotkeys from 32-byte seeds; sr25519 via go-schnorrkel v1.1.0 (wrapped in `sr25519.go`), ed25519 via the standard library |

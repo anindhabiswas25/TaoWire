@@ -152,7 +152,7 @@ func TestNewVerifierValidates(t *testing.T) {
 	cases := []Config{
 		{SelfHotkey: "nope", Store: store},
 		{SelfHotkey: bob(t).SS58()},
-		{SelfHotkey: bob(t).SS58(), Store: NewMemoryStore(5*time.Second, nil)},
+		{SelfHotkey: bob(t).SS58(), Store: NewMemoryStore(23*time.Second, nil)},
 		{SelfHotkey: bob(t).SS58(), Store: store, MaxAge: -time.Second},
 	}
 	for i, c := range cases {
@@ -514,5 +514,78 @@ func TestMemoryStoreSurvivesWallClockStepBack(t *testing.T) {
 	now = start.Add(13 * time.Second)
 	if ok, _ := s.CheckAndStore(ctx, "a", nonce); !ok {
 		t.Fatal("stale on both clocks: forgotten")
+	}
+}
+
+// D21 (spec 8.4.3): every store must keep pairs for 2 x the freshness window.
+func TestNewVerifierRefusesRetentionBelowTwiceTheWindow(t *testing.T) {
+	for _, r := range []time.Duration{12 * time.Second, 23*time.Second + 999*time.Millisecond} {
+		if _, err := NewVerifier(Config{SelfHotkey: bob(t).SS58(), Store: NewMemoryStore(r, nil)}); err == nil {
+			t.Errorf("retention %v accepted", r)
+		}
+	}
+	if _, err := NewVerifier(Config{SelfHotkey: bob(t).SS58(), Store: NewMemoryStore(24*time.Second, nil)}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// D21 (spec 8.4.4): a backwards wall-clock step larger than the margin
+// (Retention - window) fails closed for Retention instead of reopening nonces.
+func TestBackwardsClockStepFailsClosed(t *testing.T) {
+	wall := uint64(time.Now().UnixNano())
+	var mono int64
+	clockWall := func() uint64 { return wall }
+	advance := func(d time.Duration) { wall += uint64(d); mono += int64(d) }
+	// A store on a clock that forgets after 60 s (like Redis, which cannot see
+	// a step on the miner).
+	storeNow := time.Unix(0, 0)
+	store := NewMemoryStore(time.Minute, func() time.Time { return storeNow.Add(time.Duration(mono)) })
+	v, err := NewVerifier(Config{
+		SelfHotkey: bob(t).SS58(), Store: store,
+		NowNs: clockWall, MonotonicNs: func() int64 { return mono },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer := &Signer{Key: alice(t), Nonce: NonceSource{NowNs: clockWall}}
+	h, _, _ := signer.Sign("POST", "/x", nil, bob(t).SS58())
+	ctx := context.Background()
+	if _, err := v.Verify(ctx, h, nil, "POST", "/x"); err != nil {
+		t.Fatal(err)
+	}
+	advance(61 * time.Second) // both clocks: the store has forgotten the pair
+	wall -= uint64(55 * time.Second)
+	var e *Error
+	_, err = v.Verify(ctx, h, nil, "POST", "/x") // the old request is 6 s old again
+	if !errors.As(err, &e) || e.Code != CodeReplayStoreUnavailable || e.Status != 503 {
+		t.Fatalf("replay after a clock step: %v", err)
+	}
+	if !v.FailingClosed() || v.LastClockStep() != 55*time.Second {
+		t.Fatalf("guard: %v %v", v.FailingClosed(), v.LastClockStep())
+	}
+	fresh := &Signer{Key: alice(t), Nonce: NonceSource{NowNs: clockWall}}
+	h2, _, _ := fresh.Sign("POST", "/x", nil, bob(t).SS58())
+	if _, err := v.Verify(ctx, h2, nil, "POST", "/x"); !errors.As(err, &e) || e.Code != CodeReplayStoreUnavailable {
+		t.Fatalf("any request during the window: %v", err)
+	}
+	advance(time.Minute) // Retention later: normal service
+	h3, _, _ := fresh.Sign("POST", "/x", nil, bob(t).SS58())
+	if _, err := v.Verify(ctx, h3, nil, "POST", "/x"); err != nil || v.FailingClosed() {
+		t.Fatalf("after the window: %v", err)
+	}
+	if _, err := v.Verify(ctx, h, nil, "POST", "/x"); !errors.As(err, &e) || e.Code != CodeStale {
+		t.Fatalf("old request after the window: %v", err)
+	}
+}
+
+// Forward steps and steps within the margin only move the baseline.
+func TestSmallOrForwardClockStepsAreIgnored(t *testing.T) {
+	var wall, mono int64 = 1_000_000_000_000, 0
+	g := newStepGuard(48*time.Second, time.Minute, func() int64 { return wall }, func() int64 { return mono })
+	for _, step := range []time.Duration{time.Hour, -48 * time.Second, -time.Second} {
+		wall += int64(step)
+		if g.check() {
+			t.Fatalf("step %v opened the window", step)
+		}
 	}
 }

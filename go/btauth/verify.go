@@ -43,12 +43,17 @@ type Caller struct {
 type Config struct {
 	// SelfHotkey is this server's hotkey; requests must be addressed to it.
 	SelfHotkey string
-	// Store remembers accepted nonces; Retention must be >= MaxAge + AllowedSkew.
+	// Store remembers accepted nonces; Retention must be at least
+	// 2 x (MaxAge + AllowedSkew) (spec 8.4.3, D21).
 	Store NonceStore
 	// MaxAge and AllowedSkew default to 10 s and 2 s.
 	MaxAge, AllowedSkew time.Duration
 	// NowNs replaces the wall clock (tests). nil = time.Now().UnixNano().
 	NowNs func() uint64
+	// MonotonicNs replaces the monotonic clock of the clock-step guard (tests;
+	// nanoseconds from any origin). nil = Go's monotonic clock. The guard reads
+	// the wall clock through NowNs.
+	MonotonicNs func() int64
 }
 
 // Verifier checks btauth/1 requests addressed to one hotkey.
@@ -58,10 +63,12 @@ type Verifier struct {
 	maxAge      uint64
 	allowedSkew uint64
 	nowNs       func() uint64
+	steps       *stepGuard
 }
 
 // NewVerifier validates cfg. It refuses a store whose retention is shorter
-// than the freshness window (spec 11.2 rule 10) and a non-prefix-42 hotkey.
+// than twice the freshness window (spec 8.4.3, D21) and a non-prefix-42
+// hotkey.
 func NewVerifier(cfg Config) (*Verifier, error) {
 	if _, err := DecodeSS58(cfg.SelfHotkey); err != nil {
 		return nil, errors.New("btauth: SelfHotkey is not a prefix-42 SS58 address")
@@ -78,17 +85,40 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 	if cfg.MaxAge < 0 || cfg.AllowedSkew < 0 {
 		return nil, errors.New("btauth: MaxAge and AllowedSkew must be positive")
 	}
-	if cfg.Store.Retention() < cfg.MaxAge+cfg.AllowedSkew {
-		return nil, errors.New("btauth: nonce store retention too short")
+	window := cfg.MaxAge + cfg.AllowedSkew
+	retention := cfg.Store.Retention()
+	if retention < 2*window {
+		return nil, errors.New("btauth: nonce store retention too short: it must be at least 2 x (MaxAge + AllowedSkew)")
 	}
+	wall, mono := realClocks()
 	now := cfg.NowNs
 	if now == nil {
 		now = func() uint64 { return uint64(time.Now().UnixNano()) }
+	} else {
+		wall = func() int64 { return int64(now()) }
+	}
+	if cfg.MonotonicNs != nil {
+		mono = cfg.MonotonicNs
 	}
 	return &Verifier{
 		self: cfg.SelfHotkey, store: cfg.Store, nowNs: now,
 		maxAge: uint64(cfg.MaxAge), allowedSkew: uint64(cfg.AllowedSkew),
+		steps: newStepGuard(retention-window, retention, wall, mono),
 	}, nil
+}
+
+// FailingClosed reports whether a backwards wall-clock step larger than the
+// store's margin happened less than Retention ago (spec 8.4.4, D21). Requests
+// that pass the signature check are refused with tw.replay_store_unavailable
+// meanwhile; servers should report not-ready (reason clock_step).
+func (v *Verifier) FailingClosed() bool { return v.steps.check() }
+
+// LastClockStep is the size of the last backwards step that opened the
+// fail-closed window (0 before the first), for a tw_clock_step_seconds gauge.
+func (v *Verifier) LastClockStep() time.Duration {
+	v.steps.mu.Lock()
+	defer v.steps.mu.Unlock()
+	return time.Duration(v.steps.lastStep)
 }
 
 // SelfHotkey is the hotkey requests must be addressed to.
@@ -197,7 +227,11 @@ func (v *Verifier) Verify(ctx context.Context, h http.Header, body []byte, metho
 		return nil, NewError(CodeBadSignature, "signature does not verify against the claimed hotkey")
 	}
 
-	// 5. replay, only after the signature verified
+	// 5. replay, only after the signature verified; never while a wall-clock
+	// step could have reopened forgotten nonces (D21)
+	if v.steps.check() {
+		return nil, NewError(CodeReplayStoreUnavailable, "clock stepped back: failing closed")
+	}
 	fresh, err := v.store.CheckAndStore(ctx, sender, nonce)
 	if err != nil {
 		return nil, NewError(CodeReplayStoreUnavailable, err.Error())

@@ -367,3 +367,73 @@ async fn redis_store() {
     assert_eq!(s.retention(), Duration::from_secs(2));
     assert!(format!("{s:?}").contains(&prefix));
 }
+
+/// D21 (spec 8.4.3): every store must keep pairs for 2 x the freshness window.
+#[test]
+fn retention_below_twice_the_window_is_refused() {
+    for secs in [12.0_f64, 23.9] {
+        let store = Arc::new(MemoryStore::new(Duration::from_secs_f64(secs)));
+        assert!(Verifier::new(Config::new(bob().ss58(), store)).is_err(), "{secs} s accepted");
+    }
+    let store = Arc::new(MemoryStore::new(Duration::from_secs(24)));
+    assert!(Verifier::new(Config::new(bob().ss58(), store)).is_ok());
+}
+
+/// A store that has forgotten everything (as Redis would after its own
+/// retention): only the clock-step guard stands between a replay and success.
+struct Forgetful(std::sync::atomic::AtomicUsize);
+
+impl NonceStore for Forgetful {
+    fn check_and_store<'a>(&'a self, _hotkey: &'a str, _nonce: u64) -> StoreFuture<'a> {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Box::pin(async { Ok(true) })
+    }
+    fn retention(&self) -> Duration {
+        Duration::from_secs(60)
+    }
+}
+
+/// D21 (spec 8.4.4): a backwards wall-clock step larger than the margin fails
+/// closed for the retention instead of letting a forgotten nonce through.
+#[tokio::test]
+async fn backwards_clock_step_fails_closed() {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let sec = 1_000_000_000u64;
+    let wall = Arc::new(AtomicU64::new(1_800_000_000 * sec));
+    let mono = Arc::new(AtomicU64::new(0));
+    let store = Arc::new(Forgetful(Default::default()));
+    let mut cfg = Config::new(bob().ss58(), Arc::clone(&store) as Arc<dyn NonceStore>);
+    let (w, m) = (Arc::clone(&wall), Arc::clone(&mono));
+    cfg.now_ns = Some(Box::new(move || w.load(Ordering::SeqCst)));
+    cfg.monotonic_ns = Some(Box::new(move || m.load(Ordering::SeqCst)));
+    let v = Verifier::new(cfg).unwrap();
+    let w = Arc::clone(&wall);
+    let signer = Signer::with_nonce_source(
+        alice(),
+        NonceSource::with_clock(move || w.load(Ordering::SeqCst)),
+    );
+    let (h, _) = signer.sign("POST", "/x", b"", Some(bob().ss58()));
+    assert!(v.verify(borrowed(&h), b"", "POST", "/x").await.is_ok());
+    // 61 s pass on both clocks; then NTP steps the wall clock back 55 s.
+    wall.fetch_add(61 * sec, Ordering::SeqCst);
+    mono.fetch_add(61 * sec, Ordering::SeqCst);
+    wall.fetch_sub(55 * sec, Ordering::SeqCst);
+    let e = v.verify(borrowed(&h), b"", "POST", "/x").await.unwrap_err();
+    assert_eq!((e.code, e.status), (codes::REPLAY_STORE_UNAVAILABLE, 503));
+    assert!(v.failing_closed());
+    assert_eq!(v.last_clock_step(), Duration::from_secs(55));
+    assert_eq!(store.0.load(Ordering::SeqCst), 1); // the store was not asked
+                                                   // `retention` later, normal service resumes.
+    wall.fetch_add(60 * sec, Ordering::SeqCst);
+    mono.fetch_add(60 * sec, Ordering::SeqCst);
+    assert!(!v.failing_closed());
+    let w = Arc::clone(&wall);
+    let fresh = Signer::with_nonce_source(
+        alice(),
+        NonceSource::with_clock(move || w.load(Ordering::SeqCst)),
+    );
+    let (h2, _) = fresh.sign("POST", "/x", b"", Some(bob().ss58()));
+    assert!(v.verify(borrowed(&h2), b"", "POST", "/x").await.is_ok());
+    let stale = v.verify(borrowed(&h), b"", "POST", "/x").await.unwrap_err();
+    assert_eq!(stale.code, codes::STALE);
+}

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::clockstep::{monotonic_ns, StepGuard};
 use crate::error::{codes, Error};
 use crate::keys::verify_signature;
 use crate::nonce::wall_clock_ns;
@@ -45,7 +46,8 @@ pub struct Caller {
 pub struct Config {
     /// This server's hotkey; requests must be addressed to it.
     pub self_hotkey: String,
-    /// Replay store; its retention must be at least `max_age + allowed_skew`.
+    /// Replay store; its retention must be at least `2 x (max_age + allowed_skew)`
+    /// (spec 8.4.3, D21).
     pub store: Arc<dyn NonceStore>,
     /// Freshness window (default 10 s).
     pub max_age: Duration,
@@ -53,6 +55,9 @@ pub struct Config {
     pub allowed_skew: Duration,
     /// Replaces the wall clock (tests).
     pub now_ns: Option<Box<dyn Fn() -> u64 + Send + Sync>>,
+    /// Replaces the monotonic clock of the clock-step guard (tests; ns from any
+    /// origin). The guard reads the wall clock through `now_ns`.
+    pub monotonic_ns: Option<Box<dyn Fn() -> u64 + Send + Sync>>,
 }
 
 impl Config {
@@ -64,6 +69,7 @@ impl Config {
             max_age: DEFAULT_MAX_AGE,
             allowed_skew: DEFAULT_ALLOWED_SKEW,
             now_ns: None,
+            monotonic_ns: None,
         }
     }
 }
@@ -74,7 +80,8 @@ pub struct Verifier {
     store: Arc<dyn NonceStore>,
     max_age: u64,
     allowed_skew: u64,
-    now_ns: Box<dyn Fn() -> u64 + Send + Sync>,
+    now_ns: std::sync::Arc<dyn Fn() -> u64 + Send + Sync>,
+    steps: StepGuard,
 }
 
 impl std::fmt::Debug for Verifier {
@@ -93,7 +100,7 @@ fn is_hex_pairs(s: &str) -> bool {
 
 impl Verifier {
     /// Validates `cfg`: a prefix-42 hotkey, a positive window, and a store
-    /// that remembers at least the whole window (spec 11.2 rule 10).
+    /// that remembers at least twice the window (spec 8.4.3, D21).
     pub fn new(cfg: Config) -> Result<Self, String> {
         if decode_ss58(&cfg.self_hotkey).is_none() {
             return Err("self_hotkey is not a prefix-42 SS58 address".into());
@@ -101,17 +108,48 @@ impl Verifier {
         if cfg.max_age.is_zero() || cfg.allowed_skew.is_zero() {
             return Err("max_age and allowed_skew must be positive".into());
         }
-        if cfg.store.retention() < cfg.max_age + cfg.allowed_skew {
-            return Err("nonce store retention too short".into());
+        let window = cfg.max_age + cfg.allowed_skew;
+        let retention = cfg.store.retention();
+        if retention < window * 2 {
+            return Err(
+                "nonce store retention too short: it must be at least 2 x (max_age + allowed_skew)"
+                    .into(),
+            );
         }
         let as_ns = |d: Duration| u64::try_from(d.as_nanos()).unwrap_or(u64::MAX);
+        let now: std::sync::Arc<dyn Fn() -> u64 + Send + Sync> = match cfg.now_ns {
+            Some(f) => std::sync::Arc::from(f),
+            None => std::sync::Arc::new(wall_clock_ns),
+        };
+        let wall = std::sync::Arc::clone(&now);
+        let steps = StepGuard::new(
+            retention - window,
+            retention,
+            Box::new(move || wall()),
+            cfg.monotonic_ns.unwrap_or_else(monotonic_ns),
+        );
         Ok(Self {
             self_hotkey: cfg.self_hotkey,
             store: cfg.store,
             max_age: as_ns(cfg.max_age),
             allowed_skew: as_ns(cfg.allowed_skew),
-            now_ns: cfg.now_ns.unwrap_or_else(|| Box::new(wall_clock_ns)),
+            now_ns: now,
+            steps,
         })
+    }
+
+    /// Whether a backwards wall-clock step larger than the store's margin
+    /// happened less than `retention` ago (spec 8.4.4, D21). Requests that pass
+    /// the signature check get `tw.replay_store_unavailable` meanwhile; servers
+    /// should report not-ready (reason `clock_step`).
+    pub fn failing_closed(&self) -> bool {
+        self.steps.check()
+    }
+
+    /// The last backwards step that opened the fail-closed window (zero before
+    /// the first), for a `tw_clock_step_seconds` gauge.
+    pub fn last_clock_step(&self) -> Duration {
+        self.steps.last_step()
     }
 
     /// The hotkey requests must be addressed to.
@@ -219,6 +257,13 @@ impl Verifier {
         target: &str,
     ) -> Result<Caller, Error> {
         let caller = self.check(header_pairs, body, method, target)?;
+        if self.steps.check() {
+            // D21: a wall-clock step could have reopened forgotten nonces.
+            return Err(Error::new(
+                codes::REPLAY_STORE_UNAVAILABLE,
+                "clock stepped back: failing closed",
+            ));
+        }
         match self.store.check_and_store(&caller.hotkey, caller.nonce).await {
             Ok(true) => Ok(caller),
             Ok(false) => {
