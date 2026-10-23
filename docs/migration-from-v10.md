@@ -236,6 +236,16 @@ From tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron (t
 
 Remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else.
 
+<a id="twm026"></a>
+### TWM026: customised template BaseValidatorNeuron (`manual`)
+
+Keep your additions: make your BaseValidatorNeuron subclass tensorwire.compat.TemplateValidatorAdapter and keep only the methods the template does not have (spec 10b.2.4).
+
+<a id="twm027"></a>
+### TWM027: time.sleep in a coroutine (`auto`)
+
+Await asyncio.sleep(...): a blocking sleep also stops the kit's health and metrics endpoints.
+
 <a id="twm100"></a>
 ### TWM100: Synapse without required_hash_fields (`risk`)
 

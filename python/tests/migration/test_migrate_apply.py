@@ -80,6 +80,11 @@ REWRITES: dict[str, tuple[str, str]] = {
         "    s = self.metagraph.S.tolist()\n",
         "for uid in range(self.metagraph.n):\n    s = self.metagraph.S\n",
     ),
+    "TWM027": (
+        "import time\nimport os\nasync def forward(self):\n    time.sleep(5)\n",
+        "import asyncio\nimport os\nasync def forward(self):\n"
+        "    await asyncio.sleep(5)\n",
+    ),
     "TWM024": (
         "# base\nfrom template.base.validator import BaseValidatorNeuron\n",
         "# base\nfrom tensorwire.compat import TemplateValidatorAdapter as "
@@ -96,6 +101,8 @@ UNCHANGED = [
     "from template.base.miner import BaseMinerNeuron\n",
     "from tensorwire.compat import Synapse\nclass A(Synapse): pass\n",
     "def f(metagraph: 'Metagraph') -> None: ...\n",
+    "import time\ndef f():\n    time.sleep(1)\n",
+    "import time\nasync def f():\n    t = time.time()\n",
 ]
 
 
@@ -214,6 +221,22 @@ def test_template_swap_keeps_other_names() -> None:
         "from template.base.validator import helper\n"
         "from tensorwire.compat import TemplateValidatorAdapter as B\n"
     )
+
+
+def test_customised_template_base_is_not_swapped(tmp_path: Path) -> None:
+    base = tmp_path / "sub" / "base"
+    base.mkdir(parents=True)
+    (base / "validator.py").write_text(
+        "class BaseValidatorNeuron:\n    def log_step(self): ...\n"
+    )
+    (tmp_path / "v.py").write_text(
+        "from sub.base.validator import BaseValidatorNeuron\n"
+    )
+    (result,) = [f for f in plan_repo(tmp_path).files if f.path == "v.py"]
+    assert result.after.splitlines() == [
+        f"{MARKER} TWM026 {RULES['TWM026'].replacement}",
+        "from sub.base.validator import BaseValidatorNeuron",
+    ]
 
 
 def test_apply_is_idempotent_and_parse_errors_raise() -> None:

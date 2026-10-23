@@ -160,6 +160,9 @@ class ValidatorRunner:
 
     Everything after ``settings`` is optional (tests pass ``FakeChain``,
     a test metagraph source, a dev keypair and an in-process transport).
+    ``score_alpha`` replaces ``TW_SCORE_ALPHA`` for the score store; 1.0
+    stores scores as given (``compat.TemplateValidatorAdapter`` averages
+    them itself).
     """
 
     def __init__(
@@ -176,6 +179,7 @@ class ValidatorRunner:
         clock_ns: Callable[[], int] | None = None,
         legacy: LegacyFactory | None = None,
         check_sdk: bool = True,
+        score_alpha: float | None = None,
     ) -> None:
         self.validator = validator
         self.settings = settings
@@ -188,6 +192,7 @@ class ValidatorRunner:
         self._clock_ns = clock_ns
         self._legacy_factory = legacy
         self._check_sdk = check_sdk
+        self._score_alpha = settings.score_alpha if score_alpha is None else score_alpha
         self._lock: HotkeyLock | None = None
         self._started = False
         self._last_round_at: float | None = None
@@ -264,7 +269,7 @@ class ValidatorRunner:
                 )
             self.client = self._build_client(signer, raw)
             path = self._store_path or (s.state_dir / "scores.db")
-            self.store = ScoreStore(path, s.netuid, alpha=s.score_alpha)
+            self.store = ScoreStore(path, s.netuid, alpha=self._score_alpha)
             self.weights = WeightScheduler(
                 self.gateway,
                 s.netuid,

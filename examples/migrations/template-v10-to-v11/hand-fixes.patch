@@ -1484,25 +1484,6 @@ index 8648f1c..1ba8c0d 100644
 +            node = node.__dict__.setdefault(part, SimpleNamespace())
 +        setattr(node, leaf, value)
 +    return config
-diff --git a/template/validator/forward.py b/template/validator/forward.py
-index 8401caa..a9d193f 100644
---- a/template/validator/forward.py
-+++ b/template/validator/forward.py
-@@ -17,7 +17,7 @@
- # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
- # DEALINGS IN THE SOFTWARE.
- 
--import time
-+import asyncio
- import logging
- from tensorwire.compat import axons_from
- 
-@@ -61,4 +61,4 @@ async def forward(self):
-     logging.info(f"Scored responses: {rewards}")
-     # Update the scores based on the rewards. You may want to define your own update_scores function for custom behavior.
-     self.update_scores(rewards, miner_uids)
--    time.sleep(5)
-+    await asyncio.sleep(5)
 diff --git a/tests/helpers.py b/tests/helpers.py
 deleted file mode 100644
 index c400bae..0000000

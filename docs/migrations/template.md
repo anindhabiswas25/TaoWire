@@ -4,7 +4,7 @@ Source: <https://github.com/latent-to/bittensor-subnet-template> at
 `539b77c` (MIT), copied unmodified to
 `examples/migrations/template-v10-to-v11/before/`. The port is in `after/`.
 
-**Result: S6 = 19 changed lines of subnet code** after `tensorwire migrate
+**Result: S6 = 17 changed lines of subnet code** after `tensorwire migrate
 apply` (target ≤ 50, spec 1.5). The template's miner (`forward`,
 `blacklist`, `priority`) and validator (`forward`, `reward`) run on
 TensorWire with their logic unchanged. `after/` runs on localnet from `TW_*`
@@ -25,7 +25,7 @@ changes.
 
 ## What `migrate apply` did on its own
 
-35 files read, 21 changed: 175 rewrites, 42 `# TW-MIGRATE:` comments.
+35 files read, 21 changed: 177 rewrites, 42 `# TW-MIGRATE:` comments.
 
 | Rule | Rewrites | What |
 |---|---|---|
@@ -35,7 +35,8 @@ changes.
 | TWM013 | 6 | `[self.metagraph.axons[uid] for uid in uids]` → `axons_from(self.metagraph, uids)` |
 | TWM023 | 3 | `self.metagraph.n.item()` → `self.metagraph.n` |
 | TWM012 | 2 | `process_weights_for_netuid(uids=u, weights=w, ...)` → `(u, w)` |
-| TWM024 | 2 | `from template.base.validator import BaseValidatorNeuron` → `from tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron` |
+| TWM024 | 2 | `from template.base.validator import BaseValidatorNeuron` → `from tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron` (the template's base is stock) |
+| TWM027 | 2 | `time.sleep(5)` in `async def forward` → `await asyncio.sleep(5)`. The template's own bug, and it matters now: the kit's health endpoints share the event loop |
 
 `import bittensor as bt` is removed wherever nothing uses `bt` any more, and
 the new imports take its place. String annotations such as
@@ -59,13 +60,12 @@ final port, subnet code only. Import lines and the removal of `apply`'s own
 | `neurons/miner.py` | +3 / −7 | 9 | `Miner().run()` replaces v10's `with Miner() as miner: while True: sleep`. `miner=` pass-through for the in-process test |
 | `neurons/validator.py` | +2 / −2 | 4 | `**kit_parts` pass-through for the in-process test |
 | `template/protocol.py` | +3 / −1 | 3 | `required_hash_fields = ("dummy_input",)` (TWM100), plus a comment line and a blank line |
-| `template/validator/forward.py` | +2 / −2 | 2 | `await asyncio.sleep(5)` instead of `time.sleep(5)` in the coroutine. The template's own bug, which matters now: the kit's health endpoints share the event loop |
 | `requirements.txt` | +1 | 1 | `tensorwire` |
 | `template/__init__.py` | −1 | 0 | `from . import api` (an import line) |
-| **Total** | | **19** | |
+| **Total** | | **17** | |
 
-Six of the 19 lines are test plumbing. Without the in-process test the port
-would be 13 lines.
+Six of the 17 lines are test plumbing. Without the in-process test the port
+would be 11 lines.
 
 Reported separately, not hidden:
 
@@ -100,18 +100,18 @@ them logging.
 
 ## Behaviour that changed (TemplateValidatorAdapter)
 
+Scoring keeps the template's semantics (`self.scores`, its moving average,
+unqueried miners decay, replaced hotkeys zeroed). What changed:
+
 - Steps start at most every `TW_ROUND_INTERVAL_S`. Weights follow the
   chain's rate limit and `TW_MIN_WEIGHT_INTERVAL_BLOCKS`, not
   `neuron.epoch_length`.
-- `update_scores` feeds the kit's EMA (`TW_SCORE_ALPHA`). Rewards are
-  clamped to [0, 1]. Miners not queried in a step keep their score; the
-  template decayed them.
+- The moving-average alpha is `TW_SCORE_ALPHA`.
 - Scores and the step count persist in `TW_STATE_DIR`
   (`save_state` / `load_state` do nothing).
 
 ## Limits (not covered by a rule, by design)
 
-- `time.sleep` inside a coroutine: a general async bug.
 - The miner side of the template framework (`template/base/miner.py`,
   `neuron.py`) is ported by hand. `apply` rewrites `bt.axon` there and marks
   `bt.wallet` / `bt.subtensor` / `bt.metagraph`. A `TemplateMinerAdapter`

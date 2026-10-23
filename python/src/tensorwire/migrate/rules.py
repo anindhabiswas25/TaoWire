@@ -217,6 +217,21 @@ RULES: Mapping[str, Rule] = _table(
         "logging module for anything else",
     ),
     Rule(
+        "TWM026",
+        "customised template BaseValidatorNeuron",
+        "manual",
+        "keep your additions: make your BaseValidatorNeuron subclass "
+        "tensorwire.compat.TemplateValidatorAdapter and keep only the methods "
+        "the template does not have (spec 10b.2.4)",
+    ),
+    Rule(
+        "TWM027",
+        "time.sleep in a coroutine",
+        "auto",
+        "await asyncio.sleep(...): a blocking sleep also stops the kit's "
+        "health and metrics endpoints",
+    ),
+    Rule(
         "TWM100",
         "Synapse without required_hash_fields",
         "risk",

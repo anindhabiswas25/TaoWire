@@ -17,10 +17,9 @@ from typing import Any
 
 import httpx
 import pytest
-import structlog
 
 from tensorwire.compat import Axon, Synapse, TemplateValidatorAdapter
-from tensorwire.compat.template import _TemplateRounds
+from tensorwire.compat.template import _scaled, _TemplateRounds
 from tensorwire.config import ValidatorSettings
 from tensorwire.miner.app import Miner
 from tensorwire.testing.clock import FakeClock
@@ -168,7 +167,7 @@ async def test_disable_set_weights(
         await v.stop()
 
 
-async def test_update_scores_rules(
+async def test_update_scores_and_resync_keep_template_semantics(
     router: AppRouter,
     fake_chain: FakeChain,
     tw_clock: FakeClock,
@@ -182,19 +181,34 @@ async def test_update_scores_rules(
         with pytest.raises(ValueError, match="Shape mismatch"):
             v.update_scores([1.0, 0.5], [miner_uid])
         v.update_scores([], [])  # nothing happens
-        v.update_scores(
-            [math.nan, 5.0, 1.0], [miner_uid, own, 9999]
-        )  # 9999: no such uid
-        assert v.scores[miner_uid] == 0.0
-        assert v.scores[own] == pytest.approx(0.1)  # clamped to 1, EMA 0.1
-        with structlog.testing.capture_logs() as logs:
-            v.update_scores([7.0], [own])  # warned once only
-        assert not [e for e in logs if e["event"] == "template_reward_clamped"]
+        v.update_scores([math.nan, 5.0, 1.0], [miner_uid, own, 9999])  # no uid 9999
+        assert v.scores[miner_uid] == 0.0  # NaN counts as 0
+        assert v.scores[own] == pytest.approx(0.5)  # alpha 0.1 x 5.0, not clamped
+        v.update_scores([1.0], [miner_uid])
+        assert v.scores[own] == pytest.approx(0.45)  # not queried: decays
+        assert v.scores[miner_uid] == pytest.approx(0.1)
+        await v.set_weights()  # the store gets self.scores
+        stored = v.runner.store.scores() if v.runner.store else {}
+        assert stored[own] == pytest.approx(0.45)
+        assert stored[miner_uid] == pytest.approx(0.1)
+        # A replaced hotkey's score is zeroed; a bigger metagraph adds zeros.
+        v.hotkeys[own] = "replaced"
+        fake_chain.register(TEST_NETUID, dev_key("dave").ss58)
+        await v.runner.metagraph.refresh_now()  # type: ignore[attr-defined]
         v.resync_metagraph()
+        assert v.scores[own] == 0.0
+        assert len(v.scores) == v.metagraph.n == len(v.hotkeys)
+        v.resync_metagraph()  # unchanged metagraph: nothing to do
         v.save_state()
         v.load_state()
     finally:
         await v.stop()
+
+
+def test_scores_are_scaled_into_the_store_range() -> None:
+    assert _scaled([2.0, 1.0, -1.0]) == [1.0, 0.5, 0.0]  # ratios kept
+    assert _scaled([0.5, 0.25]) == [0.5, 0.25]
+    assert _scaled([]) == []
 
 
 def test_config_comes_from_settings_and_options(
@@ -232,8 +246,8 @@ async def test_before_start(tmp_path: Path) -> None:
         _ = v.dendrite
     with pytest.raises(RuntimeError, match="not started"):
         await v.set_weights()
-    with pytest.raises(RuntimeError, match="not started"):
-        v.update_scores([1.0], [0])
+    v.update_scores([1.0], [0])  # no metagraph yet: no UID to score
+    assert len(v.scores) == 0
     with pytest.raises(NotImplementedError):
         await TemplateValidatorAdapter(
             settings=settings(tmp_path), check_sdk=False

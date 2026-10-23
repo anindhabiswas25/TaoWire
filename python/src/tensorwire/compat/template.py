@@ -11,10 +11,18 @@ The kit then runs everything the template's ``BaseValidatorNeuron`` did by
 hand, through :class:`~tensorwire.validator.loop.ValidatorRunner`: the
 hotkey (never the coldkey), the chain connection and metagraph cache, the
 ``compat.Dendrite`` (with the v10 fallback when ``TW_LEGACY_V10_CLIENT=auto``),
-the EMA score store (``TW_STATE_DIR/scores.db``), weight setting with
+the score store (``TW_STATE_DIR/scores.db``), weight setting with
 ``TW_WEIGHTS_VERSION_KEY`` on the chain's rate limit, and ``/healthz``,
 ``/readyz``, ``/metrics`` on ``TW_METRICS_BIND``. Settings come from
 ``TW_*`` variables (spec Section 12).
+
+Scoring keeps the template's semantics: ``self.scores`` is an array by UID,
+``update_scores`` is the template's moving average (unqueried miners decay),
+``resync_metagraph`` zeroes the scores of replaced hotkeys. After every
+step the adapter copies ``self.scores`` into the kit's store, which
+persists it and sets weights from it. A subnet that customised these
+methods can subclass the adapter and override them (``self.scores`` may be
+a numpy array, a torch tensor or a list).
 
 What the team's code sees is the template's surface: ``self.config``
 (``netuid`` and the ``neuron.*`` options), ``self.metagraph``
@@ -25,12 +33,15 @@ What the team's code sees is the template's surface: ``self.config``
 Differences from the v10 template (also in ``docs/migration-from-v10.md``):
 
 - One step runs ``neuron.num_concurrent_forwards`` ``forward()`` calls, then
-  submits weights if due; steps start at most every ``TW_ROUND_INTERVAL_S``.
-- ``update_scores`` folds rewards into the kit's EMA (alpha
-  ``TW_SCORE_ALPHA``). Rewards are clamped to [0, 1] and NaN counts as 0.
-  Miners not queried in a step keep their score (the template decayed them).
+  submits weights if due; steps start at most every ``TW_ROUND_INTERVAL_S``,
+  and weights follow the chain's rate limit and
+  ``TW_MIN_WEIGHT_INTERVAL_BLOCKS``.
+- The moving-average alpha is ``TW_SCORE_ALPHA``.
 - Scores and the step count persist in ``TW_STATE_DIR``; ``save_state`` and
   ``load_state`` have nothing left to do.
+- The subnet's own ``--neuron.*`` options: override ``add_args`` (call
+  ``super().add_args(parser)``, then the subnet's helpers). Options the
+  adapter also defines are replaced, not refused.
 - ``self.wallet`` and ``self.subtensor`` do not exist: the kit never loads
   the coldkey, and chain calls go through the gateway (``self.gateway``).
 """
@@ -82,6 +93,31 @@ class _TemplateRounds(SubnetValidator):
         self, task: Task, results: dict[int, MinerResult]
     ) -> dict[int, float]:
         raise NotImplementedError("TemplateValidatorAdapter rounds call forward()")
+
+
+def _finite(value: Any) -> float:
+    number = float(value)
+    return number if math.isfinite(number) else 0.0
+
+
+def _array(values: Sequence[float]) -> Any:
+    """``values`` as a float32 numpy array when numpy is installed, else a list."""
+    try:
+        import numpy as np  # noqa: PLC0415 - every template subnet has it; compat does not need it
+    except ImportError:  # pragma: no cover - numpy is in every template subnet
+        return list(values)
+    return np.asarray(values, dtype=np.float32)
+
+
+def _scaled(values: Sequence[float]) -> list[float]:
+    """Scores for the kit's store, which keeps values in [0, 1].
+
+    Negative scores become 0. If the largest is above 1 all are divided by
+    it: weights are normalised on chain, so the ratios are what matters.
+    """
+    clipped = [max(0.0, v) for v in values]
+    top = max(clipped, default=0.0)
+    return [v / top for v in clipped] if top > 1.0 else clipped
 
 
 def _interrupt(_signum: int, _frame: Any) -> None:
@@ -141,16 +177,20 @@ class TemplateValidatorAdapter:
             metagraph=metagraph_source,
             hotkey=hotkey,
             transport=transport,
+            score_alpha=1.0,  # the store keeps self.scores as is (already averaged)
             **runner_options,
         )
         self.step = 0
+        #: Score per UID (template semantics); sized to the metagraph at start.
+        self.scores: Any = _array([])
+        #: The hotkeys ``self.scores`` refers to, by UID.
+        self.hotkeys: list[str] = []
         self.should_exit = False
         self.is_running = False
         self.thread: threading.Thread | None = None
         self._dendrite: Dendrite | None = None
         self._round_results: dict[int, MinerResult] = {}
         self._round_scores: dict[int, float] = {}
-        self._warned_clamp = False
         self._restore_sigterm = False
 
     # ------------------------------------------------------------ config
@@ -181,7 +221,7 @@ class TemplateValidatorAdapter:
         code reads the values the kit really uses.
         """
         if config is None:
-            parser = argparse.ArgumentParser()
+            parser = argparse.ArgumentParser(conflict_handler="resolve")
             cls.add_args(parser)
             config = _namespace(parser.parse_known_args()[0])
         parser = argparse.ArgumentParser()
@@ -217,31 +257,14 @@ class TemplateValidatorAdapter:
         return self._dendrite
 
     @property
-    def hotkeys(self) -> list[str]:
-        """The metagraph's hotkeys, by UID."""
-        return self.metagraph.hotkeys
-
-    @property
     def uid(self) -> int:
         """This validator's UID."""
-        return self.hotkeys.index(self.dendrite.hotkey)
+        return self.metagraph.hotkeys.index(self.dendrite.hotkey)
 
     @property
     def block(self) -> int:
         """The block of the current metagraph snapshot."""
         return self.metagraph.block
-
-    @property
-    def scores(self) -> Any:
-        """EMA score per UID (a numpy array when numpy is installed)."""
-        n = self.metagraph.n if self._dendrite is not None else 0
-        stored = self.runner.store.scores() if self.runner.store is not None else {}
-        values = [float(stored.get(uid, 0.0)) for uid in range(n)]
-        try:
-            import numpy as np  # noqa: PLC0415 - template subnets have it; compat does not need it
-        except ImportError:  # pragma: no cover - numpy is in every template subnet
-            return values
-        return np.asarray(values, dtype=np.float32)
 
     async def forward(self) -> Any:
         """The subnet's step: query miners, reward them, ``update_scores``."""
@@ -250,8 +273,10 @@ class TemplateValidatorAdapter:
     def update_scores(
         self, rewards: Sequence[float] | Any, uids: Sequence[int] | Any
     ) -> None:
-        """Fold ``rewards[i]`` for ``uids[i]`` into the kit's EMA score store."""
-        values = [float(r) for r in rewards]
+        """The template's moving average: every UID's score moves toward its
+        reward this step (0 for UIDs not in ``uids``), with alpha
+        ``config.neuron.moving_average_alpha``. NaN rewards count as 0."""
+        values = [_finite(r) for r in rewards]
         targets = [int(u) for u in uids]
         if len(values) != len(targets):
             raise ValueError(
@@ -260,39 +285,55 @@ class TemplateValidatorAdapter:
         if not values:
             _log.warning("template_update_scores_empty")
             return
-        cleaned = {}
+        current = [_finite(s) for s in self.scores]
+        scattered = [0.0] * len(current)
         for uid, value in zip(targets, values, strict=True):
-            finite = value if math.isfinite(value) else 0.0
-            if not 0.0 <= finite <= 1.0 and not self._warned_clamp:
-                self._warned_clamp = True
-                _log.warning(
-                    "template_reward_clamped",
-                    hint="the kit's score store keeps rewards in [0, 1]",
-                )
-            cleaned[uid] = finite
-        mg = self._snapshot()
-        hotkeys = {n.uid: n.hotkey for n in mg.neurons}
-        known = {uid: v for uid, v in cleaned.items() if uid in hotkeys}
-        store = self._store()
-        store.update(known, hotkeys, mg.block)
-        self._round_scores.update(known)
+            if 0 <= uid < len(scattered):
+                scattered[uid] = value
+                self._round_scores[uid] = value
+        alpha = float(self.config.neuron.moving_average_alpha)
+        self.scores = _array(
+            [
+                alpha * r + (1 - alpha) * c
+                for r, c in zip(scattered, current, strict=True)
+            ]
+        )
 
     async def set_weights(self) -> Any:
-        """Submit the stored scores as weights if the schedule allows it."""
+        """Store ``self.scores`` and submit them as weights if the schedule allows."""
         weights = self.runner.weights
         if weights is None:
             raise RuntimeError("the validator has not started")
+        await self._push_scores()
         return await weights.maybe_submit(self._store().scores(), self._snapshot())
 
     def resync_metagraph(self) -> None:
-        """Nothing to do: the kit keeps the metagraph fresh and resets the
-        scores of replaced hotkeys at the start of every step."""
+        """The template's resync: zero the scores of replaced hotkeys and
+        resize ``self.scores`` to the metagraph."""
+        hotkeys = self.metagraph.hotkeys
+        if hotkeys == self.hotkeys:
+            return
+        current = [_finite(s) for s in self.scores]
+        for uid, old in enumerate(self.hotkeys):
+            if uid < len(hotkeys) and uid < len(current) and old != hotkeys[uid]:
+                current[uid] = 0.0
+        resized = current[: len(hotkeys)] + [0.0] * max(0, len(hotkeys) - len(current))
+        self.scores = _array(resized)
+        self.hotkeys = list(hotkeys)
 
     def save_state(self) -> None:
         """Nothing to do: scores and steps are stored in ``TW_STATE_DIR``."""
 
     def load_state(self) -> None:
         """Nothing to do: scores and steps are stored in ``TW_STATE_DIR``."""
+
+    async def _push_scores(self) -> None:
+        """Copy ``self.scores`` into the kit's store (exactly; see :func:`_scaled`)."""
+        mg = self._snapshot()
+        hotkeys = {n.uid: n.hotkey for n in mg.neurons}
+        scores = _scaled([_finite(s) for s in self.scores])
+        known = {uid: v for uid, v in enumerate(scores) if uid in hotkeys}
+        await asyncio.to_thread(self._store().update, known, hotkeys, mg.block)
 
     # ------------------------------------------------------------ steps
 
@@ -303,7 +344,11 @@ class TemplateValidatorAdapter:
         if client is None:  # pragma: no cover - start() sets it
             raise RuntimeError("validator client missing after start")
         self._dendrite = Dendrite(client=client, on_results=self._collect)
-        self.step = await asyncio.to_thread(self._store().next_round_id) - 1
+        store = self._store()
+        self.step = await asyncio.to_thread(store.next_round_id) - 1
+        stored = await asyncio.to_thread(store.scores)
+        self.hotkeys = list(self.metagraph.hotkeys)
+        self.scores = _array([stored.get(uid, 0.0) for uid in range(len(self.hotkeys))])
 
     async def stop(self) -> None:
         """Stop the kit. Safe to call more than once."""
@@ -327,6 +372,8 @@ class TemplateValidatorAdapter:
         self._round_results, self._round_scores = {}, {}
         _log.info("template_step", step=self.step, block=mg.block)
         await self.concurrent_forward()
+        self.resync_metagraph()
+        await self._push_scores()
         report = await self.runner.end_round(
             self.step + 1,
             self._snapshot(),

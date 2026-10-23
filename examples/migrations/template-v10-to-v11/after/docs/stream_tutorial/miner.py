@@ -364,7 +364,7 @@ class StreamingTemplateMiner(StreamMiner):
                 buffer.append(token)
                 # If buffer has N tokens, send them back to the client.
                 if len(buffer) == N:
-                    time.sleep(0.1)
+                    await asyncio.sleep(0.1)
                     joined_buffer = "".join(buffer)
                     logging.debug(f"sedning tokens: {joined_buffer}")
                     await send(

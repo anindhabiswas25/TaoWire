@@ -70,7 +70,7 @@ def test_s6_subnet_code_within_50_lines() -> None:
     g = golden()
     s6 = g.count(g.PATCH.read_text(encoding="utf-8"))
     assert s6.subnet_lines() <= 50, s6.subnet_lines()
-    assert s6.subnet_lines() == 19  # docs/migrations/template.md quotes this number
+    assert s6.subnet_lines() == 17  # docs/migrations/template.md quotes this number
     # Every file the patch touches is in exactly one reported area.
     areas = [g.SUBNET, g.FRAMEWORK, g.TESTS]
     for f in s6.files:

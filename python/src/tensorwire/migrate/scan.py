@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -34,6 +34,8 @@ from tensorwire.migrate.rules import ATTRIBUTE_RULES, MODULE_RULES, RULES
 
 __all__ = [
     "LOG_LEVELS",
+    "STOCK_NEURON_METHODS",
+    "STOCK_VALIDATOR_METHODS",
     "Finding",
     "ScanReport",
     "is_axons_list",
@@ -41,6 +43,7 @@ __all__ = [
     "render",
     "scan_repo",
     "scan_source",
+    "template_bases",
 ]
 
 Format = Literal["text", "json", "md"]
@@ -82,6 +85,23 @@ LOG_LEVELS: dict[str, str] = {
     "critical": "critical",
     "exception": "exception",
 }
+#: The archived template's ``BaseValidatorNeuron`` / ``BaseNeuron`` methods.
+#: A base with more than these was customised (TWM026 instead of TWM024).
+STOCK_VALIDATOR_METHODS = frozenset(
+    {
+        "add_args", "__init__", "serve_axon", "concurrent_forward", "run",
+        "run_in_background_thread", "stop_run_thread", "__enter__", "__exit__",
+        "set_weights", "resync_metagraph", "update_scores", "save_state",
+        "load_state",
+    }
+)  # fmt: skip
+STOCK_NEURON_METHODS = frozenset(
+    {
+        "check_config", "add_args", "config", "block", "__init__", "forward",
+        "run", "sync", "check_registered", "should_sync_metagraph",
+        "should_set_weights", "save_state", "load_state",
+    }
+)  # fmt: skip
 _REGISTRATION_HINTS = (
     "hotkeys",
     "is_hotkey_registered",
@@ -198,6 +218,68 @@ def _synapse_shape(
     return fields, hash_fields
 
 
+def in_coroutine(visitor: cst.MetadataDependent, node: cst.CSTNode) -> bool:
+    """Whether ``node``'s nearest enclosing function is ``async def``."""
+    current: cst.CSTNode | None = node
+    while current is not None:
+        current = visitor.get_metadata(ParentNodeProvider, current, None)
+        if isinstance(current, cst.Lambda):
+            return False
+        if isinstance(current, cst.FunctionDef):
+            return current.asynchronous is not None
+    return False
+
+
+def resolve_module(module: str, level: int, path: str) -> str:
+    """The absolute dotted name of ``from <level dots><module> import ...``
+    written in file ``path`` (relative to the repository root)."""
+    if level == 0:
+        return module
+    package = path.removesuffix(".py").split("/")[:-1]
+    base = package[: len(package) - (level - 1)] if level > 1 else package
+    return ".".join([*base, module] if module else base)
+
+
+def _methods(module: cst.Module, cls: str) -> set[str]:
+    for statement in module.body:
+        if isinstance(statement, cst.ClassDef) and statement.name.value == cls:
+            return {
+                s.name.value
+                for s in statement.body.body
+                if isinstance(s, cst.FunctionDef)
+            }
+    return set()
+
+
+def template_bases(root: Path) -> dict[str, list[str]]:
+    """``<package>.base.validator`` modules defining ``BaseValidatorNeuron``,
+    mapped to the methods they add beyond the archived template (with their
+    sibling ``neuron.py``'s ``BaseNeuron``). An empty list: a stock base."""
+    found: dict[str, list[str]] = {}
+    for path in root.glob("**/base/validator.py"):
+        rel = path.relative_to(root)
+        if any(part in _SKIP_DIRS for part in rel.parts) or path.is_symlink():
+            continue
+        try:
+            module = cst.parse_module(path.read_text(encoding="utf-8"))
+            neuron_path = path.with_name("neuron.py")
+            neuron = (
+                cst.parse_module(neuron_path.read_text(encoding="utf-8"))
+                if neuron_path.is_file() and not neuron_path.is_symlink()
+                else None
+            )
+        except (OSError, UnicodeDecodeError, cst.ParserSyntaxError):
+            continue
+        methods = _methods(module, "BaseValidatorNeuron")
+        if not methods:
+            continue
+        extras = methods - STOCK_VALIDATOR_METHODS
+        if neuron is not None:
+            extras |= _methods(neuron, "BaseNeuron") - STOCK_NEURON_METHODS
+        found[".".join(rel.with_suffix("").parts)] = sorted(extras)
+    return found
+
+
 def is_axons_list(node: cst.ListComp) -> bool:
     """``[<x>.metagraph.axons[uid] for uid in <uids>]`` (one ``for``, no ``if``)."""
     comp = node.for_in
@@ -222,9 +304,16 @@ def _is_bool(node: cst.BaseExpression, value: bool) -> bool:
 class _Visitor(cst.CSTVisitor):
     METADATA_DEPENDENCIES = (PositionProvider, ParentNodeProvider)
 
-    def __init__(self, path: str, module: cst.Module, lines: Sequence[str]) -> None:
+    def __init__(
+        self,
+        path: str,
+        module: cst.Module,
+        lines: Sequence[str],
+        custom_bases: Mapping[str, list[str]],
+    ) -> None:
         super().__init__()
         self.path = path
+        self.custom_bases = custom_bases
         self.module = module
         self.lines = lines
         self.bt_aliases: set[str] = set()
@@ -287,7 +376,12 @@ class _Visitor(cst.CSTVisitor):
         if isinstance(node.names, cst.ImportStar):
             return
         if any(_dotted(a.name) == "BaseValidatorNeuron" for a in node.names):
-            self.add(node, "TWM024", f"from {module} import BaseValidatorNeuron")
+            target = resolve_module(module, len(node.relative), self.path)
+            extras = self.custom_bases.get(target, [])
+            if extras:
+                self.add(node, "TWM026", f"{target} adds: {', '.join(extras)}")
+            else:
+                self.add(node, "TWM024", f"from {module} import BaseValidatorNeuron")
 
     def visit_Attribute(self, node: cst.Attribute) -> None:  # noqa: N802 - libcst API
         if not (
@@ -319,7 +413,9 @@ class _Visitor(cst.CSTVisitor):
         name = _dotted(func) or ""
         last = name.rsplit(".", 1)[-1]
         receiver = name.rsplit(".", 1)[0].lower() if "." in name else ""
-        if last in _WEIGHT_HELPERS:
+        if name == "time.sleep" and in_coroutine(self, node):
+            self.add(node, "TWM027", name)
+        elif last in _WEIGHT_HELPERS:
             self.add(node, "TWM012", last)
         elif last == "set_weights" and "subtensor" in receiver:
             self.add(node, "TWM010", name)
@@ -421,14 +517,21 @@ class _Visitor(cst.CSTVisitor):
 # ---------------------------------------------------------------- scanning
 
 
-def scan_source(source: str, path: str = "<string>") -> tuple[list[Finding], bool]:
+def scan_source(
+    source: str,
+    path: str = "<string>",
+    *,
+    custom_bases: Mapping[str, list[str]] | None = None,
+) -> tuple[list[Finding], bool]:
     """Scan one file's source. Returns (findings, template classes seen).
 
+    ``custom_bases`` is :func:`template_bases` of the repository (without
+    it, every ``BaseValidatorNeuron`` import counts as the stock template).
     Raises ``libcst.ParserSyntaxError`` for code that does not parse.
     """
     module = cst.parse_module(source)
     wrapper = MetadataWrapper(module)
-    visitor = _Visitor(path, wrapper.module, source.splitlines())
+    visitor = _Visitor(path, wrapper.module, source.splitlines(), custom_bases or {})
     wrapper.visit(visitor)
     findings = sorted(set(visitor.findings))
     return findings, bool(visitor.template)
@@ -458,6 +561,7 @@ def scan_repo(root: Path | str) -> ScanReport:
         raise NotADirectoryError(str(base))
     report = ScanReport(root=str(base))
     report.template_detected = (base / "template" / "base" / "neuron.py").is_file()
+    bases = template_bases(base)
     for path in python_files(base):
         rel = path.relative_to(base).as_posix()
         try:
@@ -465,7 +569,7 @@ def scan_repo(root: Path | str) -> ScanReport:
                 report.parse_errors.append(f"{rel}: skipped (larger than 2 MiB)")
                 continue
             source = path.read_text(encoding="utf-8")
-            findings, template = scan_source(source, rel)
+            findings, template = scan_source(source, rel, custom_bases=bases)
         except (UnicodeDecodeError, OSError) as exc:
             report.parse_errors.append(f"{rel}: {type(exc).__name__}")
             continue

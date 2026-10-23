@@ -17,7 +17,10 @@ Only ``auto`` rules are rewritten:
 - ``.item()`` / ``.tolist()`` on metagraph values are dropped (TWM023);
 - the template's ``from template.base.validator import BaseValidatorNeuron``
   -> ``from tensorwire.compat import TemplateValidatorAdapter as
-  BaseValidatorNeuron`` (TWM024);
+  BaseValidatorNeuron`` (TWM024), only when that base is the stock template
+  (a customised one is TWM026, by hand);
+- ``time.sleep(x)`` inside ``async def`` -> ``await asyncio.sleep(x)``
+  (TWM027);
 - string annotations ``"bt.metagraph.Metagraph"``, ``"bt.Synapse"``, ...
   -> the compat names.
 
@@ -40,7 +43,7 @@ import os
 import subprocess
 import tempfile
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -53,7 +56,9 @@ from tensorwire.migrate.scan import (
     LOG_LEVELS,
     is_axons_list,
     python_files,
+    resolve_module,
     scan_source,
+    template_bases,
 )
 
 __all__ = [
@@ -238,11 +243,17 @@ def _used_names(module: cst.Module) -> set[str]:
 class _Rewriter(cst.CSTTransformer):
     METADATA_DEPENDENCIES = (ParentNodeProvider,)
 
-    def __init__(self, bt_aliases: set[str]) -> None:
+    def __init__(
+        self, bt_aliases: set[str], path: str, custom_bases: Mapping[str, list[str]]
+    ) -> None:
         super().__init__()
         self.bt = bt_aliases
+        self.path = path
+        self.custom_bases = custom_bases
         self.rewrites: Counter[str] = Counter()
         self.need_logging = False
+        self.need_asyncio = False
+        self._async_stack: list[bool] = []
         self.need_kit: set[str] = set()  # from tensorwire import ...
         self.need_compat: set[str] = set()  # from tensorwire.compat import ...
         self.dropped_helpers = False
@@ -279,12 +290,40 @@ class _Rewriter(cst.CSTTransformer):
 
     # -------------------------------------------------- calls
 
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> None:  # noqa: N802 - libcst API
+        self._async_stack.append(node.asynchronous is not None)
+
+    def leave_FunctionDef(  # noqa: N802 - libcst API
+        self, _original: cst.FunctionDef, updated_node: cst.FunctionDef
+    ) -> cst.FunctionDef:
+        self._async_stack.pop()
+        return updated_node
+
+    def visit_Lambda(self, _node: cst.Lambda) -> None:  # noqa: N802 - libcst API
+        self._async_stack.append(False)
+
+    def leave_Lambda(  # noqa: N802 - libcst API
+        self, _original: cst.Lambda, updated_node: cst.Lambda
+    ) -> cst.Lambda:
+        self._async_stack.pop()
+        return updated_node
+
     def leave_Call(  # noqa: N802 - libcst API
         self, original_node: cst.Call, updated_node: cst.Call
     ) -> cst.BaseExpression:
         func = original_node.func
         name = _dotted(func) or ""
         head, _, last = name.rpartition(".")
+        if name == "time.sleep" and self._async_stack and self._async_stack[-1]:
+            self.need_asyncio = True
+            self.rewrites["TWM027"] += 1
+            return cst.Await(
+                expression=updated_node.with_changes(
+                    func=cst.Attribute(
+                        value=cst.Name("asyncio"), attr=cst.Name("sleep")
+                    )
+                )
+            )
         if head.rpartition(".")[2] == "logging" and self._is_bt_path(head, 1):
             return self._logging_call(updated_node, last)
         if head in self.bt and last in ("axon", "Axon"):
@@ -420,6 +459,9 @@ class _Rewriter(cst.CSTTransformer):
         if module == "bittensor":
             return self._move_names(updated_node, {"Synapse", "AxonInfo"}, "TWM001")
         if module == "base.validator" or module.endswith(".base.validator"):
+            target = resolve_module(module, len(updated_node.relative), self.path)
+            if self.custom_bases.get(target):
+                return updated_node  # customised base: TWM026, by hand
             return self._swap_template_base(updated_node)
         return updated_node
 
@@ -527,9 +569,11 @@ def _existing_imports(module: cst.Module) -> set[str]:
 
 def _new_imports(rw: _Rewriter, module: cst.Module) -> list[str]:
     have = _existing_imports(module)
-    lines = []
-    if rw.need_logging and "logging" not in have:
-        lines.append("import logging")
+    lines = [
+        f"import {name}"
+        for name, needed in (("asyncio", rw.need_asyncio), ("logging", rw.need_logging))
+        if needed and name not in have
+    ]
     for package, names in (
         ("tensorwire", rw.need_kit),
         ("tensorwire.compat", rw.need_compat),
@@ -551,7 +595,10 @@ def _fix_imports(module: cst.Module, rw: _Rewriter) -> cst.Module:
         if isinstance(statement, cst.SimpleStatementLine) and any(
             isinstance(s, (cst.Import, cst.ImportFrom)) for s in statement.body
         ):
-            new, touched = _prune(statement, rw.bt, used, rw.dropped_helpers)
+            droppable = {"time"} if rw.rewrites["TWM027"] else set()
+            new, touched = _prune(
+                statement, rw.bt | droppable, used, rw.dropped_helpers
+            )
             if touched and insert_at is None:
                 insert_at = len(out) + (0 if new is None else 1)
                 if new is None:
@@ -599,10 +646,12 @@ def _prune(
             keep = [
                 a
                 for a in names
-                if not (_name_of(a) == "bittensor" and _local_of(a) in bt)
+                if not (_name_of(a) in ("bittensor", "time") and _local_of(a) in bt)
                 or _local_of(a) in used
             ]
-            touched |= any(_name_of(a).startswith("bittensor") for a in names)
+            touched |= len(keep) != len(names) or any(
+                _name_of(a).startswith("bittensor") for a in names
+            )
             if keep:
                 smalls.append(small.with_changes(names=_strip_trailing_comma(keep)))
             continue
@@ -712,20 +761,28 @@ class _Marker(cst.CSTTransformer):
 # ---------------------------------------------------------------- entry points
 
 
-def apply_source(source: str, path: str = "<string>") -> FileResult:
+def apply_source(
+    source: str,
+    path: str = "<string>",
+    *,
+    custom_bases: Mapping[str, list[str]] | None = None,
+) -> FileResult:
     """``source`` after the rewrites and the ``TW-MIGRATE`` markers.
 
+    ``custom_bases``: :func:`~tensorwire.migrate.scan.template_bases` of the
+    repository (without it, a ``BaseValidatorNeuron`` import is swapped).
     Raises ``libcst.ParserSyntaxError`` for code that does not parse.
     """
+    bases = custom_bases or {}
     module = cst.parse_module(source)
     aliases = _BtAliases()
     module.visit(aliases)
-    rewriter = _Rewriter(aliases.aliases)
+    rewriter = _Rewriter(aliases.aliases, path, bases)
     rewritten = MetadataWrapper(module).visit(rewriter)
     if rewriter.rewrites or rewriter.need_compat:
         rewritten = _fix_imports(rewritten, rewriter)
     code = rewritten.code
-    findings, _ = scan_source(code, path)
+    findings, _ = scan_source(code, path, custom_bases=bases)
     marks: dict[int, list[str]] = {}
     for finding in findings:
         marks.setdefault(finding.line, []).append(finding.rule)
@@ -746,13 +803,14 @@ def plan_repo(root: Path | str) -> ApplyReport:
     if not base.is_dir():
         raise NotADirectoryError(str(base))
     report = ApplyReport(root=str(base))
+    bases = template_bases(base)
     for path in python_files(base):
         rel = path.relative_to(base).as_posix()
         if path.is_symlink():
             continue  # never written through a link
         try:
             source = path.read_text(encoding="utf-8")
-            report.files.append(apply_source(source, rel))
+            report.files.append(apply_source(source, rel, custom_bases=bases))
         except (UnicodeDecodeError, OSError) as exc:
             report.parse_errors.append(f"{rel}: {type(exc).__name__}")
         except cst.ParserSyntaxError as exc:
