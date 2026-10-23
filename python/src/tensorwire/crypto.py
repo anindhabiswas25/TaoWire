@@ -11,8 +11,10 @@ Only the hotkey is ever resolved. Nothing here touches a coldkey.
 from __future__ import annotations
 
 import inspect
+import re
 from typing import Any
 
+from bittensor import http_auth as _http_auth
 from bittensor import sp_core as _sp_core
 from bittensor.keyfiles import Keypair
 from bittensor.signing import Signer, WalletLike, resolve_signer
@@ -24,7 +26,9 @@ __all__ = [
     "SS58_FORMAT",
     "HotkeySigner",
     "Keypair",
+    "btauth_payload",
     "crypto_type_from_scheme",
+    "keypair_from_seed",
     "keypair_from_uri",
     "public_key_from_ss58",
     "scheme_name",
@@ -45,6 +49,7 @@ _SCHEME_TYPES: dict[str, int] = {name: ct for ct, name in _SCHEMES.items()}
 
 _WRAP_PREFIX = b"<Bytes>"
 _WRAP_SUFFIX = b"</Bytes>"
+_HEX = re.compile(r"(?:[0-9a-fA-F]{2})*")
 
 
 def scheme_name(crypto_type: int) -> str:
@@ -167,8 +172,41 @@ def signature_to_hex(signature: bytes) -> str:
 
 
 def signature_from_hex(value: str) -> bytes:
-    """Decode a header signature (``0x`` optional). ``ValueError`` if not hex."""
-    return bytes.fromhex(value.removeprefix("0x"))
+    """Decode a header signature (``0x`` optional). ``ValueError`` if not hex.
+
+    Only hex digits are accepted: unlike ``bytes.fromhex``, no whitespace,
+    so the Go and Rust decoders give the same answer for every header value.
+    """
+    digits = value.removeprefix("0x")
+    if not _HEX.fullmatch(digits):
+        raise ValueError("non-hexadecimal signature (hex digits only, no whitespace)")
+    return bytes.fromhex(digits)
+
+
+def btauth_payload(
+    *,
+    scheme: str,
+    method: str,
+    target: str,
+    body: bytes,
+    nonce_ns: int,
+    sender_ss58: str,
+    receiver_ss58: str | None,
+) -> bytes:
+    """The SDK's btauth/1 signed payload (spec 4.2), as ``http_auth`` builds it.
+
+    ``target`` is the request target as sent (percent-encoded path plus
+    ``?query``); ``receiver_ss58=None`` writes the unbound marker ``-``.
+    """
+    return _http_auth.build_payload(
+        scheme=scheme,
+        method=method,
+        path=target,
+        body=body,
+        nonce_ns=nonce_ns,
+        sender_ss58=sender_ss58,
+        receiver_ss58=receiver_ss58,
+    )
 
 
 def keypair_from_uri(uri: str, *, crypto_type: int = CRYPTO_SR25519) -> Keypair:
@@ -179,3 +217,14 @@ def keypair_from_uri(uri: str, *, crypto_type: int = CRYPTO_SR25519) -> Keypair:
     """
     scheme_name(crypto_type)
     return Keypair.create_from_uri(uri, crypto_type=crypto_type)
+
+
+def keypair_from_seed(seed: bytes, *, crypto_type: int = CRYPTO_SR25519) -> Keypair:
+    """A keypair from a 32-byte secret seed (sr25519 mini-secret or ed25519 seed).
+
+    For the public dev keys pinned in ``conformance/vectors`` (tests only).
+    """
+    scheme_name(crypto_type)
+    if len(seed) != 32:
+        raise ValueError("a secret seed is 32 bytes")
+    return Keypair.create_from_seed(seed, crypto_type=crypto_type)

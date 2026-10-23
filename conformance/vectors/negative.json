@@ -1,0 +1,3561 @@
+{
+ "schema_version": 1,
+ "description": "btauth/1 verify cases (spec 4.3, 11.7). Verify inputs with self_hotkey, now_ns, max_age_s and allowed_skew_s; when inputs.prior is set, verify it first with the same nonce store (it must be accepted). headers is a list of [name, value] pairs, so duplicates can be expressed. expected is the normative answer; python_reference, when present, is what the Python reference does instead and why.",
+ "keys": {
+  "alice_sr25519": {
+   "uri": "//Alice",
+   "scheme": "sr25519",
+   "secret_seed_hex": "e5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a",
+   "public_key_hex": "d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d",
+   "ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+  },
+  "bob_sr25519": {
+   "uri": "//Bob",
+   "scheme": "sr25519",
+   "secret_seed_hex": "398f0c28f98885e046333d4a41c19cee4c37368a9832c6502f6cfd182e2aef89",
+   "public_key_hex": "8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48",
+   "ss58": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+  },
+  "alice_ed25519": {
+   "uri": "//Alice",
+   "scheme": "ed25519",
+   "secret_seed_hex": "abf8e5bdbe30c65656c0a3cbd181ff8a56294a69dfedd27982aace4a76909115",
+   "public_key_hex": "88dc3417d5058ec4b4503e0c12ea1a0a89be200fe98922423d4334014fa6b0ee",
+   "ss58": "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+  },
+  "bob_ed25519": {
+   "uri": "//Bob",
+   "scheme": "ed25519",
+   "secret_seed_hex": "3b7b60af2abcd57ba401ab398f84f4ca54bd6b2140d2503fbcf3286535fe3ff1",
+   "public_key_hex": "d17c2d7823ebf260fd138f2d7e27d114c0145d968b5ff5006125f2414fadae69",
+   "ss58": "5GoNkf6WdbxCFnPdAnYYQyCjAKPJgLNxXwPjwTh6DGg6gN3E"
+  }
+ },
+ "vectors": [
+  {
+   "id": "N1",
+   "description": "missing X-Bittensor-Version",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N2",
+   "description": "missing X-Bittensor-Hotkey",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N3",
+   "description": "missing X-Bittensor-Nonce",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N4",
+   "description": "missing X-Bittensor-Signature",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N5",
+   "description": "missing X-Bittensor-Receiver (TensorWire always requires it)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_wrong_receiver",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N6",
+   "description": "version 2",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "2"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N7",
+   "description": "unknown crypto ecdsa",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ecdsa"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N8",
+   "description": "signature not hex",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0xzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N9",
+   "description": "signature 63 bytes",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e0760"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N10",
+   "description": "sender SS58 with a bad checksum",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQZ"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N11",
+   "description": "receiver is another hotkey",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_wrong_receiver",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N12",
+   "description": "nonce 11 s old",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076811000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_stale",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N13",
+   "description": "nonce 3 s in the future",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076797000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_stale",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N14",
+   "description": "body changed by one byte",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbE8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N15",
+   "description": "target decoded by the router ('/a b' instead of '/a%20b')",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/a b?x=1",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0xdab517aab21bbd1f729e98743cc30766058b3af71ec9617347a276e3a11e593c94682ea2696194e5437b4fc424deb807a3eb036f96286fcac943d5855ac1d484"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/a%20b?x=1\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N16",
+   "description": "method changed (signed POST, received PUT)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "PUT",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N17",
+   "description": "ed25519 signature without X-Bittensor-Crypto: verified as sr25519 only, never falls back",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x1a6b631988bf1f7ea093ab9d5acf61f05c316d0b0e428b24b487b75a5f6ee0e1a56a26918fdf871b6cf09437e6588023a4ce423cf622621b2a7feee17612f704"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N18",
+   "description": "sr25519 signature declared as ed25519",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N19",
+   "description": "<Bytes>-wrapped sr25519 signature (strict: rejected)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x8ebfdcd6529ccee4edd475abaef2f699dee3c1b2cc8641140b5767d17f588a5b287231f89b3c340af8ef3e6256a7e457d3ba6331371037818365c9ba7341f788"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   },
+   "python_reference": {
+    "valid": true,
+    "code": null,
+    "note": "spec 11.7: the Python request verifier (bittensor.http_auth over sp_core.verify) accepts <Bytes>-wrapped signatures; strict implementations (TypeScript, Go, Rust) reject them."
+   }
+  },
+  {
+   "id": "N20",
+   "description": "<Bytes>-wrapped ed25519 signature (strict: rejected)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x544108f939f47ba93e01787455a8c07411ebb803c8104c3f45574226488902c9d114c8822b5193824059f13929585e5af693436dacf69c45c90648597849c803"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   },
+   "python_reference": {
+    "valid": true,
+    "code": null,
+    "note": "spec 11.7: the Python request verifier (bittensor.http_auth over sp_core.verify) accepts <Bytes>-wrapped signatures; strict implementations (TypeScript, Go, Rust) reject them."
+   }
+  },
+  {
+   "id": "N21",
+   "description": "replay of an accepted request (inputs.prior is the same request, verified first with the same store)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": {
+     "method": "POST",
+     "target": "/generate?stream=false",
+     "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+     "headers": [
+      [
+       "X-Bittensor-Version",
+       "1"
+      ],
+      [
+       "X-Bittensor-Hotkey",
+       "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+      ],
+      [
+       "X-Bittensor-Receiver",
+       "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+      ],
+      [
+       "X-Bittensor-Nonce",
+       "1752076800000000000"
+      ],
+      [
+       "X-Bittensor-Signature",
+       "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+      ]
+     ]
+    },
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_replayed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N22",
+   "description": "accepted nonce reused with a changed body: the signature fails first, the store is consulted only after step 4",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiYnllIn0=",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": {
+     "method": "POST",
+     "target": "/generate?stream=false",
+     "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+     "headers": [
+      [
+       "X-Bittensor-Version",
+       "1"
+      ],
+      [
+       "X-Bittensor-Hotkey",
+       "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+      ],
+      [
+       "X-Bittensor-Receiver",
+       "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+      ],
+      [
+       "X-Bittensor-Nonce",
+       "1752076800000000000"
+      ],
+      [
+       "X-Bittensor-Signature",
+       "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+      ]
+     ]
+    },
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N23",
+   "description": "sender SS58 with prefix 0 (Alice's Polkadot address)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "15oF4uVJwmo4TdGW7VfQxNLavjCXviqxT9S1MgbjMNHr6Sp5"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N24",
+   "description": "sender SS58 with a two-byte prefix (1284)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "VdvKmYJfD4VXA9fzz1SbmCo2eYHSzUFbaDCZSuaNKJAe8YNg6"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N25",
+   "description": "sender SS58 decodes to 36 bytes (one byte too many)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "yA3vprfzKUKan9P1eXE6iMGCMSMDZEnAtb6wEjTEf86eMD"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N26",
+   "description": "sender not base58 (contains '0')",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "0GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N27",
+   "description": "duplicate X-Bittensor-Signature header (same value)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N28",
+   "description": "duplicate nonce header, names differ in case only",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ],
+     [
+      "x-bittensor-nonce",
+      "1752076800000000000"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N29",
+   "description": "nonce with a '+' sign",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "+1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N30",
+   "description": "nonce of 21 digits",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "011111111111111111111"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N31",
+   "description": "nonce with non-ASCII digits (Arabic-Indic)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "١٧٥٢٠٧٦٨٠٠٠٠٠٠٠٠٠٠٠٠"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N32",
+   "description": "empty nonce",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      ""
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N33",
+   "description": "nonce with an underscore",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1_752_076_800_000_000_000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N34",
+   "description": "X-Bittensor-Crypto 'ED25519' (values are exact)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ED25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x1a6b631988bf1f7ea093ab9d5acf61f05c316d0b0e428b24b487b75a5f6ee0e1a56a26918fdf871b6cf09437e6588023a4ce423cf622621b2a7feee17612f704"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N35",
+   "description": "X-Bittensor-Crypto '1' (the SDK's numeric form)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "1"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N36",
+   "description": "X-Bittensor-Crypto with padding ' sr25519'",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      " sr25519"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N37",
+   "description": "empty X-Bittensor-Crypto",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      ""
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N38",
+   "description": "version ' 1' (values are exact)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      " 1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N39",
+   "description": "empty sender",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      ""
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N40",
+   "description": "signature prefix '0X' (only '0x' is stripped)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0X46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N41",
+   "description": "signature prefix '0x0x'",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N42",
+   "description": "empty signature '0x'",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N43",
+   "description": "signature with an odd number of hex digits",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e07608"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N44",
+   "description": "signature 65 bytes",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e07608100"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N45",
+   "description": "signature hex with an inner space",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652f bd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   },
+   "python_reference": {
+    "valid": true,
+    "code": null,
+    "note": "known divergence: bittensor.http_auth decodes the signature with bytes.fromhex, which skips ASCII whitespace. Normative answer (spec 4.3 step 1, 'signature is hex') is tw.auth_malformed; reported to Engineer A (auth/verifier.py) in COORDINATION.md."
+   }
+  },
+  {
+   "id": "N46",
+   "description": "signature hex with a trailing space (a server that keeps trailing whitespace passes it on)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081 "
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   },
+   "python_reference": {
+    "valid": true,
+    "code": null,
+    "note": "known divergence: bittensor.http_auth decodes the signature with bytes.fromhex, which skips ASCII whitespace. Normative answer (spec 4.3 step 1, 'signature is hex') is tw.auth_malformed; reported to Engineer A (auth/verifier.py) in COORDINATION.md."
+   }
+  },
+  {
+   "id": "N47",
+   "description": "receiver header is the literal unbound marker '-'",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "-"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_wrong_receiver",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N48",
+   "description": "empty receiver",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      ""
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_wrong_receiver",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N49",
+   "description": "nonce max_age + 1 ns old",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076810000000001",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_stale",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N50",
+   "description": "nonce allowed_skew + 1 ns in the future",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076797999999999",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_stale",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N51",
+   "description": "nonce of 20 digits above the u64 maximum: well-formed, far in the future",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "99999999999999999999"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_stale",
+    "status": 401,
+    "caller_ss58": null
+   },
+   "notes": [
+    "Implementations holding the nonce as u64 must report this as stale (step 3), not malformed: the digits are valid."
+   ]
+  },
+  {
+   "id": "N52",
+   "description": "nonce 0",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "0"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_stale",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N53",
+   "description": "sr25519 signature with the schnorrkel marker bit cleared",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076001"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N54",
+   "description": "ed25519 signature with a non-canonical S (S + L)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x1a6b631988bf1f7ea093ab9d5acf61f05c316d0b0e428b24b487b75a5f6ee0e1923e1ceea9429a73428d8cdac4525f38a4ce423cf622621b2a7feee17612f714"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N55",
+   "description": "sr25519 sender whose key bytes are not a ristretto point",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5HrN7fHLXWcFiXPwwtq2EkSGns9eMt5P7SpeTPewumZy6ftb"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N56",
+   "description": "ed25519 sender whose key bytes are not a curve point",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5HrN7fHLXWcFiXPwwtq2EkSGns9eMt5P7SpeTPewumZy6ftb"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x1a6b631988bf1f7ea093ab9d5acf61f05c316d0b0e428b24b487b75a5f6ee0e1a56a26918fdf871b6cf09437e6588023a4ce423cf622621b2a7feee17612f704"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N57",
+   "description": "all-zero sr25519 signature",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N58",
+   "description": "signature of another sender (//Bob signs, header says //Alice)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0xaa0db7141ef358c74d0844c2a6485473a002bc3fbb134057e27306519674ae2b915b2a588869cd4f568e5228734f3220ee76a7d92312b1308854722fa9375b8d"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_bad_signature",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N59",
+   "description": "order: duplicate header and wrong receiver -> shape first",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N60",
+   "description": "order: wrong receiver and stale -> receiver first",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY",
+    "now_ns": "1752076860000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_wrong_receiver",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N61",
+   "description": "order: stale and bad signature -> freshness first",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076860000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "dGFtcGVyZWQ=",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_stale",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "N62",
+   "description": "order: bad SS58 and stale -> shape first",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076860000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQZ"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": false,
+    "code": "tw.auth_malformed",
+    "status": 401,
+    "caller_ss58": null
+   }
+  },
+  {
+   "id": "A1",
+   "description": "golden request accepted (sr25519)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "A2",
+   "description": "golden request accepted (ed25519, Appendix C)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x1a6b631988bf1f7ea093ab9d5acf61f05c316d0b0e428b24b487b75a5f6ee0e1a56a26918fdf871b6cf09437e6588023a4ce423cf622621b2a7feee17612f704"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+   }
+  },
+  {
+   "id": "A3",
+   "description": "header names in any case",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-BITTENSOR-VERSION",
+      "1"
+     ],
+     [
+      "x-bittensor-hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-BITTENSOR-RECEIVER",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "x-bittensor-nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-BITTENSOR-SIGNATURE",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "A4",
+   "description": "signature without the 0x prefix",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "A5",
+   "description": "signature in upper-case hex",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46DF652FBD8F60E00BAD739E0D6AC618405B78B39F3D5379460CF38F0C71DE18CD273B5B1B41C51856ECB8AC5BDC09240A60B762A6A645F8154919C67E076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "A6",
+   "description": "nonce exactly max_age old",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076810000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "A7",
+   "description": "nonce exactly allowed_skew in the future",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076798000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "A8",
+   "description": "nonce with a leading zero: the payload uses the canonical decimal",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "01752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "A9",
+   "description": "method received in lower case: the payload upper-cases it",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "post",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "A10",
+   "description": "explicit X-Bittensor-Crypto: sr25519",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "sr25519"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "A11",
+   "description": "duplicate non-auth headers are not the verifier's concern",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ],
+     [
+      "Accept",
+      "a/b"
+     ],
+     [
+      "Accept",
+      "c/d"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "A12",
+   "description": "reserved X-Bittensor-Drand-Round header is ignored (spec 4.4)",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x46df652fbd8f60e00bad739e0d6ac618405b78b39f3d5379460cf38f0c71de18cd273b5b1b41c51856ecb8ac5bdc09240a60b762a6a645f8154919c67e076081"
+     ],
+     [
+      "X-Bittensor-Drand-Round",
+      "1"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
+   }
+  },
+  {
+   "id": "A13",
+   "description": "weak ed25519 key (identity point) with the universal signature",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5C61uSppDAB6oYmD4UQw1mcjftLsH8BbdnLiekCtnjHy2ZDH"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x01000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5C61uSppDAB6oYmD4UQw1mcjftLsH8BbdnLiekCtnjHy2ZDH\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5C61uSppDAB6oYmD4UQw1mcjftLsH8BbdnLiekCtnjHy2ZDH"
+   },
+   "notes": [
+    "Weak key: the identity point has a signature that verifies for every payload. Every implementation accepts it, matching the SDK (schnorrkel, ed25519 RFC 8032 cofactorless). Caller policy (registered hotkey) is the protection; spec finding filed for the PM."
+   ]
+  },
+  {
+   "id": "A14",
+   "description": "weak sr25519 key (ristretto identity) with the universal signature",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000080"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\nsr25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5C4hrfjw9DjXZTzV3MwzrrAr9P1MJhSrvWGWqi1eSuyUpnhM"
+   },
+   "notes": [
+    "Weak key: the identity point has a signature that verifies for every payload. Every implementation accepts it, matching the SDK (schnorrkel, ed25519 RFC 8032 cofactorless). Caller policy (registered hotkey) is the protection; spec finding filed for the PM."
+   ]
+  },
+  {
+   "id": "A15",
+   "description": "ed25519 sender header for the golden ed25519 address",
+   "kind": "verify_request",
+   "inputs": {
+    "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",
+    "now_ns": "1752076800000000000",
+    "max_age_s": 10,
+    "allowed_skew_s": 2,
+    "method": "POST",
+    "target": "/generate?stream=false",
+    "body_base64": "eyJwcm9tcHQiOiAiaGVsbG8ifQ==",
+    "headers": [
+     [
+      "X-Bittensor-Version",
+      "1"
+     ],
+     [
+      "X-Bittensor-Hotkey",
+      "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+     ],
+     [
+      "X-Bittensor-Receiver",
+      "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+     ],
+     [
+      "X-Bittensor-Nonce",
+      "1752076800000000000"
+     ],
+     [
+      "X-Bittensor-Crypto",
+      "ed25519"
+     ],
+     [
+      "X-Bittensor-Signature",
+      "0x1a6b631988bf1f7ea093ab9d5acf61f05c316d0b0e428b24b487b75a5f6ee0e1a56a26918fdf871b6cf09437e6588023a4ce423cf622621b2a7feee17612f704"
+     ]
+    ],
+    "prior": null,
+    "signed_payload_utf8": "btauth/1\ned25519\nPOST\n/generate?stream=false\n341c57448e531310fbbe83f44cea2a5e838bd9e8a6b82b269f01d0dbbc23c3cc\n1752076800000000000\n5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu\n5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
+   },
+   "expected": {
+    "valid": true,
+    "code": null,
+    "status": null,
+    "caller_ss58": "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"
+   }
+  }
+ ]
+}

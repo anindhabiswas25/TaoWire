@@ -162,6 +162,66 @@ def test_signature_hex_round_trip() -> None:
         crypto.signature_from_hex("0xzz")
 
 
+@pytest.mark.parametrize(
+    "value",
+    ["0xab cd", "0xabcd ", " 0xabcd", "0xab\tcd", "0xab\ncd", "0X" + "ab", "0xa"],
+)
+def test_signature_hex_is_strict(value: str) -> None:
+    """Hex digits only: ``bytes.fromhex`` would skip the whitespace (vector N45)."""
+    with pytest.raises(ValueError, match="non-hexadecimal"):
+        crypto.signature_from_hex(value)
+
+
+def test_signature_hex_accepts_upper_case_and_empty() -> None:
+    assert crypto.signature_from_hex("0xABcd") == b"\xab\xcd"
+    assert crypto.signature_from_hex("0x") == b""
+
+
+@pytest.mark.parametrize(
+    ("uri", "crypto_type", "seed"),
+    [
+        (
+            "//Alice",
+            crypto.CRYPTO_SR25519,
+            "e5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a",
+        ),
+        (
+            "//Alice",
+            crypto.CRYPTO_ED25519,
+            "abf8e5bdbe30c65656c0a3cbd181ff8a56294a69dfedd27982aace4a76909115",
+        ),
+    ],
+)
+def test_keypair_from_seed_matches_the_uri(
+    uri: str, crypto_type: int, seed: str
+) -> None:
+    by_seed = crypto.keypair_from_seed(bytes.fromhex(seed), crypto_type=crypto_type)
+    by_uri = crypto.keypair_from_uri(uri, crypto_type=crypto_type)
+    assert by_seed.ss58_address == by_uri.ss58_address
+
+
+def test_keypair_from_seed_rejects_bad_input() -> None:
+    with pytest.raises(ValueError, match="32 bytes"):
+        crypto.keypair_from_seed(b"\x01" * 31)
+    with pytest.raises(ValueError, match="unsupported crypto type"):
+        crypto.keypair_from_seed(b"\x01" * 32, crypto_type=7)
+
+
+def test_btauth_payload_is_the_sdk_payload(alice: crypto.Keypair) -> None:
+    kwargs: dict[str, Any] = {
+        "scheme": "sr25519",
+        "method": "post",
+        "body": b"{}",
+        "nonce_ns": 1,
+        "sender_ss58": alice.ss58_address,
+        "receiver_ss58": None,
+    }
+    built = crypto.btauth_payload(target="/a%20b?", **kwargs)
+    assert built == http_auth.build_payload(path="/a%20b?", **kwargs)
+    assert built.split(b"\n")[2:4] == [b"POST", b"/a%20b?"]
+    assert built.endswith(b"\n-")
+
+
 def test_keypair_from_uri_rejects_unknown_crypto_type() -> None:
     with pytest.raises(ValueError, match="unsupported crypto type"):
         crypto.keypair_from_uri("//Alice", crypto_type=9)
