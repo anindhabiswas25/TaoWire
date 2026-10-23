@@ -17,8 +17,14 @@ Only ``auto`` rules are rewritten:
 - ``.item()`` / ``.tolist()`` on metagraph values are dropped (TWM023);
 - the template's ``from template.base.validator import BaseValidatorNeuron``
   -> ``from tensorwire.compat import TemplateValidatorAdapter as
-  BaseValidatorNeuron`` (TWM024), only when that base is the stock template
-  (a customised one is TWM026, by hand);
+  BaseValidatorNeuron`` (TWM024), only when that base is the stock template;
+- a customised copy of the template's bases (``<pkg>/base/{neuron,miner,
+  validator}.py``) is put on ``TemplateMinerAdapter`` /
+  ``TemplateValidatorAdapter``, keeping the subnet's own methods (TWM026,
+  :mod:`tensorwire.migrate.base_swap`);
+- ``bt.<group>.add_args(parser)`` -> ``add_v10_args(parser, "<group>")``,
+  ``bt.config(parser)`` -> ``config(parser)``, bare
+  ``bt.<group>.check_config(...)`` statements removed (TWM031);
 - ``time.sleep(x)`` inside ``async def`` -> ``await asyncio.sleep(x)``
   (TWM027);
 - string annotations ``"bt.metagraph.Metagraph"``, ``"bt.Synapse"``, ...
@@ -51,9 +57,16 @@ from typing import Literal
 import libcst as cst
 from libcst.metadata import MetadataWrapper, ParentNodeProvider, PositionProvider
 
+from tensorwire.migrate.base_swap import (
+    ADAPTERS,
+    role_of,
+    swap_base,
+    swappable_packages,
+)
 from tensorwire.migrate.rules import RULES
 from tensorwire.migrate.scan import (
     ANNOTATION_COMPAT,
+    CONFIG_GROUPS,
     LOG_LEVELS,
     is_axons_list,
     is_metagraph_tensor_call,
@@ -396,6 +409,9 @@ class _Rewriter(cst.CSTTransformer):
                     )
                 )
             )
+        config_call = self._config_call(original_node, updated_node, head, last)
+        if config_call is not None:
+            return config_call
         if head.rpartition(".")[2] == "logging" and self._is_bt_path(head, 1):
             return self._logging_call(updated_node, last)
         if head in self.bt and last in ("axon", "Axon"):
@@ -410,6 +426,61 @@ class _Rewriter(cst.CSTTransformer):
             self.rewrites["TWM023"] += 1
             return updated_node.func.value
         return updated_node
+
+    def _config_call(
+        self, original: cst.Call, updated: cst.Call, head: str, last: str
+    ) -> cst.Call | None:
+        """TWM031: ``bt.<group>.add_args(p)`` and ``bt.config(p)``."""
+        if head in self.bt and last in ("config", "Config"):
+            self.rewrites["TWM031"] += 1
+            return updated.with_changes(func=cst.Name(self._compat("config")))
+        group_head, _, group = head.rpartition(".")
+        if (
+            last == "add_args"
+            and group_head in self.bt
+            and group in CONFIG_GROUPS
+            and len(original.args) == 1
+            and original.args[0].keyword is None
+            and not original.args[0].star
+        ):
+            self.rewrites["TWM031"] += 1
+            name = cst.SimpleString(f'"{CONFIG_GROUPS[group]}"')
+            first = updated.args[0].with_changes(
+                comma=cst.Comma(whitespace_after=cst.SimpleWhitespace(" "))
+            )
+            return cst.Call(
+                func=cst.Name(self._compat("add_v10_args")),
+                args=[first, cst.Arg(value=name)],
+            )
+        return None
+
+    def _is_config_check(self, statement: cst.BaseStatement) -> bool:
+        """A bare ``bt.<group>.check_config(...)`` statement (TWM031)."""
+        if not (
+            isinstance(statement, cst.SimpleStatementLine) and len(statement.body) == 1
+        ):
+            return False
+        small = statement.body[0]
+        if not (isinstance(small, cst.Expr) and isinstance(small.value, cst.Call)):
+            return False
+        parts = (_dotted(small.value.func) or "").split(".")
+        return (
+            len(parts) == 3
+            and parts[0] in self.bt
+            and parts[1] in CONFIG_GROUPS
+            and parts[2] == "check_config"
+        )
+
+    def leave_IndentedBlock(  # noqa: N802 - libcst API
+        self, _original: cst.IndentedBlock, updated_node: cst.IndentedBlock
+    ) -> cst.IndentedBlock:
+        body = [s for s in updated_node.body if not self._is_config_check(s)]
+        if len(body) == len(updated_node.body):
+            return updated_node
+        self.rewrites["TWM031"] += len(updated_node.body) - len(body)
+        return updated_node.with_changes(
+            body=body or [cst.SimpleStatementLine(body=[cst.Pass()])]
+        )
 
     def _is_bt_path(self, dotted: str, depth: int) -> bool:
         parts = dotted.split(".")
@@ -863,11 +934,15 @@ def apply_source(
     path: str = "<string>",
     *,
     custom_bases: Mapping[str, list[str] | None] | None = None,
+    swap_role: str | None = None,
 ) -> FileResult:
     """``source`` after the rewrites and the ``TW-MIGRATE`` markers.
 
     ``custom_bases``: :func:`~tensorwire.migrate.scan.template_bases` of the
     repository (without it, a ``BaseValidatorNeuron`` import is swapped).
+    ``swap_role`` (``"neuron"``, ``"miner"`` or ``"validator"``): this file
+    is that base of a customised template package, swapped onto the
+    adapters (TWM026; :func:`plan_repo` decides).
     Raises ``libcst.ParserSyntaxError`` for code that does not parse.
     """
     bases = custom_bases or {}
@@ -875,6 +950,13 @@ def apply_source(
     aliases = _BtAliases()
     module.visit(aliases)
     rewriter = _Rewriter(aliases.aliases, path, bases, aliases.bound)
+    if swap_role is not None:
+        adapter = ADAPTERS.get(swap_role)
+        local = None if adapter is None else rewriter._compat(adapter)
+        swapped = swap_base(module, swap_role, aliases.aliases, local)
+        if swapped.swapped:
+            rewriter.rewrites["TWM026"] += 1
+            module = swapped.module
     rewritten = MetadataWrapper(module).visit(rewriter)
     if rewriter.rewrites or rewriter.need_compat:
         rewritten = _fix_imports(rewritten, rewriter)
@@ -901,13 +983,26 @@ def plan_repo(root: Path | str) -> ApplyReport:
         raise NotADirectoryError(str(base))
     report = ApplyReport(root=str(base))
     bases = template_bases(base)
+    customised = sorted(
+        {target.rpartition(".")[0] for target, extras in bases.items() if extras}
+    )
+    swapped = swappable_packages(base, customised)
+    # After the swap those bases are on the adapters: no TWM026 import finding.
+    scan_bases = {
+        target: None if target.rpartition(".")[0] in swapped else extras
+        for target, extras in bases.items()
+    }
     for path in python_files(base):
         rel = path.relative_to(base).as_posix()
         if path.is_symlink():
             continue  # never written through a link
+        role = role_of(".".join(Path(rel).with_suffix("").parts))
+        swap_role = role[1] if role is not None and role[0] in swapped else None
         try:
             source = path.read_text(encoding="utf-8")
-            report.files.append(apply_source(source, rel, custom_bases=bases))
+            report.files.append(
+                apply_source(source, rel, custom_bases=scan_bases, swap_role=swap_role)
+            )
         except (UnicodeDecodeError, OSError) as exc:
             report.parse_errors.append(f"{rel}: {type(exc).__name__}")
         except cst.ParserSyntaxError as exc:

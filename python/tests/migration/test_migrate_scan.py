@@ -45,7 +45,7 @@ FIXTURES: dict[str, tuple[str, str]] = {
         "import torch\nt: torch.Tensor\n",
     ),
     "TWM006": (
-        "import bittensor as bt\nc = bt.config(parser)\n",
+        "import bittensor as bt\nbt.wallet.add_args(parser, prefix='x')\n",
         "config = load_config()\n",
     ),
     "TWM007": (
@@ -139,6 +139,12 @@ FIXTURES: dict[str, tuple[str, str]] = {
     "TWM030": (
         "import bittensor as bt\nx = bt.Epistula()\n",
         "import bittensor as bt\nx = bt.Balance.from_tao(1)\n",
+    ),
+    "TWM031": (
+        "import bittensor as bt\nbt.Wallet.add_args(parser)\nc = bt.config(parser)\n"
+        "def check(c):\n    bt.logging.check_config(c)\n",
+        "from tensorwire.compat import add_v10_args, config\n"
+        "add_v10_args(parser, 'wallet')\nc = config(parser)\n",
     ),
     "TWM100": (
         "class Ask(Synapse):\n    question: str\n    answer: str | None = None\n",
@@ -280,10 +286,12 @@ def test_negative_fixture(rule: str) -> None:
         ("import bittensor as bt\ns = bt.Subtensor(config=self.config)\n", "TWM008"),
         ("import bittensor as bt\ndef f(m: bt.Metagraph): ...\n", "TWM009"),
         ("import bittensor as bt\ndef f(s: bt.Subtensor): ...\n", "TWM008"),
-        ("import bittensor as bt\nbt.Subtensor.add_args(p)\n", "TWM006"),
+        ("import bittensor as bt\nbt.Subtensor.add_args(p)\n", "TWM031"),
+        ("import bittensor as bt\nbt.Subtensor.add_args(p, prefix=x)\n", "TWM006"),
         ("from bittensor_wallet.keypair import Keypair\n", "TWM017"),
         ("import bittensor_wallet\n", "TWM014"),
-        ("import bittensor as bt\ndef f(c: 'bt.Config' = None): ...\n", "TWM006"),
+        ("import bittensor as bt\ndef f(c: 'bt.Config' = None): ...\n", "TWM028"),
+        ("import bittensor as bt\nc = bt.config\n", "TWM006"),
         ("import bittensor as bt\nt = bt.TerminalInfo(status_code=200)\n", "TWM001"),
         ("from bittensor import Epistula\n", "TWM030"),
         ("import bittensor as bt\noriginal = bt.logging.trace\n", "TWM025"),

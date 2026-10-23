@@ -34,6 +34,7 @@ from libcst.metadata import MetadataWrapper, ParentNodeProvider, PositionProvide
 from tensorwire.migrate.rules import ATTRIBUTE_RULES, MODULE_RULES, RULES, V11_PUBLIC
 
 __all__ = [
+    "CONFIG_GROUPS",
     "LOG_LEVELS",
     "STOCK_NEURON_METHODS",
     "STOCK_VALIDATOR_METHODS",
@@ -112,6 +113,18 @@ ANNOTATION_COMPAT: dict[str, str] = {
     "Metagraph": "Metagraph",
     "metagraph": "Metagraph",
     "metagraph.Metagraph": "Metagraph",
+    "Config": "Config",
+    "config": "Config",
+}
+#: ``bt.<group>.add_args(parser)`` -> ``add_v10_args(parser, "<group>")`` (TWM031).
+CONFIG_GROUPS: dict[str, str] = {
+    "wallet": "wallet",
+    "Wallet": "wallet",
+    "subtensor": "subtensor",
+    "Subtensor": "subtensor",
+    "axon": "axon",
+    "Axon": "axon",
+    "logging": "logging",
 }
 #: Names v11 kept with a different API: v10-shaped uses are flagged.
 _RENAMED_V10 = {"Wallet": "TWM014", "Metagraph": "TWM009", "Subtensor": "TWM008"}
@@ -446,6 +459,9 @@ class _Visitor(cst.CSTVisitor):
             return
         attr = node.attr.value
         full = self.full_name(node)
+        if self.v10_config_call(node, attr, full):
+            self.add(node, "TWM031", full)
+            return
         rule = ATTRIBUTE_RULES.get(attr)
         if rule is None:
             rule = self.v10_shaped(node, attr, full)
@@ -463,6 +479,26 @@ class _Visitor(cst.CSTVisitor):
         ):
             rule = "TWM025"  # bt.logging.set_config(...), a monkeypatch, ...
         self.add(node, rule, full)
+
+    def v10_config_call(self, node: cst.Attribute, attr: str, full: str) -> bool:
+        """``bt.<group>.add_args(p)``, ``bt.config(p)``, or a bare
+        ``bt.<group>.check_config(c)`` statement: what ``apply`` rewrites (TWM031)."""
+        if not self.is_called(node):
+            return False
+        parts = full.split(".")
+        if len(parts) == 2 and attr in ("config", "Config"):
+            return True
+        if len(parts) != 3 or attr not in CONFIG_GROUPS:
+            return False
+        if parts[2] == "add_args":
+            call = self.get_metadata(ParentNodeProvider, self.outermost(node), None)
+            return isinstance(call, cst.Call) and len(call.args) == 1
+        if parts[2] == "check_config":
+            call = self.get_metadata(ParentNodeProvider, self.outermost(node), None)
+            return call is not None and isinstance(
+                self.get_metadata(ParentNodeProvider, call, None), cst.Expr
+            )
+        return False
 
     def v10_shaped(self, node: cst.Attribute, attr: str, full: str) -> str | None:
         """The rule for a ``bt.<name>`` v11 also has (or none): only v10-shaped

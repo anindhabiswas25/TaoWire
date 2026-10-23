@@ -90,6 +90,38 @@ REWRITES: dict[str, tuple[str, str]] = {
         'import bittensor as bt\ndef f(s: "bt.Synapse") -> None: ...\n',
         'from tensorwire.compat import Synapse\ndef f(s: "Synapse") -> None: ...\n',
     ),
+    "TWM031": (
+        "import argparse\nimport bittensor as bt\ndef config(cls):\n"
+        "    parser = argparse.ArgumentParser()\n    bt.wallet.add_args(parser)\n"
+        "    bt.Subtensor.add_args(parser)\n    bt.logging.add_args(parser)\n"
+        "    bt.Axon.add_args(parser)\n    return bt.config(parser)\n"
+        "def only(config):\n    bt.logging.check_config(config)\n",
+        "import argparse\n"
+        "from tensorwire.compat import add_v10_args, config as tw_config\n"
+        "def config(cls):\n    parser = argparse.ArgumentParser()\n"
+        '    add_v10_args(parser, "wallet")\n    add_v10_args(parser, "subtensor")\n'
+        '    add_v10_args(parser, "logging")\n    add_v10_args(parser, "axon")\n'
+        "    return tw_config(parser)\ndef only(config):\n    pass\n",
+    ),
+    "TWM026": (
+        "import copy\nimport bittensor as bt\nfrom sub.base.neuron import BaseNeuron\n"
+        "class BaseValidatorNeuron(BaseNeuron):\n"
+        "    def __init__(self, config=None):\n"
+        "        super().__init__(config=config)\n"
+        "        self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)\n"
+        "        self.dendrite = bt.dendrite(wallet=self.wallet)\n"
+        "    def run(self):\n        while True:\n            self.sync()\n"
+        "    def log_step(self):\n        pass\n",
+        "import copy\nfrom tensorwire.compat import TemplateValidatorAdapter\n"
+        "from sub.base.neuron import BaseNeuron\n"
+        "# TW-MIGRATE: TWM026 TemplateValidatorAdapter runs run() now (removed "
+        "here); move any custom code they held into sync() / resync_metagraph()\n"
+        "class BaseValidatorNeuron(BaseNeuron, TemplateValidatorAdapter):\n"
+        "    def __init__(self, config=None, **kit_parts):\n"
+        "        super().__init__(config=config, **kit_parts)\n"
+        "        self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)\n"
+        "    def log_step(self):\n        pass\n",
+    ),
     "TWM024": (
         "# base\nfrom template.base.validator import BaseValidatorNeuron\n",
         "# base\nfrom tensorwire.compat import TemplateValidatorAdapter as "
@@ -114,10 +146,11 @@ UNCHANGED = [
 @pytest.mark.parametrize("rule", sorted(REWRITES))
 def test_rewrite(rule: str) -> None:
     source, expected = REWRITES[rule]
-    result = apply_source(source, "x.py")
+    role = "validator" if rule == "TWM026" else None  # plan_repo decides it
+    result = apply_source(source, "x.py", swap_role=role)
     assert result.after == expected
     assert result.rewrites[rule] >= 1
-    assert MARKER not in result.after
+    assert (MARKER in result.after) is (rule == "TWM026")  # TWM026 lists removals
 
 
 @pytest.mark.parametrize("source", UNCHANGED)
@@ -215,8 +248,8 @@ def test_manual_shapes_are_kept_and_marked() -> None:
         """
     )
     assert "class MyAxon(bt.axon):" in out
-    config = run("import bittensor as bt\nbt.axon.add_args(parser)\n")
-    assert "bt.axon.add_args(parser)" in config
+    config = run("import bittensor as bt\nbt.axon.add_args(parser, prefix=p)\n")
+    assert "bt.axon.add_args(parser, prefix=p)" in config  # not v10's plain form
     assert f"{MARKER} TWM006 " in config
     assert f"{MARKER} TWM019 " in out
     assert "d = bt.dendrite()" in out
@@ -334,11 +367,11 @@ def test_markers_on_decorated_functions_are_idempotent() -> None:
         import bittensor as bt
         class N:
             @classmethod
-            def check(cls, config: "bt.Config"):
+            def check(cls, config: "bt.Mystery"):
                 ...
         """
     )
-    assert once.count(f"{MARKER} TWM006") == 1
+    assert once.count(f"{MARKER} TWM030") == 1
     assert run(once) == once
 
 
@@ -486,3 +519,131 @@ def test_summary_lists_rules(repo: Path) -> None:
     assert "rewritten: TWM007 x1" in text
     assert "to do by hand: TWM014 x1" in text
     assert "  pkg/m.py" in text
+
+
+# ---------------------------------------------------------------- TWM026 swap
+
+
+def _customised_template(root: Path, *, miner_base: str = "BaseNeuron") -> None:
+    base = root / "sub" / "base"
+    base.mkdir(parents=True)
+    (root / "sub" / "__init__.py").write_text("")
+    (base / "__init__.py").write_text("")
+    (base / "neuron.py").write_text(
+        textwrap.dedent(
+            """\
+            import copy
+            from abc import ABC, abstractmethod
+            import bittensor as bt
+            class BaseNeuron(ABC):
+                wallet: "bt.wallet"
+                def __init__(self, config=None):
+                    base_config = copy.deepcopy(config or BaseNeuron.config())
+                    self.config = self.config()
+                    self.config.merge(base_config)
+                    bt.logging(config=self.config, logging_dir=self.config.full_path)
+                    self.wallet = bt.wallet(config=self.config)
+                    self.subtensor = bt.subtensor(config=self.config)
+                    self.metagraph = self.subtensor.metagraph(self.config.netuid)
+                    hotkey = self.wallet.hotkey.ss58_address
+                    self.uid = self.metagraph.hotkeys.index(hotkey)
+                    self.parse_versions()
+                @abstractmethod
+                async def forward(self, synapse): ...
+                @abstractmethod
+                def run(self): ...
+                def parse_versions(self):
+                    self.version = "1"
+            """
+        )
+    )
+    (base / "miner.py").write_text(
+        textwrap.dedent(
+            f"""\
+            import bittensor as bt
+            from sub.base.neuron import BaseNeuron
+            class BaseMinerNeuron({miner_base}):
+                def __init__(self, config=None):
+                    super().__init__(config=config)
+                    self.axon = bt.axon(wallet=self.wallet, config=self.config)
+                    self.axon.attach(forward_fn=self.forward)
+                    self.blacklisted = set()
+                def run(self):
+                    self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+                    self.axon.start()
+                def __enter__(self):
+                    return self
+            """
+        )
+    )
+    (base / "validator.py").write_text(
+        textwrap.dedent(
+            """\
+            import bittensor as bt
+            from sub.base.neuron import BaseNeuron
+            class BaseValidatorNeuron(BaseNeuron):
+                def __init__(self, config=None):
+                    super().__init__(config=config)
+                    self.dendrite = bt.dendrite(wallet=self.wallet)
+                    self.scores = [0.0] * len(self.metagraph.hotkeys)
+                def set_weights(self):
+                    self.subtensor.set_weights(netuid=1, uids=[], weights=[])
+                def log_step(self):
+                    bt.logging.info("step")
+            """
+        )
+    )
+    (root / "neurons").mkdir()
+    (root / "neurons" / "validator.py").write_text(
+        "from sub.base.validator import BaseValidatorNeuron\n"
+        "class Validator(BaseValidatorNeuron):\n    async def forward(self): ...\n"
+    )
+
+
+def test_a_customised_template_package_is_swapped_onto_the_adapters(
+    tmp_path: Path,
+) -> None:
+    _customised_template(tmp_path)
+    report = plan_repo(tmp_path)
+    assert not report.parse_errors
+    out = {f.path: f for f in report.files}
+    neuron = out["sub/base/neuron.py"].after
+    miner = out["sub/base/miner.py"].after
+    validator = out["sub/base/validator.py"].after
+    assert "super().__init__(config=config, **kit_parts)" in neuron
+    assert "def run(self)" not in neuron
+    assert "self.parse_versions()" in neuron
+    for gone in ("self.wallet =", "self.subtensor =", "self.uid =", "base_config",
+                 "bt.logging(", 'wallet: "bt.wallet"', "import bittensor"):  # fmt: skip
+        assert gone not in neuron, gone
+    assert "class BaseMinerNeuron(BaseNeuron, TemplateMinerAdapter):" in miner
+    assert "from tensorwire.compat import TemplateMinerAdapter" in miner
+    assert "self.axon.attach(forward_fn=self.forward)" in miner
+    assert "self.axon = " not in miner
+    assert f"{MARKER} TWM026 TemplateMinerAdapter runs run(), __enter__() now" in miner
+    assert (
+        "class BaseValidatorNeuron(BaseNeuron, TemplateValidatorAdapter):" in validator
+    )
+    assert "self.dendrite =" not in validator
+    assert "def set_weights" not in validator
+    assert 'logging.info("step")' in validator
+    # The subnet's import of its own base needs nothing now.
+    assert out["neurons/validator.py"].after.startswith("from sub.base.validator")
+    bases = [f for f in report.files if f.path.startswith("sub/base/") and
+             not f.path.endswith("__init__.py")]  # fmt: skip
+    assert len(bases) == 3
+    assert all(f.rewrites.get("TWM026") for f in bases)
+    write_changes(report)
+    again = plan_repo(tmp_path)
+    assert not again.changed  # idempotent: the swapped package counts as ported
+    for path in ("sub/base/neuron.py", "sub/base/miner.py", "sub/base/validator.py"):
+        compile((tmp_path / path).read_text(), path, "exec")
+
+
+def test_a_package_without_the_template_shape_is_not_swapped(tmp_path: Path) -> None:
+    _customised_template(tmp_path, miner_base="Something")
+    report = plan_repo(tmp_path)
+    out = {f.path: f for f in report.files}
+    assert "TemplateMinerAdapter" not in out["sub/base/miner.py"].after
+    assert "TemplateValidatorAdapter" not in out["sub/base/validator.py"].after
+    assert out["neurons/validator.py"].after.startswith(f"{MARKER} TWM026")

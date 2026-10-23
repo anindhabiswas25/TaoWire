@@ -1,3 +1,109 @@
+diff --git a/docs/stream_tutorial/config.py b/docs/stream_tutorial/config.py
+index e049c37..b8578b4 100644
+--- a/docs/stream_tutorial/config.py
++++ b/docs/stream_tutorial/config.py
+@@ -1,10 +1,14 @@
+ import bittensor as bt
+-from tensorwire.compat import Config, add_v10_args, config as tw_config
+ import argparse
+ import os
+ 
+ 
+-def check_config(cls, config: "Config"):
++# TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
++def check_config(cls, config: "bt.Config"):
++    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
++    bt.axon.check_config(config)
++    # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
++    bt.logging.check_config(config)
+     # TW-MIGRATE: TWM030 neither a known v10 symbol nor part of the v11 public API: check it by hand (removed in v11, or a typo)
+     full_path = os.path.expanduser(
+         "{}/{}/{}/{}".format(
+@@ -19,7 +23,8 @@ def check_config(cls, config: "Config"):
+         os.makedirs(config.miner.full_path)
+ 
+ 
+-def get_config() -> "Config":
++# TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
++def get_config() -> "bt.Config":
+     parser = argparse.ArgumentParser()
+     parser.add_argument(
+         "--axon.port", type=int, default=8098, help="Port to run the axon on."
+@@ -85,20 +90,25 @@ def get_config() -> "Config":
+     )
+ 
+     # Adds subtensor specific arguments i.e. --subtensor.chain_endpoint ... --subtensor.network ...
+-    add_v10_args(parser, "subtensor")
++    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
++    bt.subtensor.add_args(parser)
+ 
+     # Adds logging specific arguments i.e. --logging.debug ..., --logging.trace .. or --logging.logging_dir ...
+-    add_v10_args(parser, "logging")
++    # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
++    bt.logging.add_args(parser)
+ 
+     # Adds wallet specific arguments i.e. --wallet.name ..., --wallet.hotkey ./. or --wallet.path ...
+-    add_v10_args(parser, "wallet")
++    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
++    bt.wallet.add_args(parser)
+ 
+     # Adds axon specific arguments i.e. --axon.port ...
+-    add_v10_args(parser, "axon")
++    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
++    bt.axon.add_args(parser)
+ 
+     # Activating the parser to read any command-line inputs.
+     # To print help message, run python3 template/miner.py --help
+-    config = tw_config(parser)
++    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
++    config = bt.config(parser)
+ 
+     # Logging captures events for diagnosis or understanding miner's behavior.
+     config.full_path = os.path.expanduser(
+diff --git a/docs/stream_tutorial/miner.py b/docs/stream_tutorial/miner.py
+index 8018b98..cdc68b8 100644
+--- a/docs/stream_tutorial/miner.py
++++ b/docs/stream_tutorial/miner.py
+@@ -11,7 +11,7 @@ from starlette.types import Send
+ import bittensor as bt
+ import logging
+ from tensorwire import Miner
+-from tensorwire.compat import Axon, Config, config as tw_config
++from tensorwire.compat import Axon
+ from transformers import GPT2Tokenizer
+ from typing import List, Dict, Tuple, Union, Callable, Awaitable
+ 
+@@ -81,8 +81,9 @@ class StreamMiner(ABC):
+         self.lock = asyncio.Lock()
+         self.request_timestamps: Dict = {}
+ 
++    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
+     @abstractmethod
+-    def config(self) -> "Config":
++    def config(self) -> "bt.Config":
+         ...
+ 
+     @classmethod
+@@ -275,7 +276,8 @@ class StreamMiner(ABC):
+ 
+ 
+ class StreamingTemplateMiner(StreamMiner):
+-    def config(self) -> "Config":
++    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
++    def config(self) -> "bt.Config":
+         """
+         Returns the configuration object specific to this miner.
+ 
+@@ -287,7 +289,8 @@ class StreamingTemplateMiner(StreamMiner):
+         """
+         parser = argparse.ArgumentParser(description="Streaming Miner Configs")
+         self.add_args(parser)
+-        return tw_config(parser)
++        # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
++        return bt.config(parser)
+ 
+     def add_args(cls, parser: argparse.ArgumentParser):
+         """
 diff --git a/neurons/miner.py b/neurons/miner.py
 index 9c32979..2721e2d 100644
 --- a/neurons/miner.py
@@ -446,10 +552,10 @@ index 564d794..473cf75 100644
 -        # TW-MIGRATE: TWM009 the kit's MetagraphCache (refreshes itself); compat.Metagraph for hotkeys / S / validator_permit
 -        self.metagraph.sync(subtensor=self.subtensor)
 diff --git a/template/base/neuron.py b/template/base/neuron.py
-index b4a6d30..a264771 100644
+index 29a2785..a264771 100644
 --- a/template/base/neuron.py
 +++ b/template/base/neuron.py
-@@ -16,33 +16,30 @@
+@@ -16,32 +16,30 @@
  # DEALINGS IN THE SOFTWARE.
  
  import copy
@@ -457,7 +563,7 @@ index b4a6d30..a264771 100644
  
 -import bittensor as bt
  import logging
--from tensorwire.compat import Metagraph, Synapse
+-from tensorwire.compat import Config, Metagraph, Synapse
 -
  from abc import ABC, abstractmethod
  
@@ -483,14 +589,13 @@ index b4a6d30..a264771 100644
  
      neuron_type: str = "BaseNeuron"
  
--    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
      @classmethod
--    def check_config(cls, config: "bt.Config"):
+-    def check_config(cls, config: "Config"):
 +    def check_config(cls, config):
          check_config(cls, config)
  
      @classmethod
-@@ -53,68 +50,17 @@ class BaseNeuron(ABC):
+@@ -52,68 +50,17 @@ class BaseNeuron(ABC):
      def config(cls):
          return config(cls)
  
@@ -560,7 +665,7 @@ index b4a6d30..a264771 100644
          self.step = 0
  
      @abstractmethod
-@@ -125,58 +71,6 @@ class BaseNeuron(ABC):
+@@ -124,58 +71,6 @@ class BaseNeuron(ABC):
      def run(self):
          ...
  
@@ -1399,28 +1504,26 @@ index 633b177..2881a7b 100644
          """
          Deserialize the dummy output. This method retrieves the response from
 diff --git a/template/utils/config.py b/template/utils/config.py
-index d3f9688..1ba8c0d 100644
+index e44d28e..1ba8c0d 100644
 --- a/template/utils/config.py
 +++ b/template/utils/config.py
-@@ -19,7 +19,7 @@
+@@ -19,8 +19,7 @@
  import os
  import subprocess
  import argparse
 -import bittensor as bt
+-from tensorwire.compat import Config, add_v10_args, config as tw_config
 +from types import SimpleNamespace
  from .logging import setup_events_logger
  
  
-@@ -41,17 +41,11 @@ def is_cuda_available():
+@@ -42,14 +41,11 @@ def is_cuda_available():
      return "cpu"
  
  
--# TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
--def check_config(cls, config: "bt.Config"):
+-def check_config(cls, config: "Config"):
 +def check_config(cls, config: SimpleNamespace):
      r"""Checks/validates the config namespace object."""
--    # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
--    bt.logging.check_config(config)
 -
      full_path = os.path.expanduser(
 -        "{}/{}/{}/netuid{}/{}".format(
@@ -1432,7 +1535,7 @@ index d3f9688..1ba8c0d 100644
              config.netuid,
              config.neuron.name,
          )
-@@ -63,11 +57,9 @@ def check_config(cls, config: "bt.Config"):
+@@ -61,11 +57,9 @@ def check_config(cls, config: "Config"):
  
      if not config.neuron.dont_save_events:
          # Add custom event logger for the events.
@@ -1445,7 +1548,7 @@ index d3f9688..1ba8c0d 100644
  
  
  def add_args(cls, parser):
-@@ -75,7 +67,12 @@ def add_args(cls, parser):
+@@ -73,7 +67,12 @@ def add_args(cls, parser):
      Adds relevant arguments to the parser for operation.
      """
  
@@ -1459,7 +1562,7 @@ index d3f9688..1ba8c0d 100644
  
      parser.add_argument(
          "--neuron.device",
-@@ -144,7 +141,6 @@ def add_miner_args(cls, parser):
+@@ -142,7 +141,6 @@ def add_miner_args(cls, parser):
          default="miner",
      )
  
@@ -1467,21 +1570,16 @@ index d3f9688..1ba8c0d 100644
      parser.add_argument(
          "--blacklist.force_validator_permit",
          action="store_true",
-@@ -256,14 +252,13 @@ def config(cls):
+@@ -254,9 +252,13 @@ def config(cls):
      Returns the configuration object specific to this miner or validator after adding relevant arguments.
      """
      parser = argparse.ArgumentParser()
--    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
--    bt.wallet.add_args(parser)
--    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
--    bt.subtensor.add_args(parser)
--    # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
--    bt.logging.add_args(parser)
--    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
--    bt.axon.add_args(parser)
+-    add_v10_args(parser, "wallet")
+-    add_v10_args(parser, "subtensor")
+-    add_v10_args(parser, "logging")
+-    add_v10_args(parser, "axon")
 -    cls.add_args(parser)
--    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
--    return bt.config(parser)
+-    return tw_config(parser)
 +    cls.add_args(parser)  # wallet, chain and axon settings come from TW_* variables
 +    args, _ = parser.parse_known_args()
 +    config = SimpleNamespace()
