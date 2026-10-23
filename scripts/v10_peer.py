@@ -20,6 +20,21 @@ On localnet (mixed fleet, spec 13.8), ``--chain ws://127.0.0.1:9944`` with
 ``serve_axon``; ``validator`` reads the v10 metagraph and queries the given
 UIDs' axons, printing one ``RESULT`` JSON line per UID.
 
+``validator --rounds N --set-weights`` (rollout walk-through, spec 10b.5) runs
+like the archived template's validator: every ``--interval`` seconds it
+re-reads the metagraph, queries the UIDs, and sets weights proportional to the
+correct answers with the v10 SDK's ``set_weights`` and the template's
+``version_key`` (``--version-key``, default 0 = template ``__spec_version__``).
+Like the template it only sets weights when more than ``--epoch-length``
+blocks (template default 100) have passed since its last update, and prints a
+``WEIGHTS`` JSON line per attempt. Under commit-reveal a commit can be
+accepted and its reveal still be dropped, so whether weights *landed* is read
+from the chain (the ``Weights`` row) by the caller, not from this line.
+``--block-time`` is passed to the v10 ``set_weights``, which uses it to pick
+the drand round of the timelocked commit: on a fast-block localnet (0.25 s)
+the SDK default of 12 s picks a round ~48x too late and the chain never
+reveals the commit. ``--rounds 0`` runs until SIGTERM.
+
 Dev keys and localnet wallets only; never a public network. Nothing else
 leaves the machine: the external-IP lookup is disabled.
 """
@@ -117,42 +132,106 @@ def run_axon(args: argparse.Namespace) -> None:
         axon.stop()
 
 
+async def _query_uids(
+    args: argparse.Namespace, dendrite: "bt.Dendrite", metagraph: "bt.Metagraph"
+) -> dict[int, int]:
+    """Query every ``--uids`` axon ``--count`` times; ``{uid: correct answers}``."""
+    oks: dict[int, int] = {}
+    for uid in args.uids:
+        target = metagraph.axons[uid]
+        statuses: dict[str, int] = {}
+        ok = 0
+        for i in range(args.count):
+            synapse = await dendrite.call(
+                target,
+                Dummy(dummy_input=i),
+                timeout=args.timeout,
+                deserialize=False,
+            )
+            status = str(synapse.dendrite.status_code)
+            statuses[status] = statuses.get(status, 0) + 1
+            ok += status == "200" and synapse.dummy_output == i * 2
+        oks[uid] = ok
+        result = {
+            "uid": uid,
+            "axon": f"{target.ip}:{target.port}",
+            "hotkey": target.hotkey,
+            "count": args.count,
+            "ok": ok,
+            "statuses": statuses,
+        }
+        print("RESULT " + json.dumps(result), flush=True)
+    return oks
+
+
+def _set_weights(
+    args: argparse.Namespace,
+    subtensor: "bt.Subtensor",
+    wallet: "bt.Wallet",
+    oks: dict[int, int],
+) -> None:
+    uids = [uid for uid, ok in oks.items() if ok > 0]
+    block = subtensor.get_current_block()
+    metagraph = subtensor.metagraph(args.netuid)
+    me = metagraph.hotkeys.index(wallet.hotkey.ss58_address)
+    since = block - int(metagraph.last_update[me])
+    line: dict[str, typing.Any] = {"block": block, "uids": uids, "since_update": since}
+    if since <= args.epoch_length:
+        line.update(submitted=False, message="not due (template epoch_length)")
+    elif not uids:
+        line.update(submitted=False, message="no correct answers this round")
+    else:
+        total = sum(oks[uid] for uid in uids)
+        response = subtensor.set_weights(
+            wallet=wallet,
+            netuid=args.netuid,
+            uids=uids,
+            weights=[oks[uid] / total for uid in uids],
+            version_key=args.version_key,
+            block_time=args.block_time,
+            wait_for_inclusion=True,
+            wait_for_finalization=False,
+            wait_for_revealed_execution=False,
+        )
+        line.update(
+            submitted=True,
+            version_key=args.version_key,
+            success=bool(response.success),
+            message=str(response.message),
+        )
+    print("WEIGHTS " + json.dumps(line), flush=True)
+
+
 async def run_validator(args: argparse.Namespace) -> None:
     subtensor = bt.Subtensor(network=_local_chain(args.chain))
-    metagraph = subtensor.metagraph(args.netuid)
+    stop = threading.Event()
+    signal.signal(signal.SIGTERM, lambda *_: stop.set())
     with tempfile.TemporaryDirectory() as tmp:
-        dendrite = bt.Dendrite(wallet=_wallet(args, tmp))
+        wallet = _wallet(args, tmp)
+        dendrite = bt.Dendrite(wallet=wallet)
     try:
-        for uid in args.uids:
-            target = metagraph.axons[uid]
-            statuses: dict[str, int] = {}
-            ok = 0
-            for i in range(args.count):
-                synapse = await dendrite.call(
-                    target,
-                    Dummy(dummy_input=i),
-                    timeout=args.timeout,
-                    deserialize=False,
-                )
-                status = str(synapse.dendrite.status_code)
-                statuses[status] = statuses.get(status, 0) + 1
-                ok += status == "200" and synapse.dummy_output == i * 2
-            result = {
-                "uid": uid,
-                "axon": f"{target.ip}:{target.port}",
-                "hotkey": target.hotkey,
-                "count": args.count,
-                "ok": ok,
-                "statuses": statuses,
-            }
-            print("RESULT " + json.dumps(result), flush=True)
+        n = 0
+        while not stop.is_set():
+            metagraph = subtensor.metagraph(args.netuid)
+            oks = await _query_uids(args, dendrite, metagraph)
+            if args.set_weights:
+                _set_weights(args, subtensor, wallet, oks)
+            n += 1
+            if args.rounds and n >= args.rounds:
+                break
+            await asyncio.get_running_loop().run_in_executor(
+                None, stop.wait, args.interval
+            )
     finally:
         await dendrite.aclose_session()
 
 
 async def run_dendrite(args: argparse.Namespace) -> None:
-    key = bt.Keypair.create_from_uri(args.hotkey_uri)
-    dendrite = bt.Dendrite(wallet=key)
+    if args.wallet_name:  # a registered localnet hotkey, so caller policy admits it
+        with tempfile.TemporaryDirectory() as tmp:
+            dendrite = bt.Dendrite(wallet=_wallet(args, tmp))
+    else:
+        dendrite = bt.Dendrite(wallet=bt.Keypair.create_from_uri(args.hotkey_uri))
     target = AxonInfo(
         version=0,
         ip=args.ip,
@@ -210,6 +289,12 @@ def main() -> None:
         mode.add_argument("--timeout", type=float, default=12.0)
     axon.add_argument("--chain")
     validator.add_argument("--chain", required=True)
+    validator.add_argument("--rounds", type=int, default=1, help="0 = until SIGTERM")
+    validator.add_argument("--interval", type=float, default=3.0)
+    validator.add_argument("--set-weights", action="store_true")
+    validator.add_argument("--version-key", type=int, default=0)
+    validator.add_argument("--epoch-length", type=int, default=100)
+    validator.add_argument("--block-time", type=float, default=12.0)
     args = parser.parse_args()
     if not args.hotkey_uri.startswith("//"):
         raise SystemExit("dev URIs only (//Alice, //Bob, ...)")
