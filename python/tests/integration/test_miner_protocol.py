@@ -9,6 +9,7 @@ import time
 from collections.abc import AsyncIterator, MutableMapping
 from typing import Any
 
+import anyio
 import pytest
 import uvicorn
 from uvicorn.server import ServerState
@@ -83,12 +84,9 @@ async def exchange(
             if pause:
                 await asyncio.sleep(pause)
         data = b""
-        try:
-            async with asyncio.timeout(read_s):
-                while chunk := await reader.read(65536):
-                    data += chunk
-        except TimeoutError:
-            pass
+        with anyio.move_on_after(read_s):  # asyncio.timeout is 3.11+
+            while chunk := await reader.read(65536):
+                data += chunk
     except ConnectionError:
         data = b""
     finally:
