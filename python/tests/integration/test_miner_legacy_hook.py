@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from tensorwire.auth.verifier import Caller
 from tensorwire.compat.synapse import Synapse
 from tensorwire.crypto import CRYPTO_SR25519
-from tensorwire.errors import LegacyAuthFailed, StartupError, TWError
+from tensorwire.errors import HandlerError, LegacyAuthFailed, StartupError, TWError
 from tensorwire.miner.app import Miner
 from tensorwire.miner.routes import RouteContext
 from tensorwire.testing.client import BASE_URL, SignedClient
@@ -101,6 +101,8 @@ class FakeLegacyServer:
         self.responses.append(
             {"request": request, "status": status, "error": error, "raw": raw_body}
         )
+        if status == 200 and getattr(synapse, "result", None) == "REFUSE":
+            raise HandlerError()  # as B's encode_response does for a non-finite answer
         if synapse is not None:
             body = synapse.model_dump_json().encode()
         elif raw_body is not None:
@@ -186,6 +188,17 @@ async def test_v10_request_on_a_synapse_route(
     text = tw_miner.metrics.render().decode()
     assert 'tw_legacy_v10_requests_total{direction="inbound",result="ok"} 1.0' in text
     assert 'tw_legacy_v10_days_remaining{direction="inbound"}' in text
+
+
+async def test_answer_refused_by_respond_counts_once(
+    miner_app: Any, tw_miner: Miner
+) -> None:
+    r = await post_v10(miner_app, "/Syn", Syn(text="refuse").model_dump_json().encode())
+    assert r.status_code == 500
+    assert r.headers["bt_header_axon_status_code"] == "500"
+    text = tw_miner.metrics.render().decode()
+    assert 'result="tw.handler_error"} 1.0' in text
+    assert 'result="ok"' not in text
 
 
 async def test_native_route_answers_through_its_synapse_alias(

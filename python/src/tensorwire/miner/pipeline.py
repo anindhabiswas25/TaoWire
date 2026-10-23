@@ -278,8 +278,7 @@ class RouteEndpoint:
         argument = self._legacy_argument(verified, body)  # [9]
         result = await self._invoke(argument, ctx)  # [10]
         synapse, raw = self._legacy_result(verified, result)  # [11]
-        self._lifecycle.legacy_traffic.record(verified.caller.hotkey_ss58, "ok")
-        return _legacy_response(
+        response = _legacy_response(  # may refuse the answer (HandlerError)
             legacy,
             request,
             verified=verified,
@@ -288,6 +287,8 @@ class RouteEndpoint:
             raw_body=raw,
             started=started,
         )
+        self._lifecycle.legacy_traffic.record(verified.caller.hotkey_ss58, "ok")
+        return response
 
     def _legacy_argument(self, verified: LegacyRequestLike, body: bytes) -> Any:
         route = self.route
