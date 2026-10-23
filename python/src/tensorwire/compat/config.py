@@ -46,7 +46,17 @@ V10_GROUPS = ("wallet", "subtensor", "logging", "axon")
 
 
 class Config(SimpleNamespace):
-    """v10's ``bt.config``: nested attributes (``config.neuron.name``), ``merge``."""
+    """v10's ``bt.config``: nested attributes (``config.neuron.name``), ``merge``.
+
+    Like v10's (a ``DefaultMunch``), a missing option reads as ``None``:
+    template code tests ``config.neuron.disable_set_weights`` on miners,
+    where only validators define it.
+    """
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
 
     def merge(self, other: Any) -> Config:
         """Copy every value of ``other`` that this config lacks (v10 semantics)."""
@@ -65,11 +75,11 @@ class Config(SimpleNamespace):
         return copy.deepcopy(self)
 
     def get(self, name: str, default: Any = None) -> Any:
-        """``getattr(self, name, default)``."""
-        return getattr(self, name, default)
+        """The option's value, or ``default`` when it is not set."""
+        return self.__dict__.get(name, default)
 
     def __contains__(self, name: object) -> bool:
-        return isinstance(name, str) and hasattr(self, name)
+        return isinstance(name, str) and name in self.__dict__
 
 
 def _env(name: str, default: str) -> str:

@@ -43,7 +43,7 @@ def test_unknown_options_are_ignored_unless_strict() -> None:
     p = parser_with("wallet")
     c = config(p, ["--neuron.name", "x", "--subtensor.network", "finney"])
     assert c.neuron.name == "x"
-    assert not hasattr(c, "subtensor")
+    assert "subtensor" not in c
     with pytest.raises(SystemExit):
         config(p, ["--subtensor.network", "finney"], strict=True)
 
@@ -128,3 +128,15 @@ def test_fill_defaults_fills_only_missing_values() -> None:
     assert target.neuron.device == "cpu"
     assert target.neuron.epoch_length == 100
     assert target.blacklist.force_validator_permit is False
+
+
+def test_a_missing_option_reads_as_none_like_v10() -> None:
+    c = config(parser_with(), [])
+    assert c.neuron.disable_set_weights is None
+    assert c.nothing is None
+    assert "nothing" not in c
+    assert "neuron" in c
+    with pytest.raises(AttributeError):
+        _ = c.__missing_dunder__
+    copied = c.copy()
+    assert copied.neuron.name == "miner"
