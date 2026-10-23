@@ -3,11 +3,13 @@ import argparse
 import os
 
 
+# TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
 def check_config(cls, config: "bt.Config"):
     # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
     bt.axon.check_config(config)
     # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
     bt.logging.check_config(config)
+    # TW-MIGRATE: TWM030 neither a known v10 symbol nor part of the v11 public API: check it by hand (removed in v11, or a typo)
     full_path = os.path.expanduser(
         "{}/{}/{}/{}".format(
             config.logging.logging_dir,
@@ -21,6 +23,7 @@ def check_config(cls, config: "bt.Config"):
         os.makedirs(config.miner.full_path)
 
 
+# TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
 def get_config() -> "bt.Config":
     parser = argparse.ArgumentParser()
     parser.add_argument(

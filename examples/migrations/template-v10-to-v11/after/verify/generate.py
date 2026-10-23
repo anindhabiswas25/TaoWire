@@ -7,6 +7,7 @@ import bittensor
 
 
 def main(args):
+    # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
     wallet = bittensor.Wallet(name=args.name)
     keypair = wallet.coldkey
 

@@ -78,7 +78,7 @@ FIXTURES: dict[str, tuple[str, str]] = {
     ),
     "TWM014": (
         "import bittensor as bt\nw = bt.wallet(config=c)\n",
-        "import bittensor as bt\nw = bt.Wallet(name='v')\n",
+        "from tensorwire.auth.keys import load_hotkey\nk = load_hotkey(p, n, h)\n",
     ),
     "TWM015": (
         "import bittensor as bt\nw = bt.MockWallet()\n",
@@ -127,6 +127,18 @@ FIXTURES: dict[str, tuple[str, str]] = {
     "TWM027": (
         "import time\nasync def forward(self):\n    time.sleep(5)\n",
         "import time\ndef forward(self):\n    time.sleep(5)\n",
+    ),
+    "TWM028": (
+        "import bittensor as bt\ndef f(s: 'bt.Synapse') -> None: ...\n",
+        "from tensorwire.compat import Synapse\ndef f(s: 'Synapse') -> None: ...\n",
+    ),
+    "TWM029": (
+        "patch('vali_utils.miner_evaluator.bt.logging.info')\n",
+        "patch('vali_utils.miner_evaluator.logging.info')\n",
+    ),
+    "TWM030": (
+        "import bittensor as bt\nx = bt.Epistula()\n",
+        "import bittensor as bt\nx = bt.Balance.from_tao(1)\n",
     ),
     "TWM100": (
         "class Ask(Synapse):\n    question: str\n    answer: str | None = None\n",
@@ -263,6 +275,19 @@ def test_negative_fixture(rule: str) -> None:
         ("from bittensor import logging\n", "TWM025"),
         ("import bittensor as bt\nbt.logging.trace('x')\n", "TWM007"),
         ("from .base.validator import BaseValidatorNeuron as B\n", "TWM024"),
+        # B's data-universe misses (2026-10-23)
+        ("import bittensor as bt\nw = bt.Wallet(config=self.config)\n", "TWM014"),
+        ("import bittensor as bt\ns = bt.Subtensor(config=self.config)\n", "TWM008"),
+        ("import bittensor as bt\ndef f(m: bt.Metagraph): ...\n", "TWM009"),
+        ("import bittensor as bt\ndef f(s: bt.Subtensor): ...\n", "TWM008"),
+        ("import bittensor as bt\nbt.Subtensor.add_args(p)\n", "TWM006"),
+        ("from bittensor_wallet.keypair import Keypair\n", "TWM017"),
+        ("import bittensor_wallet\n", "TWM014"),
+        ("import bittensor as bt\ndef f(c: 'bt.Config' = None): ...\n", "TWM006"),
+        ("import bittensor as bt\nt = bt.TerminalInfo(status_code=200)\n", "TWM001"),
+        ("from bittensor import Epistula\n", "TWM030"),
+        ("import bittensor as bt\noriginal = bt.logging.trace\n", "TWM025"),
+        ("import bittensor as bt\nbt.logging.trace = mine\n", "TWM025"),
         (
             "import time\nclass V:\n    async def f(self):\n"
             "        if x:\n            time.sleep(1)\n",
@@ -284,7 +309,11 @@ def test_more_positives(source: str, rule: str) -> None:
         "class A(Synapse):\n    pass\n",  # no fields: nothing to hash
         "class A(Synapse):\n    limit: ClassVar[int] = 3\n",
         "import numpy as bt\nbt.Tensor\n",  # bt is not bittensor here
-        "from bittensor import Subtensor, Wallet\n",
+        "from bittensor import Subtensor, SetWeights\n",
+        "import bittensor as bt\nc = bt.Subtensor('test')\n",  # v11 constructor
+        "import bittensor as bt\nr = bt.SetWeights(netuid=1, weights=w)\n",
+        "x = f('bt.logging is mentioned in prose only as bt.unknownthing')\n",
+        'def f():\n    """Uses bt.logging.info and bt.Synapse."""\n',
         "x = values.item()\n",
         "a = self.metagraph.axons[uid]\n",  # works through compat.Metagraph
         "a = [self.metagraph.axons[u] for u in uids if u]\n",  # not the plain list

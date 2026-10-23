@@ -81,6 +81,7 @@ class StreamMiner(ABC):
         self.lock = asyncio.Lock()
         self.request_timestamps: Dict = {}
 
+    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
     @abstractmethod
     def config(self) -> "bt.Config":
         ...
@@ -275,6 +276,7 @@ class StreamMiner(ABC):
 
 
 class StreamingTemplateMiner(StreamMiner):
+    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
     def config(self) -> "bt.Config":
         """
         Returns the configuration object specific to this miner.

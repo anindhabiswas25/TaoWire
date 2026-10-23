@@ -86,6 +86,10 @@ REWRITES: dict[str, tuple[str, str]] = {
         "import asyncio\nimport os\nasync def forward(self):\n"
         "    await asyncio.sleep(5)\n",
     ),
+    "TWM028": (
+        'import bittensor as bt\ndef f(s: "bt.Synapse") -> None: ...\n',
+        'from tensorwire.compat import Synapse\ndef f(s: "Synapse") -> None: ...\n',
+    ),
     "TWM024": (
         "# base\nfrom template.base.validator import BaseValidatorNeuron\n",
         "# base\nfrom tensorwire.compat import TemplateValidatorAdapter as "
@@ -231,13 +235,15 @@ def test_string_annotations_and_existing_imports() -> None:
         """
     )
     assert out == textwrap.dedent(
-        """\
+        f"""\
+        import bittensor as bt
         from tensorwire.compat import Metagraph
         from tensorwire.compat import Synapse
+        {MARKER} TWM030 {RULES["TWM030"].replacement}
         def f(m: "Metagraph", s: "Synapse") -> "bt.Unknown": ...
         x: Synapse
         """
-    )
+    )  # "bt.Unknown" still names bt: the import stays
 
 
 def test_template_swap_keeps_other_names() -> None:
@@ -262,6 +268,78 @@ def test_customised_template_base_is_not_swapped(tmp_path: Path) -> None:
         f"{MARKER} TWM026 {RULES['TWM026'].replacement}",
         "from sub.base.validator import BaseValidatorNeuron",
     ]
+
+
+def test_inserted_names_never_shadow_the_teams_own() -> None:
+    out = run(
+        """\
+        import bittensor as bt
+        class Miner:
+            def __init__(self):
+                self.axon = bt.Axon(wallet=self.wallet, port=8091)
+        def axons_from(x):
+            return [self.metagraph.axons[uid] for uid in x]
+        """
+    )
+    assert "from tensorwire import Miner as TWMiner" in out
+    assert "from tensorwire.compat import Axon, axons_from as tw_axons_from" in out
+    assert "self.axon = Axon(miner=TWMiner.from_env())" in out
+    assert "return tw_axons_from(self.metagraph, x)" in out
+    assert run(out) == out
+
+
+def test_match_statements() -> None:
+    out = run(
+        """\
+        import bittensor as bt
+        def f(x):
+            match x:
+                case 1:
+                    bt.logging.info("one")
+                case _:
+                    w = bt.wallet()
+        """
+    )
+    assert 'logging.info("one")' in out
+    lines = out.splitlines()
+    i = lines.index("            w = bt.wallet()")
+    assert lines[i - 1].startswith(f"            {MARKER} TWM014 ")
+
+
+def test_one_failing_file_does_not_stop_the_others(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tensorwire.migrate import apply as codemod
+
+    (tmp_path / "a.py").write_text("import bittensor as bt\nbt.logging.info('a')\n")
+    (tmp_path / "boom.py").write_text("x = 1\n")
+    real = codemod.apply_source
+
+    def flaky(source: str, path: str = "<string>", **kw: object) -> object:
+        if path == "boom.py":
+            raise RuntimeError("bug")
+        return real(source, path, **kw)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(codemod, "apply_source", flaky)
+    report = plan_repo(tmp_path)
+    assert [f.path for f in report.changed] == ["a.py"]
+    assert report.parse_errors == [
+        "boom.py: not rewritten, internal error (RuntimeError: bug); please report it"
+    ]
+
+
+def test_markers_on_decorated_functions_are_idempotent() -> None:
+    once = run(
+        """\
+        import bittensor as bt
+        class N:
+            @classmethod
+            def check(cls, config: "bt.Config"):
+                ...
+        """
+    )
+    assert once.count(f"{MARKER} TWM006") == 1
+    assert run(once) == once
 
 
 def test_apply_is_idempotent_and_parse_errors_raise() -> None:

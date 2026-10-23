@@ -106,9 +106,9 @@ changed and what it took: `docs/migrations/template.md`.
 ## Rules
 
 <a id="twm001"></a>
-### TWM001: bt.Synapse (`auto`)
+### TWM001: bt.Synapse / bt.TerminalInfo (`auto`)
 
-From tensorwire.compat import Synapse.
+From tensorwire.compat import Synapse (TerminalInfo likewise).
 
 <a id="twm002"></a>
 ### TWM002: bt.StreamingSynapse (`manual`)
@@ -245,6 +245,21 @@ Keep your additions: make your BaseValidatorNeuron subclass tensorwire.compat.Te
 ### TWM027: time.sleep in a coroutine (`auto`)
 
 Await asyncio.sleep(...): a blocking sleep also stops the kit's health and metrics endpoints.
+
+<a id="twm028"></a>
+### TWM028: bittensor type in a string annotation (`auto`)
+
+The compat type: "bt.Synapse" -> "Synapse", "bt.metagraph.Metagraph" -> "Metagraph" (AxonInfo, TerminalInfo likewise).
+
+<a id="twm029"></a>
+### TWM029: bittensor name inside a string (`manual`)
+
+Update it by hand (a mock.patch target such as 'mod.bt.logging.info' breaks once the code it names is migrated).
+
+<a id="twm030"></a>
+### TWM030: unknown bittensor name (`manual`)
+
+Neither a known v10 symbol nor part of the v11 public API: check it by hand (removed in v11, or a typo).
 
 <a id="twm100"></a>
 ### TWM100: Synapse without required_hash_fields (`risk`)

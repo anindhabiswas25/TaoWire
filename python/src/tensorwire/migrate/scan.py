@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -30,7 +31,7 @@ from typing import Literal
 import libcst as cst
 from libcst.metadata import MetadataWrapper, ParentNodeProvider, PositionProvider
 
-from tensorwire.migrate.rules import ATTRIBUTE_RULES, MODULE_RULES, RULES
+from tensorwire.migrate.rules import ATTRIBUTE_RULES, MODULE_RULES, RULES, V11_PUBLIC
 
 __all__ = [
     "LOG_LEVELS",
@@ -103,6 +104,19 @@ STOCK_NEURON_METHODS = frozenset(
         "should_set_weights", "save_state", "load_state",
     }
 )  # fmt: skip
+#: ``"bt.<path>"`` string annotations that have a compat type (TWM028).
+ANNOTATION_COMPAT: dict[str, str] = {
+    "Synapse": "Synapse",
+    "AxonInfo": "AxonInfo",
+    "TerminalInfo": "TerminalInfo",
+    "Metagraph": "Metagraph",
+    "metagraph": "Metagraph",
+    "metagraph.Metagraph": "Metagraph",
+}
+#: Names v11 kept with a different API: v10-shaped uses are flagged.
+_RENAMED_V10 = {"Wallet": "TWM014", "Metagraph": "TWM009", "Subtensor": "TWM008"}
+_DOTTED_PATH = re.compile(r"[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+")
+_IN_STRING = re.compile(r"(?<![\w.])(?:[\w.]+\.)?(bt|bittensor)\.(\w+)")
 _REGISTRATION_HINTS = (
     "hotkeys",
     "is_hotkey_registered",
@@ -343,6 +357,7 @@ class _Visitor(cst.CSTVisitor):
         self.lines = lines
         self.bt_aliases: set[str] = set()
         self.findings: list[Finding] = []
+        self._annotation_depth = 0
         self.template = False
 
     def add(self, node: cst.CSTNode, rule: str, detail: str = "") -> None:
@@ -362,6 +377,9 @@ class _Visitor(cst.CSTVisitor):
     def visit_Import(self, node: cst.Import) -> None:  # noqa: N802 - libcst API
         for alias in node.names:
             name = _dotted(alias.name) or ""
+            if name == "bittensor_wallet" or name.startswith("bittensor_wallet."):
+                self.add(node, self.module_rule(name) or "TWM014", f"import {name}")
+                continue
             if name != "bittensor" and not name.startswith("bittensor."):
                 continue
             asname = alias.asname.name if alias.asname is not None else None
@@ -374,6 +392,13 @@ class _Visitor(cst.CSTVisitor):
     def visit_ImportFrom(self, node: cst.ImportFrom) -> None:  # noqa: N802 - libcst API
         self.check_template_import(node)
         module = _dotted(node.module) if node.module is not None else None
+        if module is not None and (
+            module == "bittensor_wallet" or module.startswith("bittensor_wallet.")
+        ):
+            self.add(
+                node, self.module_rule(module) or "TWM014", f"from {module} import ..."
+            )
+            return
         if module is None or not (
             module == "bittensor" or module.startswith("bittensor.")
         ):
@@ -389,6 +414,10 @@ class _Visitor(cst.CSTVisitor):
         for alias in node.names:
             name = _dotted(alias.name) or ""
             rule = "TWM025" if name == "logging" else ATTRIBUTE_RULES.get(name)
+            if rule is None and name in ("Wallet", "Metagraph"):
+                rule = _RENAMED_V10[name]
+            elif rule is None and name not in V11_PUBLIC:
+                rule = "TWM030"
             if rule:
                 self.add(node, rule, f"from bittensor import {name}")
 
@@ -415,29 +444,93 @@ class _Visitor(cst.CSTVisitor):
             isinstance(node.value, cst.Name) and node.value.value in self.bt_aliases
         ):
             return
-        rule = ATTRIBUTE_RULES.get(node.attr.value)
-        if rule is None:
-            return
+        attr = node.attr.value
         full = self.full_name(node)
+        rule = ATTRIBUTE_RULES.get(attr)
+        if rule is None:
+            rule = self.v10_shaped(node, attr, full)
+            if rule:
+                self.add(node, rule, full)
+            return
         if "weight_utils" in full:
             rule = "TWM012"
         elif (
             full.rsplit(".", 1)[-1] in ("add_args", "check_config") and rule != "TWM007"
         ):
             rule = "TWM006"  # bt.axon.add_args(parser), bt.wallet.add_args(...)
-        elif rule == "TWM007" and full.rsplit(".", 1)[-1] not in LOG_LEVELS:
-            rule = "TWM025"  # bt.logging.set_config(...), bt.logging(...), ...
+        elif rule == "TWM007" and (
+            full.rsplit(".", 1)[-1] not in LOG_LEVELS or not self.is_called(node)
+        ):
+            rule = "TWM025"  # bt.logging.set_config(...), a monkeypatch, ...
         self.add(node, rule, full)
 
-    def full_name(self, node: cst.Attribute) -> str:
+    def v10_shaped(self, node: cst.Attribute, attr: str, full: str) -> str | None:
+        """The rule for a ``bt.<name>`` v11 also has (or none): only v10-shaped
+        uses of ``Wallet`` / ``Metagraph`` / ``Subtensor``, and the catch-all."""
+        if attr not in V11_PUBLIC:
+            return "TWM030"
+        if attr not in _RENAMED_V10:
+            return None
+        if full.rsplit(".", 1)[-1] in ("add_args", "check_config", "config"):
+            return "TWM006"
+        if attr != "Subtensor" or self._annotation_depth:
+            return _RENAMED_V10[attr]
+        parent = self.get_metadata(ParentNodeProvider, node, None)
+        if isinstance(parent, cst.Call) and any(
+            a.keyword is not None and a.keyword.value == "config" for a in parent.args
+        ):
+            return "TWM008"  # bt.Subtensor(config=...): v10's constructor
+        return None  # bt.Subtensor("test"): v11
+
+    def outermost(self, node: cst.Attribute) -> cst.Attribute:
         current = node
         while True:
             parent = self.get_metadata(ParentNodeProvider, current, None)
             if isinstance(parent, cst.Attribute) and parent.value is current:
                 current = parent
             else:
-                break
-        return _dotted(current) or ""
+                return current
+
+    def is_called(self, node: cst.Attribute) -> bool:
+        whole = self.outermost(node)
+        parent = self.get_metadata(ParentNodeProvider, whole, None)
+        return isinstance(parent, cst.Call) and parent.func is whole
+
+    def visit_Annotation(self, _node: cst.Annotation) -> None:  # noqa: N802 - libcst API
+        self._annotation_depth += 1
+
+    def leave_Annotation(self, _node: cst.Annotation) -> None:  # noqa: N802 - libcst API
+        self._annotation_depth -= 1
+
+    def visit_SimpleString(self, node: cst.SimpleString) -> None:  # noqa: N802 - libcst API
+        value = node.evaluated_value
+        if not isinstance(value, str) or node.prefix:
+            return
+        if self._annotation_depth:
+            alias, _, path = value.partition(".")
+            if alias not in self.bt_aliases:
+                return
+            if path in ANNOTATION_COMPAT:
+                self.add(node, "TWM028", value)
+                return
+            head = path.split(".")[0]
+            rule = ATTRIBUTE_RULES.get(head) or _RENAMED_V10.get(head)
+            if rule is None and head not in V11_PUBLIC:
+                rule = "TWM030"
+            if rule:
+                self.add(node, rule, value)
+            return
+        if isinstance(self.get_metadata(ParentNodeProvider, node, None), cst.Expr):
+            return  # a docstring or a bare string statement
+        if not _DOTTED_PATH.fullmatch(value):
+            return  # prose, not a name (mock.patch targets are dotted paths)
+        for match in _IN_STRING.finditer(value):
+            if match.group(2) in ATTRIBUTE_RULES:
+                self.add(node, "TWM029", match.group(0)[:80])
+                return
+
+    def full_name(self, node: cst.Attribute) -> str:
+        return _dotted(self.outermost(node)) or ""
 
     def visit_Call(self, node: cst.Call) -> None:  # noqa: N802 - libcst API
         func = node.func
@@ -606,6 +699,12 @@ def scan_repo(root: Path | str) -> ScanReport:
             continue
         except cst.ParserSyntaxError as exc:
             report.parse_errors.append(f"{rel}:{exc.raw_line}: syntax error")
+            continue
+        except Exception as exc:  # noqa: BLE001 - one file must not stop the others
+            report.parse_errors.append(
+                f"{rel}: not scanned, internal error ({type(exc).__name__}: {exc}); "
+                "please report it"
+            )
             continue
         report.files_scanned += 1
         report.findings.extend(findings)

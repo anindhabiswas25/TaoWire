@@ -53,6 +53,7 @@ from libcst.metadata import MetadataWrapper, ParentNodeProvider, PositionProvide
 
 from tensorwire.migrate.rules import RULES
 from tensorwire.migrate.scan import (
+    ANNOTATION_COMPAT,
     LOG_LEVELS,
     is_axons_list,
     is_metagraph_tensor_call,
@@ -84,19 +85,12 @@ _WEIGHT_HELPERS = frozenset(
 #: ``bt.<name>`` -> the compat name it becomes when used as a value or type.
 _COMPAT_NAMES = {
     "Synapse": "Synapse",
+    "TerminalInfo": "TerminalInfo",
     "AxonInfo": "AxonInfo",
     "axon": "Axon",
     "Axon": "Axon",
     "dendrite": "Dendrite",
     "Dendrite": "Dendrite",
-}
-#: ``"bt.<path>"`` string annotations -> the compat name.
-_ANNOTATION_NAMES = {
-    "Synapse": "Synapse",
-    "AxonInfo": "AxonInfo",
-    "Metagraph": "Metagraph",
-    "metagraph": "Metagraph",
-    "metagraph.Metagraph": "Metagraph",
 }
 _TEMPLATE_BASE = "BaseValidatorNeuron"
 _ADAPTER = "TemplateValidatorAdapter"
@@ -250,11 +244,24 @@ def _logging_args(call: cst.Call) -> Sequence[cst.Arg]:
 
 
 class _Names(cst.CSTVisitor):
-    """Every ``Name`` used outside import statements."""
+    """Every ``Name`` used outside import statements, and the first name in
+    string annotations (``"bt.Config"`` still needs ``bt``)."""
 
     def __init__(self) -> None:
         super().__init__()
         self.used: set[str] = set()
+        self._annotation_depth = 0
+
+    def visit_Annotation(self, _node: cst.Annotation) -> None:  # noqa: N802 - libcst API
+        self._annotation_depth += 1
+
+    def leave_Annotation(self, _node: cst.Annotation) -> None:  # noqa: N802 - libcst API
+        self._annotation_depth -= 1
+
+    def visit_SimpleString(self, node: cst.SimpleString) -> None:  # noqa: N802 - libcst API
+        value = node.evaluated_value
+        if self._annotation_depth and isinstance(value, str) and "." in value:
+            self.used.add(value.split(".")[0])
 
     def visit_Import(self, _node: cst.Import) -> bool:  # noqa: N802 - libcst API
         return False
@@ -283,9 +290,12 @@ class _Rewriter(cst.CSTTransformer):
         bt_aliases: set[str],
         path: str,
         custom_bases: Mapping[str, list[str] | None],
+        taken: set[str],
     ) -> None:
         super().__init__()
         self.bt = bt_aliases
+        #: Names the file binds itself (a team's own ``class Miner``, ...).
+        self.taken = taken
         self.path = path
         self.custom_bases = custom_bases
         self.rewrites: Counter[str] = Counter()
@@ -296,6 +306,24 @@ class _Rewriter(cst.CSTTransformer):
         self.need_compat: set[str] = set()  # from tensorwire.compat import ...
         self.dropped_helpers = False
         self._annotation_depth = 0
+
+    # -------------------------------------------------- inserted names
+
+    def _kit(self, name: str) -> str:
+        """``from tensorwire import <name>``; aliased if the file binds it."""
+        return self._need(self.need_kit, name)
+
+    def _compat(self, name: str) -> str:
+        """``from tensorwire.compat import <name>``; aliased if the file binds it."""
+        return self._need(self.need_compat, name)
+
+    def _need(self, needed: set[str], name: str) -> str:
+        if name not in self.taken:
+            needed.add(name)
+            return name
+        local = f"tw_{name}" if name[:1].islower() else f"TW{name}"
+        needed.add(f"{name} as {local}")
+        return local
 
     # -------------------------------------------------- bt.<name>
 
@@ -322,12 +350,15 @@ class _Rewriter(cst.CSTTransformer):
         parent = self.get_metadata(ParentNodeProvider, original_node, None)
         if isinstance(parent, cst.Attribute) and parent.value is original_node:
             return updated_node  # bt.axon.add_args(...): v10 config, TWM006
-        self.need_compat.add(compat)
-        rule = {"Synapse": "TWM001", "AxonInfo": "TWM021", "Axon": "TWM003"}.get(
-            compat, "TWM004"
-        )
+        local = self._compat(compat)
+        rule = {
+            "Synapse": "TWM001",
+            "TerminalInfo": "TWM001",
+            "AxonInfo": "TWM021",
+            "Axon": "TWM003",
+        }.get(compat, "TWM004")
         self.rewrites[rule] += 1
-        return cst.Name(compat)
+        return cst.Name(local)
 
     # -------------------------------------------------- calls
 
@@ -398,14 +429,13 @@ class _Rewriter(cst.CSTTransformer):
     def _axon_call(self) -> cst.BaseExpression:
         # bt.axon's arguments are dropped: every setting comes from TW_*
         # (TW_BIND_PORT, TW_EXTERNAL_IP, ...), as the TWM003 docs say.
-        self.need_compat.add("Axon")
-        self.need_kit.add("Miner")
+        axon, miner = self._compat("Axon"), self._kit("Miner")
         self.rewrites["TWM003"] += 1
         from_env = cst.Call(
-            func=cst.Attribute(value=cst.Name("Miner"), attr=cst.Name("from_env"))
+            func=cst.Attribute(value=cst.Name(miner), attr=cst.Name("from_env"))
         )
         return cst.Call(
-            func=cst.Name("Axon"),
+            func=cst.Name(axon),
             args=[_kwarg("miner", from_env)],
         )
 
@@ -416,12 +446,11 @@ class _Rewriter(cst.CSTTransformer):
         if wallet is None or len(original.args) > 1:
             # Unknown shape: keep it for a person (the scan will flag it).
             return updated.with_changes(func=original.func)
-        self.need_compat.add("Dendrite")
-        self.need_kit.add("RequestSigner")
+        dendrite, request_signer = self._compat("Dendrite"), self._kit("RequestSigner")
         self.rewrites["TWM004"] += 1
-        signer = cst.Call(func=cst.Name("RequestSigner"), args=[cst.Arg(value=wallet)])
+        signer = cst.Call(func=cst.Name(request_signer), args=[cst.Arg(value=wallet)])
         return cst.Call(
-            func=cst.Name("Dendrite"),
+            func=cst.Name(dendrite),
             args=[_kwarg("signer", signer)],
         )
 
@@ -449,10 +478,10 @@ class _Rewriter(cst.CSTTransformer):
             isinstance(elt, cst.Subscript) and isinstance(elt.value, cst.Attribute)
         ):
             return updated_node  # pragma: no cover - is_axons_list checked the shape
-        self.need_compat.add("axons_from")
+        axons_from = self._compat("axons_from")
         self.rewrites["TWM013"] += 1
         return cst.Call(
-            func=cst.Name("axons_from"),
+            func=cst.Name(axons_from),
             args=[
                 cst.Arg(value=elt.value.value),
                 cst.Arg(value=updated_node.for_in.iter),
@@ -479,12 +508,13 @@ class _Rewriter(cst.CSTTransformer):
         if not isinstance(value, str):
             return updated_node  # pragma: no cover - a prefix-less string is str
         alias, _, path = value.partition(".")
-        compat = _ANNOTATION_NAMES.get(path) if alias in self.bt else None
+        compat = ANNOTATION_COMPAT.get(path) if alias in self.bt else None
         if compat is None:
             return updated_node
-        self.need_compat.add(compat)
+        local = self._compat(compat)
+        self.rewrites["TWM028"] += 1
         quote = original_node.quote
-        return updated_node.with_changes(value=f"{quote}{compat}{quote}")
+        return updated_node.with_changes(value=f"{quote}{local}{quote}")
 
     # -------------------------------------------------- import statements
 
@@ -562,14 +592,37 @@ def _strip_trailing_comma(aliases: Sequence[cst.ImportAlias]) -> list[cst.Import
 
 
 class _BtAliases(cst.CSTVisitor):
+    """The file's ``bittensor`` aliases, and every name it binds itself."""
+
     def __init__(self) -> None:
         super().__init__()
         self.aliases: set[str] = set()
+        self.bound: set[str] = set()
 
     def visit_Import(self, node: cst.Import) -> None:  # noqa: N802 - libcst API
         for alias in node.names:
             if _name_of(alias) == "bittensor":
                 self.aliases.add(_local_of(alias))
+            else:
+                self.bound.add(_local_of(alias))
+
+    def visit_ImportFrom(self, node: cst.ImportFrom) -> None:  # noqa: N802 - libcst API
+        module = (_dotted(node.module) if node.module else None) or ""
+        if isinstance(node.names, cst.ImportStar) or module.startswith(
+            ("tensorwire", "bittensor")
+        ):
+            return
+        self.bound.update(_local_of(a) for a in node.names)
+
+    def visit_ClassDef(self, node: cst.ClassDef) -> None:  # noqa: N802 - libcst API
+        self.bound.add(node.name.value)
+
+    def visit_FunctionDef(self, node: cst.FunctionDef) -> None:  # noqa: N802 - libcst API
+        self.bound.add(node.name.value)
+
+    def visit_AssignTarget(self, node: cst.AssignTarget) -> None:  # noqa: N802 - libcst API
+        if isinstance(node.target, cst.Name):
+            self.bound.add(node.target.value)
 
 
 # ---------------------------------------------------------------- import lines
@@ -745,8 +798,9 @@ class _Marker(cst.CSTTransformer):
         """
         found = []
         index = line - 2
-        while index >= 0 and self.lines[index].lstrip().startswith("#"):
-            found.append(self.lines[index].strip())
+        while index >= 0 and self.lines[index].lstrip().startswith(("#", "@")):
+            if self.lines[index].lstrip().startswith("#"):  # "@": a decorator line
+                found.append(self.lines[index].strip())
             index -= 1
         return found
 
@@ -759,11 +813,16 @@ class _Marker(cst.CSTTransformer):
     def _header_end(self, node: cst.BaseCompoundStatement) -> int:
         """The last line of a compound statement's header (``if ...:``)."""
         start = self.get_metadata(PositionProvider, node).start.line
-        body = node.body
-        if isinstance(body, cst.IndentedBlock) and body.body:
-            first = self.get_metadata(PositionProvider, body.body[0]).start.line
-            return max(start, first - 1)
-        return start
+        if isinstance(node, cst.Match):  # "match x:" then the case blocks
+            first_child: cst.CSTNode | None = node.cases[0] if node.cases else None
+        else:
+            body = getattr(node, "body", None)
+            inner = body.body if isinstance(body, cst.IndentedBlock) else ()
+            first_child = inner[0] if inner else None
+        if first_child is None:
+            return start
+        first = self.get_metadata(PositionProvider, first_child).start.line
+        return max(start, first - 1)
 
     def on_visit(self, node: cst.CSTNode) -> bool:
         if isinstance(node, cst.SimpleStatementLine):
@@ -815,7 +874,7 @@ def apply_source(
     module = cst.parse_module(source)
     aliases = _BtAliases()
     module.visit(aliases)
-    rewriter = _Rewriter(aliases.aliases, path, bases)
+    rewriter = _Rewriter(aliases.aliases, path, bases, aliases.bound)
     rewritten = MetadataWrapper(module).visit(rewriter)
     if rewriter.rewrites or rewriter.need_compat:
         rewritten = _fix_imports(rewritten, rewriter)
@@ -853,6 +912,11 @@ def plan_repo(root: Path | str) -> ApplyReport:
             report.parse_errors.append(f"{rel}: {type(exc).__name__}")
         except cst.ParserSyntaxError as exc:
             report.parse_errors.append(f"{rel}:{exc.raw_line}: syntax error")
+        except Exception as exc:  # noqa: BLE001 - one file must not stop the others
+            report.parse_errors.append(
+                f"{rel}: not rewritten, internal error ({type(exc).__name__}: {exc}); "
+                "please report it"
+            )
     return report
 
 

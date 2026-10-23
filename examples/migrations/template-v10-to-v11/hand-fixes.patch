@@ -69,10 +69,10 @@ deleted file mode 100644
 index e69de29..0000000
 diff --git a/template/api/dummy.py b/template/api/dummy.py
 deleted file mode 100644
-index 97debfd..0000000
+index a3dac36..0000000
 --- a/template/api/dummy.py
 +++ /dev/null
-@@ -1,45 +0,0 @@
+@@ -1,47 +0,0 @@
 -# The MIT License (MIT)
 -# Copyright © 2021 Yuma Rao
 -# Copyright © 2023 Opentensor Foundation
@@ -92,6 +92,7 @@ index 97debfd..0000000
 -# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 -# DEALINGS IN THE SOFTWARE.
 -
+-import bittensor as bt
 -from tensorwire.compat import Synapse
 -from typing import List, Optional, Union, Any, Dict
 -from template.protocol import Dummy
@@ -100,6 +101,7 @@ index 97debfd..0000000
 -
 -
 -class DummyAPI(SubnetsAPI):
+-    # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
 -    def __init__(self, wallet: "bt.wallet"):
 -        super().__init__(wallet)
 -        self.netuid = 33
@@ -444,10 +446,10 @@ index 564d794..473cf75 100644
 -        # TW-MIGRATE: TWM009 the kit's MetagraphCache (refreshes itself); compat.Metagraph for hotkeys / S / validator_permit
 -        self.metagraph.sync(subtensor=self.subtensor)
 diff --git a/template/base/neuron.py b/template/base/neuron.py
-index e35aae1..a264771 100644
+index b4a6d30..a264771 100644
 --- a/template/base/neuron.py
 +++ b/template/base/neuron.py
-@@ -16,32 +16,30 @@
+@@ -16,33 +16,30 @@
  # DEALINGS IN THE SOFTWARE.
  
  import copy
@@ -481,17 +483,20 @@ index e35aae1..a264771 100644
  
      neuron_type: str = "BaseNeuron"
  
+-    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
      @classmethod
 -    def check_config(cls, config: "bt.Config"):
 +    def check_config(cls, config):
          check_config(cls, config)
  
      @classmethod
-@@ -52,66 +50,17 @@ class BaseNeuron(ABC):
+@@ -53,68 +50,17 @@ class BaseNeuron(ABC):
      def config(cls):
          return config(cls)
  
+-    # TW-MIGRATE: TWM008 the kit's chain gateway and MetagraphCache, or bt.Subtensor directly
 -    subtensor: "bt.subtensor"
+-    # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
 -    wallet: "bt.wallet"
 -    metagraph: "Metagraph"
      spec_version: int = spec_version
@@ -555,7 +560,7 @@ index e35aae1..a264771 100644
          self.step = 0
  
      @abstractmethod
-@@ -122,58 +71,6 @@ class BaseNeuron(ABC):
+@@ -125,58 +71,6 @@ class BaseNeuron(ABC):
      def run(self):
          ...
  
@@ -619,12 +624,13 @@ deleted file mode 100644
 index e69de29..0000000
 diff --git a/template/base/utils/weight_utils.py b/template/base/utils/weight_utils.py
 deleted file mode 100644
-index 26027ba..0000000
+index 65feac5..0000000
 --- a/template/base/utils/weight_utils.py
 +++ /dev/null
-@@ -1,227 +0,0 @@
+@@ -1,229 +0,0 @@
 -import numpy as np
 -from typing import Tuple, List, Union, Any
+-import bittensor
 -import logging
 -from tensorwire.compat import Metagraph
 -from numpy import ndarray, dtype, floating, complexfloating
@@ -754,6 +760,7 @@ index 26027ba..0000000
 -    return weight_uids, weight_vals
 -
 -
+-# TW-MIGRATE: TWM008 the kit's chain gateway and MetagraphCache, or bt.Subtensor directly
 -def process_weights_for_netuid(
 -    uids,
 -    weights: np.ndarray,
@@ -1392,7 +1399,7 @@ index 633b177..2881a7b 100644
          """
          Deserialize the dummy output. This method retrieves the response from
 diff --git a/template/utils/config.py b/template/utils/config.py
-index 3bcde1e..1ba8c0d 100644
+index d3f9688..1ba8c0d 100644
 --- a/template/utils/config.py
 +++ b/template/utils/config.py
 @@ -19,7 +19,7 @@
@@ -1404,10 +1411,11 @@ index 3bcde1e..1ba8c0d 100644
  from .logging import setup_events_logger
  
  
-@@ -41,16 +41,11 @@ def is_cuda_available():
+@@ -41,17 +41,11 @@ def is_cuda_available():
      return "cpu"
  
  
+-# TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
 -def check_config(cls, config: "bt.Config"):
 +def check_config(cls, config: SimpleNamespace):
      r"""Checks/validates the config namespace object."""
@@ -1424,7 +1432,7 @@ index 3bcde1e..1ba8c0d 100644
              config.netuid,
              config.neuron.name,
          )
-@@ -62,11 +57,9 @@ def check_config(cls, config: "bt.Config"):
+@@ -63,11 +57,9 @@ def check_config(cls, config: "bt.Config"):
  
      if not config.neuron.dont_save_events:
          # Add custom event logger for the events.
@@ -1437,7 +1445,7 @@ index 3bcde1e..1ba8c0d 100644
  
  
  def add_args(cls, parser):
-@@ -74,7 +67,12 @@ def add_args(cls, parser):
+@@ -75,7 +67,12 @@ def add_args(cls, parser):
      Adds relevant arguments to the parser for operation.
      """
  
@@ -1451,7 +1459,7 @@ index 3bcde1e..1ba8c0d 100644
  
      parser.add_argument(
          "--neuron.device",
-@@ -143,7 +141,6 @@ def add_miner_args(cls, parser):
+@@ -144,7 +141,6 @@ def add_miner_args(cls, parser):
          default="miner",
      )
  
@@ -1459,7 +1467,7 @@ index 3bcde1e..1ba8c0d 100644
      parser.add_argument(
          "--blacklist.force_validator_permit",
          action="store_true",
-@@ -255,14 +252,13 @@ def config(cls):
+@@ -256,14 +252,13 @@ def config(cls):
      Returns the configuration object specific to this miner or validator after adding relevant arguments.
      """
      parser = argparse.ArgumentParser()
@@ -1678,14 +1686,14 @@ index c400bae..0000000
 -        return output_no_syntax
 diff --git a/tests/test_mock.py b/tests/test_mock.py
 deleted file mode 100644
-index cb6c49b..0000000
+index d58645e..0000000
 --- a/tests/test_mock.py
 +++ /dev/null
 @@ -1,109 +0,0 @@
 -import pytest
 -import asyncio
 -import bittensor as bt
--from tensorwire.compat import AxonInfo
+-from tensorwire.compat import AxonInfo, TerminalInfo
 -from prompting.mock import MockDendrite, MockMetagraph, MockSubtensor
 -from prompting.protocol import PromptingSynapse
 -
@@ -1765,7 +1773,7 @@ index cb6c49b..0000000
 -    for synapse in responses:
 -        assert (
 -            hasattr(synapse, "dendrite")
--            and type(synapse.dendrite) == bt.TerminalInfo
+-            and type(synapse.dendrite) == TerminalInfo
 -        )
 -
 -        dendrite = synapse.dendrite
