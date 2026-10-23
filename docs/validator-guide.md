@@ -136,6 +136,21 @@ gateway runs the SDK preflight first.
   counts only if the hotkey holds one. `tensorwire doctor --role validator`
   shows the permit.
 - `rate_limited`: waits the blocks named by the chain, or one tempo.
+- `expired` / `too_early` from the timelocked commit itself (the chain's
+  `InvalidRevealRound`: it stored the commit's drand round before the commit
+  was included, which happens on fast-block chains; or `RevealTooEarly`;
+  `TxOutcome.replannable`): the next round, at least one block later, plans
+  again against the current block, a **new** extrinsic with a new reveal
+  round (the rejected one is never resent). The decision says
+  `reason="replanning"`. At most `MAX_REPLANS` (3) re-plans per weight
+  window (`max(weights_rate_limit, tempo)` blocks from the first rejection);
+  each is logged as `weights_commit_replanned` (WARNING). When they run out:
+  `weights_commit_replan_exhausted` (ERROR), and nothing is submitted until
+  the window ends. Every attempt is a real submission, counted
+  (`ok="false",code="expired"`) and stored. Pool errors with the same codes
+  (`Stale` / `Future`, already re-signed by the gateway) and
+  `MultiBlockMigrationsOngoing` are not re-planned (spec 8.9, D32).
+  `WeightDecision.replans` counts the re-plans used in the current window.
 - `not_registered` / `not_authorized`: logged at ERROR, submissions stop
   (querying continues) until the metagraph shows the hotkey registered with
   a permit again; `/readyz` reports `weights_stopped`.

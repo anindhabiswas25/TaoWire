@@ -26,6 +26,7 @@ import bittensor as bt
 from tensorwire.chain.axon import Endpoint, parse_axon
 
 __all__ = [
+    "REPLAN_ERROR_NAMES",
     "BittensorGateway",
     "ChainGateway",
     "ChainUnavailable",
@@ -121,13 +122,22 @@ class TxOutcome:
 
     ``code`` is a ``bittensor.ErrorCode`` value (for example
     ``"rate_limited"``) when ``ok`` is false, else ``None``. ``remediation`` is
-    the SDK's human hint for that failure.
+    the SDK's human hint for that failure. ``error_name`` is the chain's own
+    error name when the chain or the SDK preflight named one: one ``code``
+    covers several names (``expired`` is both a pool ``Stale`` nonce and
+    ``InvalidRevealRound``).
     """
 
     ok: bool
     code: str | None
     remediation: str | None
     block_hash: str | None
+    error_name: str | None = None
+
+    @property
+    def replannable(self) -> bool:
+        """A timelocked commit a new plan can fix (:data:`REPLAN_ERROR_NAMES`, D32)."""
+        return not self.ok and self.error_name in REPLAN_ERROR_NAMES
 
 
 @runtime_checkable
@@ -192,7 +202,11 @@ class ChainGateway(Protocol):
         mechid: int,
         version_key: int,
     ) -> TxOutcome:
-        """Submit weights for the gateway's hotkey (``SetWeights``)."""
+        """Submit weights for the gateway's hotkey (``SetWeights``).
+
+        Returned after one submission when ``TxOutcome.replannable``; the
+        weight scheduler re-plans (D32).
+        """
         ...
 
 
@@ -232,6 +246,14 @@ Only these are retried, and always with a new extrinsic (fresh nonce, fresh
 era, new signature), never by resending the old bytes. Every other failure,
 including ``Retracted`` and ``FinalityTimeout`` (it may still be on chain),
 is returned to the caller.
+"""
+
+REPLAN_ERROR_NAMES = frozenset({"InvalidRevealRound", "RevealTooEarly"})
+"""Timelocked weight commits that a new plan can fix (``expired`` / ``too_early``).
+
+``InvalidRevealRound``: the chain stored the commit's drand reveal round before
+the commit was included. Not retried here: the weight scheduler plans again
+(spec 8.9, D32); see :attr:`TxOutcome.replannable`.
 """
 
 _NOT_SUBMITTED = (
@@ -353,7 +375,9 @@ class BittensorGateway:
     connection loss after submission returns ``code="unknown"`` without a
     retry, because the transaction may still land. Each write waits up to
     ``write_timeout_s`` (default: four times ``timeout_s``) for inclusion and,
-    with ``wait_for_finalization``, finality.
+    with ``wait_for_finalization``, finality. Any other chain rejection is
+    returned after one submission with its code and ``error_name``
+    (:attr:`TxOutcome.replannable`, D32).
     """
 
     def __init__(
@@ -702,8 +726,7 @@ class BittensorGateway:
                 )
                 break
             outcome = _outcome(result)
-            error = getattr(result, "error", None)
-            name = getattr(error, "name", None)
+            name = outcome.error_name
             resign = not outcome.ok and name in RESIGN_ERROR_NAMES
             _log.info(
                 "chain write",
@@ -746,7 +769,10 @@ class BittensorGateway:
                 None,
                 "unknown",
             ):
-                rejection = _rejected(str(code), str(e))
+                name = getattr(e, "name", None)
+                rejection = _rejected(
+                    str(code), str(e), error_name=None if name is None else str(name)
+                )
                 _log.info(
                     "chain write",
                     extra={**summary, "attempt": attempt, "ok": False, "code": code},
@@ -857,11 +883,13 @@ def _outcome(result: Any) -> TxOutcome:
     error = result.error
     code = getattr(getattr(error, "code", None), "value", None) or "unknown"
     remediation = getattr(error, "remediation", None)
+    name = getattr(error, "name", None)
     return TxOutcome(
         ok=False,
         code=str(code),
         remediation=None if remediation is None else str(remediation),
         block_hash=result.block_hash,
+        error_name=None if name is None else str(name),
     )
 
 
@@ -878,8 +906,16 @@ def _policy_outcome(error: BaseException) -> TxOutcome:
     return _rejected("policy_violation", "; ".join(violations))
 
 
-def _rejected(code: str, remediation: str) -> TxOutcome:
-    return TxOutcome(ok=False, code=code, remediation=remediation, block_hash=None)
+def _rejected(
+    code: str, remediation: str, *, error_name: str | None = None
+) -> TxOutcome:
+    return TxOutcome(
+        ok=False,
+        code=code,
+        remediation=remediation,
+        block_hash=None,
+        error_name=error_name,
+    )
 
 
 async def _close_quietly(client: Any) -> None:

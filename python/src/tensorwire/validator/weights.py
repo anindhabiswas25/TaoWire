@@ -17,6 +17,17 @@ Outcomes (``TxOutcome.code``, ``bt.ErrorCode`` values):
 - ``not_registered`` / ``not_authorized``: alert and stop setting weights
   (querying continues). Submissions resume when the metagraph shows this
   hotkey registered again, or with a validator permit.
+- ``expired`` / ``too_early`` from a timelocked commit that a new plan can fix
+  (:attr:`TxOutcome.replannable`: the chain's ``InvalidRevealRound``, i.e. it
+  stored the commit's drand round before the commit was included, likely on
+  fast blocks; or ``RevealTooEarly``), decision D32: the next
+  :meth:`~WeightScheduler.maybe_submit` at least one block later plans again
+  against the current block, a **new** extrinsic with a new reveal round; the
+  rejected one is never resent (8.3). At most :data:`MAX_REPLANS` re-plans per
+  weight window (``max(weights_rate_limit, tempo)`` blocks from the first
+  rejection), then ``weights_commit_replan_exhausted`` and a wait until that
+  window ends. Pool errors with the same codes (``Stale`` / ``Future``, which
+  the gateway already re-signs) are not re-planned.
 - All scores zero: nothing is submitted (``tw.no_scores``), so weights are
   never burned on an all-zero vector.
 
@@ -43,10 +54,16 @@ from tensorwire.chain.gateway import (
 from tensorwire.observability.metrics import Metrics
 from tensorwire.validator.scores import ScoreStore, WeightRecord
 
-__all__ = ["WeightDecision", "WeightScheduler", "blocks_from_remediation"]
+__all__ = [
+    "MAX_REPLANS",
+    "WeightDecision",
+    "WeightScheduler",
+    "blocks_from_remediation",
+]
 
 Reason = Literal[
     "submitted",
+    "replanning",
     "not_due",
     "waiting",
     "no_scores",
@@ -57,6 +74,9 @@ Reason = Literal[
 
 _BLOCKS_RE = re.compile(r"(\d+)\s*blocks?\b", re.IGNORECASE)
 _STOP_CODES = frozenset({"not_registered", "not_authorized"})
+
+MAX_REPLANS = 3
+"""Re-plans per weight window (D32); each one is a new, freshly signed extrinsic."""
 
 _log = structlog.stdlib.get_logger("tensorwire.validator.weights")
 
@@ -69,6 +89,8 @@ class WeightDecision:
     block: int | None = None
     outcome: TxOutcome | None = None
     n_uids: int = 0
+    replans: int = 0
+    """Re-plans used in the current weight window (D32), this one included."""
 
     @property
     def submitted(self) -> bool:
@@ -113,6 +135,8 @@ class WeightScheduler:
         self._rate_limit_read_at: int | None = None
         self._last_submit_block: int | None = None
         self._wait_until = 0
+        self._replan_window_end: int | None = None
+        self._replans_used = 0  # in the window that ends at _replan_window_end
         self.stopped: str | None = None
         """``not_registered`` / ``not_authorized`` while submissions are stopped."""
 
@@ -167,27 +191,27 @@ class WeightScheduler:
     async def _submit(
         self, block: int, weights: dict[int, float], tempo: int
     ) -> WeightDecision:
-        try:
-            outcome = await self._gateway.set_weights(
-                self.netuid, weights, mechid=self.mechid, version_key=self.version_key
-            )
-        except GatewayError as exc:
-            _log.error("weights_submit_failed", error=str(exc))
-            outcome = TxOutcome(
-                ok=False, code="unknown", remediation=str(exc), block_hash=None
-            )
+        outcome = await self._set_weights(weights)
         code = None if outcome.ok else (outcome.code or "unknown")
         await self._record(block, outcome, code, len(weights))
+        n = len(weights)
         if outcome.ok:
+            end = self._replan_window_end
+            replans = self._replans_used if end is not None and block < end else 0
             self._last_submit_block = block
+            self._replan_window_end = None
+            self._replans_used = 0
             _log.info(
                 "weights submitted",
                 block=block,
                 block_hash=outcome.block_hash,
-                n_uids=len(weights),
+                n_uids=n,
+                replans=replans,
                 meaning="commit included; weights apply after the reveal",
             )
-            return WeightDecision("submitted", block, outcome, len(weights))
+            return WeightDecision("submitted", block, outcome, n, replans)
+        if outcome.replannable:
+            return self._replan(block, outcome, n, tempo)
         if code == "rate_limited":
             wait = blocks_from_remediation(outcome.remediation) or tempo
             self._wait_until = block + wait
@@ -197,7 +221,53 @@ class WeightScheduler:
         else:
             self._wait_until = block + max(1, min(self.min_interval_blocks, tempo))
             _log.error("weights_rejected", code=code, remediation=outcome.remediation)
-        return WeightDecision("failed", block, outcome, len(weights))
+        return WeightDecision("failed", block, outcome, n, self._replans_used)
+
+    def _replan(
+        self, block: int, outcome: TxOutcome, n_uids: int, tempo: int
+    ) -> WeightDecision:
+        """Plan again from the next block, within the window's budget (D32)."""
+        end = self._replan_window_end
+        if end is None or block >= end:
+            end = block + max(self._rate_limit or 0, tempo, 1)
+            self._replan_window_end = end
+            self._replans_used = 0
+        fields = {
+            "code": outcome.code,
+            "error_name": outcome.error_name,
+            "remediation": outcome.remediation,
+        }
+        if self._replans_used >= MAX_REPLANS:
+            self._wait_until = end
+            _log.error(
+                "weights_commit_replan_exhausted",
+                replans=self._replans_used,
+                wait_until_block=end,
+                **fields,
+            )
+            return WeightDecision("failed", block, outcome, n_uids, self._replans_used)
+        self._replans_used += 1
+        # The next maybe_submit (a block later at least) plans and signs a new
+        # extrinsic with a new reveal round; the rejected one is never resent.
+        self._wait_until = block + 1
+        _log.warning(
+            "weights_commit_replanned",
+            attempt=self._replans_used,
+            max_replans=MAX_REPLANS,
+            **fields,
+        )
+        return WeightDecision("replanning", block, outcome, n_uids, self._replans_used)
+
+    async def _set_weights(self, weights: dict[int, float]) -> TxOutcome:
+        try:
+            return await self._gateway.set_weights(
+                self.netuid, weights, mechid=self.mechid, version_key=self.version_key
+            )
+        except GatewayError as exc:
+            _log.error("weights_submit_failed", error=str(exc))
+            return TxOutcome(
+                ok=False, code="unknown", remediation=str(exc), block_hash=None
+            )
 
     def _stop(self, code: str, remediation: str | None) -> None:
         if self.stopped == code:

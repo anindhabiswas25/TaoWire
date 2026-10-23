@@ -658,6 +658,23 @@ async def test_chain_rejection_is_mapped_not_retried(
     assert len(world.executed) == 1
 
 
+@pytest.mark.parametrize(
+    ("name", "code"),
+    [("InvalidRevealRound", "expired"), ("RevealTooEarly", "too_early")],
+)
+async def test_reveal_round_rejection_is_returned_not_resent(
+    world: World, sleeps: list[float], name: str, code: str
+) -> None:
+    """D32: `expired` comes back after one submission; the scheduler re-plans."""
+    world.results = [_failed(name), _ok()]
+    gw = await _connected(world, sleeps)
+    outcome = await gw.set_weights(NETUID, {1: 1.0}, mechid=0, version_key=0)
+    assert (outcome.ok, outcome.code, outcome.error_name) == (False, code, name)
+    assert outcome.replannable
+    assert len(world.planned) == 1
+    assert len(world.executed) == 1
+
+
 @pytest.mark.parametrize("name", sorted(RESIGN_ERROR_NAMES))
 async def test_pool_rejections_are_resigned(
     world: World, sleeps: list[float], name: str
@@ -842,6 +859,24 @@ async def test_failed_preflight_is_definite_and_not_submitted(
     assert "retry in ~70 blocks" in (outcome.remediation or "")
     assert world.executed == []
     assert len(world.planned) == 1
+
+
+async def test_preflight_error_name_is_kept(world: World, sleeps: list[float]) -> None:
+    world.fail(
+        "plan",
+        bt.ChainError(
+            "migrations",
+            code=bt.ErrorCode.TOO_EARLY,
+            name="MultiBlockMigrationsOngoing",
+        ),
+    )
+    gw = await _connected(world, sleeps)
+    outcome = await gw.set_weights(NETUID, {1: 1.0}, mechid=0, version_key=0)
+    assert (outcome.code, outcome.error_name) == (
+        "too_early",
+        "MultiBlockMigrationsOngoing",
+    )
+    assert world.executed == []
 
 
 @pytest.mark.parametrize(

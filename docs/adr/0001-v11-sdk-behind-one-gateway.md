@@ -64,7 +64,7 @@ These were verified on localnet in Phases 0 and 1.
   1. Each attempt is first planned (`client.plan`: a dry run, nothing signed). A failed SDK preflight is returned with its own code and nothing is submitted. Example: the weights rate-limit check gives `rate_limited` with "retry in ~N blocks".
   2. A submission that the pool rejected or dropped before inclusion is retried as a **new** extrinsic, signed after the next finalized block, up to 3 attempts. These are the names in `RESIGN_ERROR_NAMES`: `BadProof` ("signature does not match"), `AncientBirthBlock`, `Stale`, `Future`, `PriorityTooLow`, `Invalid`, `Dropped`, `Usurped`. The same design fixes `localnet_up.sh` (gate item F1).
   3. A timeout or connection loss **after** submission returns `code="unknown"` and is not retried, because the transaction may still land. The caller reads chain state first. `Retracted` and `FinalityTimeout` are also returned as is.
-  4. Chain-side failures map to `TxOutcome.code` as `bt.ErrorCode` values, unchanged.
+  4. Chain-side failures map to `TxOutcome.code` as `bt.ErrorCode` values, unchanged. `TxOutcome.error_name` (Phase 4) carries the chain's error name when there is one, because one code covers several names: `expired` is both a pool `Stale` nonce (re-signed under rule 2) and `InvalidRevealRound`, a timelocked weight commit whose drand round the chain already stored. The gateway returns the latter after one submission; the weight scheduler re-plans it as a new extrinsic (spec 8.9, D32).
 - **Logging.** Every write is logged on the `tensorwire.chain` logger with an intent summary, attempt, outcome code, error name and block hash. Hotkeys and signatures are never logged.
 
 ## Consequences

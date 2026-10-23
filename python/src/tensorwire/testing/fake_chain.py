@@ -66,6 +66,8 @@ _REMEDIATION = {
     "rate_limited": "wait for the rate-limit window to pass, then retry",
     "invalid_argument": "check the argument values against the operation schema",
     "subnet_not_exists": "use an existing netuid",
+    "expired": "the window has closed; restart the flow with fresh state",
+    "too_early": "the required window has not opened yet; wait some blocks and retry",
 }
 
 
@@ -363,8 +365,13 @@ class FakeChain:
         times: int = 1,
         *,
         remediation: str | None = None,
+        error_name: str | None = None,
     ) -> None:
-        """Make the next ``times`` writes of ``operation`` return a failed outcome."""
+        """Make the next ``times`` writes of ``operation`` return a failed outcome.
+
+        ``error_name`` is the chain error the real gateway would report (e.g.
+        ``"InvalidRevealRound"`` with ``code="expired"``).
+        """
         if operation not in _WRITES:
             raise ValueError(f"reject_next only applies to writes: {sorted(_WRITES)}")
         outcome = TxOutcome(
@@ -374,6 +381,7 @@ class FakeChain:
             if remediation is not None
             else _REMEDIATION.get(code),
             block_hash=None,
+            error_name=error_name,
         )
         self._add_fault(operation, times, _Fault(remaining=times, outcome=outcome))
 

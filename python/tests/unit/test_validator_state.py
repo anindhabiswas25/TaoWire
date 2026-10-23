@@ -16,7 +16,11 @@ from tensorwire.testing.fake_chain import FakeChain
 from tensorwire.validator.lock import HotkeyLock, HotkeyLockHeld
 from tensorwire.validator.scores import RoundRecord, ScoreStore, WeightRecord
 from tensorwire.validator.selection import eligible_miners, select_miners
-from tensorwire.validator.weights import WeightScheduler, blocks_from_remediation
+from tensorwire.validator.weights import (
+    MAX_REPLANS,
+    WeightScheduler,
+    blocks_from_remediation,
+)
 
 NETUID = 7
 VALI = "5Vali"
@@ -245,6 +249,140 @@ async def test_other_rejections_back_off() -> None:
     assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "failed"
     assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "waiting"
     assert sched.stopped is None
+
+
+# ---------------------------------------------------------------- re-plans
+# D32, G5-2: timelocked commits that missed their drand reveal round.
+
+REVEAL = {"expired": "InvalidRevealRound", "too_early": "RevealTooEarly"}
+
+
+def reject_reveal(chain: FakeChain, code: str = "expired", times: int = 1) -> None:
+    chain.reject_next("set_weights", code, times, error_name=REVEAL[code])
+
+
+def submissions(metrics: Metrics, ok: str, code: str) -> float | None:
+    return metrics.registry.get_sample_value(
+        "tw_validator_weight_submissions_total", {"ok": ok, "code": code}
+    )
+
+
+@pytest.mark.parametrize("code", ["expired", "too_early"])
+async def test_a_missed_reveal_round_is_replanned_from_the_next_block(
+    code: str,
+) -> None:
+    chain = fleet(2)
+    chain.advance(10)
+    reject_reveal(chain, code)
+    metrics = Metrics()
+    sched = scheduler(chain, metrics=metrics)
+    mg = await metagraph(chain)
+    with structlog.testing.capture_logs() as logs:
+        d = await sched.maybe_submit({1: 1.0}, mg)
+    assert (d.reason, d.replans) == ("replanning", 1)
+    (event,) = [e for e in logs if e["event"] == "weights_commit_replanned"]
+    assert (event["code"], event["error_name"]) == (code, REVEAL[code])
+    assert event["log_level"] == "warning"
+    assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "waiting"  # same block
+    chain.advance(1)
+    d = await sched.maybe_submit({1: 1.0}, mg)
+    assert (d.reason, d.replans) == ("submitted", 1)
+    assert chain.calls["set_weights"] == 2  # a new plan and a new extrinsic
+    assert len(chain.weight_submissions()) == 1
+    assert submissions(metrics, "false", code) == 1
+    assert submissions(metrics, "true", "ok") == 1
+
+
+async def test_replans_are_bounded_per_window_logged_metered_and_stored(
+    tmp_path: Path,
+) -> None:
+    chain = fleet(2)
+    chain.advance(10)
+    reject_reveal(chain, times=1 + MAX_REPLANS)
+    metrics = Metrics()
+    s = store(tmp_path)
+    sched = scheduler(chain, metrics=metrics, store=s)
+    mg = await metagraph(chain)
+    start = chain.current_block
+    with structlog.testing.capture_logs() as logs:
+        for _ in range(MAX_REPLANS):
+            assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "replanning"
+            chain.advance(1)
+        d = await sched.maybe_submit({1: 1.0}, mg)
+    assert (d.reason, d.replans) == ("failed", MAX_REPLANS)
+    events = [e["event"] for e in logs]
+    assert events.count("weights_commit_replanned") == MAX_REPLANS
+    (exhausted,) = [e for e in logs if e["event"] == "weights_commit_replan_exhausted"]
+    window_end = start + max(5, 10)  # max(weights_rate_limit, tempo)
+    assert (exhausted["log_level"], exhausted["wait_until_block"]) == (
+        "error",
+        window_end,
+    )
+    assert "weights_rejected" not in events
+    assert chain.calls["set_weights"] == 1 + MAX_REPLANS
+    assert submissions(metrics, "false", "expired") == 1 + MAX_REPLANS
+    rows = s.last_weights(10)
+    assert sorted(r.block for r in rows) == [start + i for i in range(1 + MAX_REPLANS)]
+    assert all(not r.ok and r.code == "expired" for r in rows)
+    chain.advance(window_end - chain.current_block - 1)
+    assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "waiting"
+    chain.advance(1)
+    d = await sched.maybe_submit({1: 1.0}, mg)  # the next window
+    assert (d.reason, d.replans) == ("submitted", 0)
+
+
+async def test_another_error_does_not_reset_the_window_budget() -> None:
+    chain = fleet(2)
+    chain.advance(10)
+    sched = scheduler(chain, min_interval_blocks=0)
+    mg = await metagraph(chain)
+    reject_reveal(chain)
+    assert (await sched.maybe_submit({1: 1.0}, mg)).replans == 1
+    chain.advance(1)
+    chain.reject_next("set_weights", "invalid_argument")
+    assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "failed"
+    chain.advance(1)  # back-off: max(1, min(min_interval 0, tempo))
+    reject_reveal(chain, times=MAX_REPLANS)
+    reasons = []
+    for _ in range(MAX_REPLANS):
+        reasons.append((await sched.maybe_submit({1: 1.0}, mg)).reason)
+        chain.advance(1)
+    assert reasons == ["replanning"] * (MAX_REPLANS - 1) + ["failed"]
+
+
+async def test_a_commit_that_landed_meanwhile_is_noticed() -> None:
+    chain = fleet(2)
+    chain.advance(10)
+    reject_reveal(chain)
+    sched = scheduler(chain)
+    mg = await metagraph(chain)
+    assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "replanning"
+    other = chain.with_signer(VALI)  # e.g. a commit from a second process landed
+    await other.connect()
+    assert (await other.set_weights(NETUID, {1: 1.0}, mechid=0, version_key=0)).ok
+    chain.advance(1)
+    assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "not_due"
+
+
+@pytest.mark.parametrize(
+    ("code", "error_name"),
+    [
+        ("expired", "Stale"),  # pool nonce: the gateway already re-signed it
+        ("too_early", "Future"),
+        ("too_early", "MultiBlockMigrationsOngoing"),  # a new plan cannot help
+        ("expired", None),
+    ],
+)
+async def test_other_errors_with_those_codes_are_not_replanned(
+    code: str, error_name: str | None
+) -> None:
+    chain = fleet(2)
+    chain.advance(10)
+    chain.reject_next("set_weights", code, error_name=error_name)
+    with structlog.testing.capture_logs() as logs:
+        d = await scheduler(chain).maybe_submit({1: 1.0}, await metagraph(chain))
+    assert (d.reason, d.replans) == ("failed", 0)
+    assert any(e["event"] == "weights_rejected" for e in logs)
 
 
 async def test_chain_failures_never_raise() -> None:

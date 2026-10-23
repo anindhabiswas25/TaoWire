@@ -36,6 +36,7 @@ from localnet_env import ENDPOINT, Localnet
 
 from tensorwire.chain.axon import Endpoint
 from tensorwire.chain.gateway import BittensorGateway
+from tensorwire.validator.weights import WeightDecision, WeightScheduler
 
 EXAMPLE = Path(__file__).resolve().parents[3] / "examples" / "text-ops-subnet"
 MINER_WALLET = "miner_py"
@@ -189,7 +190,7 @@ async def _marker_row(
     validator_uid: int,
     marker_uid: int,
     process: Process,
-) -> dict[int, float]:
+) -> tuple[dict[int, float], int]:
     """Put a known row on chain (validator -> marker uid) and wait for its reveal."""
     gw = BittensorGateway(
         ENDPOINT, hotkey=localnet.hotkey(VALIDATOR_WALLET), allow_private_axons=True
@@ -209,10 +210,26 @@ async def _marker_row(
             process,
         )
         await require_drand_feed(client)
-        outcome = await gw.set_weights(
-            localnet.netuid, {marker_uid: 1.0}, mechid=0, version_key=0
+        # Through the scheduler, as the validator does: a commit whose reveal round
+        # the chain's drand feed already passed (``expired``) is re-planned (D32).
+        scheduler = WeightScheduler(
+            gw,
+            localnet.netuid,
+            localnet.wallets[VALIDATOR_WALLET]["hotkey"],
+            min_interval_blocks=0,
         )
-        assert outcome.ok, outcome
+        mg = await gw.metagraph(localnet.netuid)
+
+        async def committed() -> WeightDecision | None:
+            decision = await scheduler.maybe_submit({marker_uid: 1.0}, mg)
+            if decision.reason in ("replanning", "waiting"):
+                return None
+            return decision
+
+        decision = await _until(
+            "the marker commit", committed, localnet.wait_s(10, 60.0), process
+        )
+        assert decision.submitted, decision
 
         async def marker_revealed() -> dict[int, float] | None:
             row = (await client.weights.weights(localnet.netuid)).get(validator_uid)
@@ -225,7 +242,7 @@ async def _marker_row(
             process,
             DrandWatch(client),
         )
-        return row
+        return row, decision.replans
     finally:
         await gw.close()
 
@@ -270,7 +287,7 @@ async def test_validator_scores_miner_and_weights_reveal(
         marker_uid = next(
             n.uid for n in mg.neurons if n.uid not in (miner_uid, validator_uid)
         )
-        results["marker_row"] = await _marker_row(
+        results["marker_row"], results["marker_replans"] = await _marker_row(
             localnet, client, validator_uid, marker_uid, miner_process
         )
         results["start_block"] = await gw.block()
