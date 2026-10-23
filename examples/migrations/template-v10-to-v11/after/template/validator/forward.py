@@ -19,6 +19,7 @@
 
 import asyncio
 import logging
+from tensorwire.compat import axons_from
 
 from template.protocol import Dummy
 from template.validator.reward import get_rewards
@@ -42,7 +43,7 @@ async def forward(self):
     # The dendrite client queries the network.
     responses = await self.dendrite(
         # Send the query to selected miner axons in the network.
-        axons=[self.metagraph.axons[uid] for uid in miner_uids],
+        axons=axons_from(self.metagraph, miner_uids),
         # Construct a dummy query. This simply contains a single integer.
         synapse=Dummy(dummy_input=self.step),
         # All responses have the deserialize function called on them before returning.

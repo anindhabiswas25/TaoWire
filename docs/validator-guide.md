@@ -92,11 +92,23 @@ never raise for one miner's failure. Rules (spec 8.8):
   on 502/503/504; never on 4xx. `TW_MAX_ATTEMPTS` (2).
 - Each attempt has a deadline (`TW_QUERY_TIMEOUT_S`, 12 s; `timeout_s=` per
   call) and the response is read with a cap (`TW_MAX_RESPONSE_BYTES`, 4 MiB).
+- One time budget per miner per query: every attempt, the v10 fallback
+  included, finishes within `TW_MAX_ATTEMPTS × TW_QUERY_TIMEOUT_S` (24 s by
+  default). Each attempt gets its own deadline or the time left, whichever is
+  less; with nothing left the result is `tw.timeout`. A round therefore never
+  takes longer than that, however miners answer.
 - With `TW_VERIFY_RESPONSES=1` (default) a 200 counts only with a valid
   `twresp/1` signature from that miner, over that request's nonce and
   sender. Signed error answers are verified too.
 - Neurons without a usable axon are never contacted (`tw.no_axon`); private
   and loopback axons are refused unless `TW_ALLOW_PRIVATE_AXONS=1` (localnet).
+- Scheme: `TW_SCHEME_POLICY=http` (default; requests and responses are
+  signed, but not encrypted) or `https` (every miner behind TLS).
+  `https-if-tls-published` (pin the TLS key a miner published with
+  `ServeAxonTls`) needs TLS support, which is not in this release: the
+  runner, `ValidatorClient` and `tensorwire doctor --role validator` refuse
+  it with an error naming the setting, so a validator that asked for pinned
+  TLS never runs on plain HTTP without knowing it.
 
 Use it directly when you run your own loop:
 
@@ -188,6 +200,7 @@ can end (`docs/migration-from-v10.md`).
 | `TW_MIN_WEIGHT_INTERVAL_BLOCKS` | 100 | |
 | `TW_WEIGHTS_VERSION_KEY` | 0 | must be ≥ the subnet's stored key |
 | `TW_MECHID` | 0 | |
+| `TW_SCHEME_POLICY` | http | `http` or `https`; `https-if-tls-published` is refused until TLS ships |
 | `TW_LEGACY_V10_CLIENT` | off | `auto` reaches v10 miners |
 | `TW_LEGACY_V10_CLIENT_UNTIL` | | required with `auto` |
 

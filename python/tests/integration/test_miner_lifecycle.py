@@ -18,6 +18,7 @@ from tensorwire.auth.sdk_check import SdkReport
 from tensorwire.chain.gateway import ChainUnavailable, MetagraphView
 from tensorwire.config import MinerSettings
 from tensorwire.errors import StartupError
+from tensorwire.limits.ratelimit import RedisRateLimiter
 from tensorwire.miner import lifecycle as lifecycle_mod
 from tensorwire.miner.app import Miner
 from tensorwire.testing.clock import FakeClock
@@ -335,8 +336,14 @@ async def test_redis_url_builds_the_shared_store(
         rt = miner.lifecycle.runtime
         assert isinstance(rt.store, RedisNonceStore)
         assert rt.store_backend == "redis"
+        assert isinstance(rt.ip_limiter, RedisRateLimiter)
+        assert isinstance(rt.hotkey_limiter, RedisRateLimiter)
+        assert rt.limiter_backend == "redis"
         verdict = await miner.lifecycle.readiness()
-        assert verdict.reasons == ("nonce_store_unreachable",)
+        assert verdict.reasons == (
+            "nonce_store_unreachable",
+            "rate_limiter_unreachable",
+        )
 
 
 async def test_redis_url_without_the_extra_refuses_start(
@@ -385,6 +392,26 @@ async def test_clock_skew_makes_readyz_fail(tw_miner_kwargs: dict[str, Any]) -> 
         verdict = await miner.lifecycle.readiness()
         assert verdict.reasons == ("clock_skew",)
         assert miner.metrics.registry.get_sample_value("tw_clock_offset_seconds") == 7.5
+
+
+async def test_readyz_recovers_once_the_clock_is_fixed(
+    tw_miner_kwargs: dict[str, Any],
+) -> None:
+    offset = [7.5]
+    miner = build(
+        tw_miner_kwargs,
+        settings={"ntp_servers": ("ntp.test",)},
+        ntp_query=lambda server, timeout: offset[0],
+    )
+    async with miner.running():
+        assert (await miner.lifecycle.readiness()).reasons == ("clock_skew",)
+        offset[0] = 0.05  # chrony fixed it; the next scheduled check sees it
+        await miner.lifecycle.runtime.clock.check_async()
+        verdict = await miner.lifecycle.readiness()
+        assert verdict.ready
+        assert (
+            miner.metrics.registry.get_sample_value("tw_clock_offset_seconds") == 0.05
+        )
 
 
 async def test_degraded_warning_is_rate_limited(

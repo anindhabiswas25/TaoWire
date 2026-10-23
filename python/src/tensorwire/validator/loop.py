@@ -76,6 +76,7 @@ from tensorwire.validator.client import (
     MinerResult,
     ProtocolSelectorLike,
     ValidatorClient,
+    check_scheme_policy,
 )
 from tensorwire.validator.lock import HotkeyLock, HotkeyLockHeld
 from tensorwire.validator.scores import RoundRecord, ScoreStore
@@ -159,6 +160,9 @@ class ValidatorRunner:
 
     Everything after ``settings`` is optional (tests pass ``FakeChain``,
     a test metagraph source, a dev keypair and an in-process transport).
+    ``score_alpha`` replaces ``TW_SCORE_ALPHA`` for the score store; 1.0
+    stores scores as given (``compat.TemplateValidatorAdapter`` averages
+    them itself).
     """
 
     def __init__(
@@ -175,6 +179,7 @@ class ValidatorRunner:
         clock_ns: Callable[[], int] | None = None,
         legacy: LegacyFactory | None = None,
         check_sdk: bool = True,
+        score_alpha: float | None = None,
     ) -> None:
         self.validator = validator
         self.settings = settings
@@ -187,10 +192,12 @@ class ValidatorRunner:
         self._clock_ns = clock_ns
         self._legacy_factory = legacy
         self._check_sdk = check_sdk
+        self._score_alpha = settings.score_alpha if score_alpha is None else score_alpha
         self._lock: HotkeyLock | None = None
         self._started = False
         self._last_round_at: float | None = None
         self._last_reprobe_block: int | None = None
+        self._protocol_tags: dict[str, int | None] = {}
         self.client: ValidatorClient | None = None
         self.store: ScoreStore | None = None
         self.weights: WeightScheduler | None = None
@@ -225,6 +232,7 @@ class ValidatorRunner:
     async def start(self) -> None:
         """Load the hotkey, connect, check registration, open the store."""
         s = self.settings
+        check_scheme_policy(s.scheme_policy)
         if self._check_sdk:
             report = check_sdk()
             if not report.tested:
@@ -235,6 +243,15 @@ class ValidatorRunner:
         hotkey = self._load_hotkey()
         nonce = None if self._clock_ns is None else MonotonicNonce(self._clock_ns)
         signer = RequestSigner(hotkey, nonce=nonce)
+        raw = HotkeySigner(hotkey)
+        if s.legacy_v10_client == "auto" and raw.scheme != "sr25519":
+            # Spec 8.11.3: v10 Axons verify sr25519 only.
+            raise StartupError(
+                "TW_LEGACY_V10_CLIENT=auto needs an sr25519 validator hotkey "
+                f"(this one is {raw.scheme}): v10 Axons verify sr25519 "
+                "signatures only. Set TW_LEGACY_V10_CLIENT=off and unset "
+                "TW_LEGACY_V10_CLIENT_UNTIL, or use an sr25519 hotkey"
+            )
         self.hotkey_ss58 = signer.hotkey_ss58
         self._lock = HotkeyLock(s.state_dir, signer.hotkey_ss58)
         try:
@@ -251,9 +268,9 @@ class ValidatorRunner:
                     f"{s.netuid} -w {s.wallet_name} -H {s.wallet_hotkey}",
                     exit_code=3,
                 )
-            self.client = self._build_client(signer, HotkeySigner(hotkey))
+            self.client = self._build_client(signer, raw)
             path = self._store_path or (s.state_dir / "scores.db")
-            self.store = ScoreStore(path, s.netuid, alpha=s.score_alpha)
+            self.store = ScoreStore(path, s.netuid, alpha=self._score_alpha)
             self.weights = WeightScheduler(
                 self.gateway,
                 s.netuid,
@@ -321,6 +338,10 @@ class ValidatorRunner:
         if s.legacy_v10_client == "auto":
             factory = self._legacy_factory or _bridge_client
             legacy, selector = factory(s, raw)
+            if s.legacy_v10_client_until is not None:
+                self.metrics.track_legacy_v10_end(
+                    "outbound", s.legacy_v10_client_until, clock_ns=self._clock_ns
+                )
             _log.warning(
                 "legacy_v10_outbound_enabled",
                 until=str(s.legacy_v10_client_until),
@@ -371,20 +392,13 @@ class ValidatorRunner:
 
     async def run_round(self, round_id: int | None = None) -> RoundReport | None:
         """Run one round. Returns ``None`` when there is no metagraph yet."""
-        client, store, weights = self.client, self.store, self.weights
-        if client is None or store is None or weights is None:
-            raise RuntimeError("the validator has not started")
+        client, store = self._parts()[:2]
         mg = self.metagraph.snapshot()
         if mg is None:
             _log.warning("round_skipped", reason="no metagraph snapshot")
             return None
         started = time.perf_counter()
-        hotkeys = {n.uid: n.hotkey for n in mg.neurons}
-        for old in (
-            await anyio.to_thread.run_sync(store.sync_hotkeys, hotkeys)
-        ).values():
-            client.forget(old)
-        self._maybe_reprobe(mg)
+        hotkeys = await self.begin_round(mg)
         rid = (
             round_id
             if round_id is not None
@@ -408,6 +422,65 @@ class ValidatorRunner:
             if uid in hotkeys and math.isfinite(float(v))
         }
         await anyio.to_thread.run_sync(store.update, scores, hotkeys, mg.block)
+        return await self.end_round(rid, mg, results, scores, started)
+
+    def _parts(self) -> tuple[ValidatorClient, ScoreStore, WeightScheduler]:
+        client, store, weights = self.client, self.store, self.weights
+        if client is None or store is None or weights is None:
+            raise RuntimeError("the validator has not started")
+        return client, store, weights
+
+    async def begin_round(self, mg: MetagraphView) -> dict[int, str]:
+        """Round start: reset replaced hotkeys' scores, re-probe once per tempo.
+
+        Returns the snapshot's ``uid -> hotkey`` map. :meth:`run_round` calls
+        it; custom loops (``compat.TemplateValidatorAdapter``) call it too.
+        """
+        client, store = self._parts()[:2]
+        hotkeys = {n.uid: n.hotkey for n in mg.neurons}
+        for old in (
+            await anyio.to_thread.run_sync(store.sync_hotkeys, hotkeys)
+        ).values():
+            client.forget(old)
+        self._forget_tag_changes(mg, client)
+        self._maybe_reprobe(mg)
+        return hotkeys
+
+    def _forget_tag_changes(self, mg: MetagraphView, client: ValidatorClient) -> None:
+        """D16 (spec 8.11.3 step 5): a miner whose on-chain protocol tag was the
+        kit's and now is something else (it rolled back to v10) loses its
+        protocol memory, so the next query may fall back to v10. The tag is
+        set by the miner's own signed ``ServeAxon``; a v10-shaped answer on its
+        own still never downgrades."""
+        tag = self.settings.protocol_tag
+        now = {n.hotkey: n.axon_protocol for n in mg.neurons}
+        for hotkey, before in self._protocol_tags.items():
+            if before == tag and hotkey in now and now[hotkey] != tag:
+                client.forget(hotkey)
+                _log.info(
+                    "legacy_v10_protocol_tag_changed",
+                    hotkey=hotkey,
+                    before=before,
+                    now=now[hotkey],
+                )
+        self._protocol_tags = now
+
+    async def end_round(
+        self,
+        rid: int,
+        mg: MetagraphView,
+        results: dict[int, MinerResult],
+        scores: dict[int, float],
+        started: float,
+        *,
+        submit_weights: bool = True,
+    ) -> RoundReport:
+        """Round end (scores already in the store): record the round, let the
+        weight scheduler submit if due, update metrics, log ``round ok``.
+
+        ``started`` is the round's ``time.perf_counter()`` start.
+        """
+        _client, store, weights = self._parts()
         report = self._report(rid, results, scores)
         await anyio.to_thread.run_sync(
             store.record_round,
@@ -415,7 +488,11 @@ class ValidatorRunner:
                 time.time(), report.n_queried, report.n_ok, report.p50_ms, report.p95_ms
             ),
         )
-        decision = await weights.maybe_submit(store.scores(), mg)
+        decision = (
+            await weights.maybe_submit(store.scores(), mg)
+            if submit_weights
+            else WeightDecision("disabled")
+        )
         self.metrics.validator_round_duration.observe(time.perf_counter() - started)
         self.metrics.validator_miners_by_protocol.labels(protocol="btauth/1").set(
             report.n_btauth

@@ -1,11 +1,13 @@
 import pydantic
 import bittensor as bt
+import logging
 
 from abc import ABC, abstractmethod
 from typing import List, Union, Callable, Awaitable
 from starlette.responses import StreamingResponse
 
 
+# TW-MIGRATE: TWM002 compat.StreamingSynapse arrives with the kit's streaming support (Phase 4); until then keep the route on v10 or answer without streaming
 class StreamPrompting(bt.StreamingSynapse):
     """
     StreamPrompting is a specialized implementation of the `StreamingSynapse` tailored for prompting functionalities within
@@ -85,17 +87,17 @@ class StreamPrompting(bt.StreamingSynapse):
         """
         if self.completion is None:
             self.completion = ""
-        bt.logging.debug(
+        logging.debug(
             "Processing streaming response (StreamingSynapse base class)."
         )
         async for chunk in response.content.iter_any():
-            bt.logging.debug(f"Processing chunk: {chunk}")
+            logging.debug(f"Processing chunk: {chunk}")
             tokens = chunk.decode("utf-8").split("\n")
             for token in tokens:
-                bt.logging.debug(f"--processing token: {token}")
+                logging.debug(f"--processing token: {token}")
                 if token:
                     self.completion += token
-            bt.logging.debug(f"yielding tokens {tokens}")
+            logging.debug(f"yielding tokens {tokens}")
             yield tokens
 
     def deserialize(self) -> str:

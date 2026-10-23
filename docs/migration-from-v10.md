@@ -9,11 +9,15 @@ and new nodes keep working together while the subnet migrates.
 The path:
 
 1. `tensorwire migrate scan .` lists everything that needs changing.
-2. Port the code to `tensorwire.compat` (mostly import changes; see the rules
-   below and the worked example of the template).
-3. Release. Old and new nodes keep talking (the legacy bridge).
-4. Follow the rollout runbook (spec 10b.5; `docs/migration-rollout.md` arrives
-   in Phase 3) to end the transition.
+2. `tensorwire migrate apply .` makes the mechanical rewrites and marks
+   everything else with a `# TW-MIGRATE:` comment.
+3. Fix the marked items by hand. For a template-derived subnet that is mostly
+   config and the template's own base classes; the subnet's code changes by
+   tens of lines (17 for the template, 21 for llm-detection:
+   `docs/migrations/`).
+4. Release. Old and new nodes keep talking (the legacy bridge).
+5. Follow the rollout runbook (`docs/migration-rollout.md`) to end the
+   transition; `tensorwire migrate status` gives its numbers.
 
 New subnets should use the native API (`Miner`, `SubnetValidator`); `compat`
 is for migrating code.
@@ -37,13 +41,65 @@ caches, never follows symlinks out of the repository, and reports each finding
 as `file:line: rule [severity] title`, with what it found and the fix. It says
 at the top when the repository has the template's shape. Severities:
 
-- `auto`: a mechanical rewrite (`tensorwire migrate apply`, Phase 3, does
-  these for you);
+- `auto`: a mechanical rewrite (`tensorwire migrate apply` does these for
+  you);
 - `manual`: needs a person;
 - `risk`: works, but weakens the subnet's security.
 
 Exit status 0 when every finding is `auto`, 1 otherwise (or when a file does
 not parse).
+
+## `tensorwire migrate apply`
+
+```bash
+git status                               # apply refuses a dirty tree: commit first
+tensorwire migrate apply path/to/subnet --dry-run   # the unified diff, nothing written
+tensorwire migrate apply path/to/subnet             # rewrite in place
+git diff                                 # exactly what apply changed
+```
+
+It rewrites every `auto` rule (the list is under "Rules": imports, `bt.logging`
+calls, Axon/Dendrite construction, the metagraph axons list, the weights
+helpers, `time.sleep` in coroutines, the template's validator base) and puts a
+`# TW-MIGRATE: TWMxxx <instruction>` line above every statement that still
+needs a person, including any `auto` case it could not rewrite safely.
+`import bittensor as bt` goes once nothing uses `bt` any more. Names it
+inserts never shadow your own (a module with its own `class Miner` gets
+`from tensorwire import Miner as TWMiner`). Running it twice changes nothing.
+It reads and writes only `.py` files, never through symlinks, and never
+touches wallets or `.env` files. Exit status 0; 1 when a file could not be
+parsed or rewritten (that file is named, the others are still done); 2 when
+it refuses to run. Afterwards `migrate scan` shows what is left.
+
+## The template's validator base: `TemplateValidatorAdapter`
+
+`apply` replaces the template's `BaseValidatorNeuron` import with
+`tensorwire.compat.TemplateValidatorAdapter` when your
+`template/base/validator.py` is the stock one (TWM024). The kit then runs
+what that base did by hand: the hotkey (never the coldkey), the chain and
+metagraph, `compat.Dendrite` (with the v10 fallback), the score store, weight
+setting with `TW_WEIGHTS_VERSION_KEY`, and `/healthz`, `/readyz`, `/metrics`
+on `TW_METRICS_BIND`. Your `forward()` and `reward()` stay as they are;
+`self.config`, `self.metagraph`, `self.dendrite`, `self.step`, `self.scores`,
+`self.hotkeys`, `self.uid`, `update_scores()`, `run()` and
+`with Validator() as v:` keep working. Scoring keeps the template's semantics
+(the moving average with alpha `TW_SCORE_ALPHA`, unqueried miners decay,
+replaced hotkeys are zeroed); the kit stores the scores and sets weights from
+them. Steps start at most every `TW_ROUND_INTERVAL_S`; weights follow the
+chain's rate limit and `TW_MIN_WEIGHT_INTERVAL_BLOCKS`.
+
+If your base adds methods of its own (wandb logging, stake filters, ...),
+`apply` leaves the import and marks it TWM026: make your
+`BaseValidatorNeuron` subclass `TemplateValidatorAdapter` instead of
+`BaseNeuron`, keep only your additions (override `update_scores` /
+`resync_metagraph` if you changed them; `self.scores` may be a numpy array, a
+torch tensor or a list), and add your own command-line options in an
+`add_args` classmethod that calls `super().add_args(parser)` first. The
+llm-detection case study shows one: `docs/migrations/llm-detection.md`.
+
+The miner side has no adapter: port `template/base/miner.py` and `neuron.py`
+onto `compat.Axon(miner=Miner.from_env())` and `Metagraph.of_miner(...)` as
+the template example does (about 20 lines written).
 
 ## The compat layer
 
@@ -59,7 +115,7 @@ from tensorwire.compat import Synapse, Axon, Dendrite, AxonInfo, axons_from, Met
 | `axon.serve(netuid, subtensor)` / `axon.start()` | `serve(netuid=...)` only checks the netuid; `start()` runs the miner (blocks) |
 | `bt.dendrite(wallet=wallet)` | `Dendrite(signer=RequestSigner(hotkey))` |
 | `await dendrite(axons, synapse, timeout, deserialize)` | the same call and result shapes |
-| `[metagraph.axons[uid] for uid in uids]` | `axons_from(metagraph_view, uids)`, or `Metagraph(...).axons[uid]` |
+| `[metagraph.axons[uid] for uid in uids]` | `axons_from(metagraph, uids)` (a `compat.Metagraph` or a `MetagraphView`), or `Metagraph(...).axons[uid]` |
 | `metagraph.hotkeys`, `.S`, `.validator_permit`, `.n` | `Metagraph(source)` / `Metagraph.of_miner(miner)`: same names, plain lists |
 | `process_weights_for_netuid` + `convert_weights_and_uids_for_emit` | `weights.to_mapping(uids, weights)`; v11 `SetWeights` normalises itself |
 
@@ -99,21 +155,23 @@ What changes in behaviour:
 ## Worked example
 
 `examples/migrations/template-v10-to-v11/` holds the archived template
-(`before/`, unmodified) and its hand port (`after/`), whose test runs the
-template's miner and validator together on TensorWire's FakeChain. What
-changed and what it took: `docs/migrations/template.md`.
+(`before/`, unmodified) and its port (`after/` = `migrate apply` output plus
+`hand-fixes.patch`, checked byte for byte by the golden test), whose test runs
+the template's miner and validator together on TensorWire's FakeChain. What
+changed and what it took: `docs/migrations/template.md`. A real subnet with a
+customised base: `docs/migrations/llm-detection.md`.
 
 ## Rules
 
 <a id="twm001"></a>
-### TWM001: bt.Synapse (`auto`)
+### TWM001: bt.Synapse / bt.TerminalInfo (`auto`)
 
-From tensorwire.compat import Synapse.
+From tensorwire.compat import Synapse (TerminalInfo likewise).
 
 <a id="twm002"></a>
-### TWM002: bt.StreamingSynapse (`auto`)
+### TWM002: bt.StreamingSynapse (`manual`)
 
-From tensorwire.compat import StreamingSynapse (streaming support).
+Compat.StreamingSynapse arrives with the kit's streaming support (Phase 4); until then keep the route on v10 or answer without streaming.
 
 <a id="twm003"></a>
 ### TWM003: bt.axon / bt.Axon (`auto`)
@@ -142,9 +200,9 @@ port replaces `bt.config(parser)` with a ten-line helper that turns
 `--neuron.sample_size` into `config.neuron.sample_size`.
 
 <a id="twm007"></a>
-### TWM007: bt.logging (`manual`)
+### TWM007: bt.logging calls (`auto`)
 
-Standard logging (the kit configures structlog JSON logs).
+Standard logging: bt.logging.info(...) -> logging.info(...); trace -> debug, success -> info (the kit configures JSON logs).
 
 <a id="twm008"></a>
 ### TWM008: bt.subtensor / bt.AsyncSubtensor (`manual`)
@@ -172,9 +230,9 @@ Nothing: the kit publishes the axon at startup (TW_EXTERNAL_IP).
 Tensorwire.compat.weights.to_mapping(uids, weights); v11 SetWeights normalises itself.
 
 <a id="twm013"></a>
-### TWM013: metagraph.axons[uid] lists (`auto`)
+### TWM013: [metagraph.axons[uid] for uid in uids] (`auto`)
 
-Tensorwire.compat.axons_from(metagraph_view, uids).
+Tensorwire.compat.axons_from(metagraph, uids).
 
 <a id="twm014"></a>
 ### TWM014: bt.wallet (`manual`)
@@ -222,9 +280,44 @@ Tensorwire.compat.AxonInfo (ip, port, hotkey, is_serving).
 NeuronInfo / PrometheusInfo are gone: read NeuronView from the kit's metagraph; the SS58 format is 42 (tensorwire.crypto.SS58_FORMAT).
 
 <a id="twm023"></a>
-### TWM023: tensor methods on metagraph values (`manual`)
+### TWM023: tensor methods on metagraph values (`auto`)
 
-Compat.Metagraph values are plain ints and lists: drop .item() / .tolist(), or wrap in numpy.array(...).
+Compat.Metagraph values are plain ints and lists: .item() / .tolist() are dropped (wrap in numpy.array(...) where an array is needed).
+
+<a id="twm024"></a>
+### TWM024: template BaseValidatorNeuron (`auto`)
+
+From tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron (the kit runs the loop, scores and weights).
+
+<a id="twm025"></a>
+### TWM025: bt.logging configuration (`manual`)
+
+Remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else.
+
+<a id="twm026"></a>
+### TWM026: customised template BaseValidatorNeuron (`manual`)
+
+Keep your additions: make your BaseValidatorNeuron subclass tensorwire.compat.TemplateValidatorAdapter and keep only the methods the template does not have (spec 10b.2.4).
+
+<a id="twm027"></a>
+### TWM027: time.sleep in a coroutine (`auto`)
+
+Await asyncio.sleep(...): a blocking sleep also stops the kit's health and metrics endpoints.
+
+<a id="twm028"></a>
+### TWM028: bittensor type in a string annotation (`auto`)
+
+The compat type: "bt.Synapse" -> "Synapse", "bt.metagraph.Metagraph" -> "Metagraph" (AxonInfo, TerminalInfo likewise).
+
+<a id="twm029"></a>
+### TWM029: bittensor name inside a string (`manual`)
+
+Update it by hand (a mock.patch target such as 'mod.bt.logging.info' breaks once the code it names is migrated).
+
+<a id="twm030"></a>
+### TWM030: unknown bittensor name (`manual`)
+
+Neither a known v10 symbol nor part of the v11 public API: check it by hand (removed in v11, or a typo).
 
 <a id="twm100"></a>
 ### TWM100: Synapse without required_hash_fields (`risk`)

@@ -23,9 +23,9 @@ did not parse) and ``dendrite.status_message`` set to the ``tw.*`` code.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, TypeVar, overload
+from typing import Any, Protocol, TypeVar, overload
 
 from tensorwire.auth.signer import RequestSigner
 from tensorwire.chain.gateway import MetagraphView, NeuronView
@@ -71,13 +71,21 @@ class AxonInfo:
         )
 
 
-def axons_from(mg: MetagraphView, uids: Iterable[int] | None = None) -> list[AxonInfo]:
+class _Snapshots(Protocol):
+    def snapshot(self) -> MetagraphView: ...
+
+
+def axons_from(
+    mg: MetagraphView | _Snapshots, uids: Iterable[int] | None = None
+) -> list[AxonInfo]:
     """``[metagraph.axons[uid] for uid in uids]`` for a TensorWire metagraph.
 
-    ``uids=None`` means every neuron, in UID order. An unknown UID raises
-    ``KeyError``.
+    ``mg`` is a ``MetagraphView`` or anything with ``snapshot()`` (such as
+    ``compat.Metagraph``). ``uids=None`` means every neuron, in UID order;
+    UIDs may be numpy integers. An unknown UID raises ``KeyError``.
     """
-    by_uid = {n.uid: n for n in mg.neurons}
+    view = mg if isinstance(mg, MetagraphView) else mg.snapshot()
+    by_uid = {n.uid: n for n in view.neurons}
     chosen = sorted(by_uid) if uids is None else [int(u) for u in uids]
     return [AxonInfo.from_neuron(by_uid[uid]) for uid in chosen]
 
@@ -101,9 +109,14 @@ class Dendrite:
         signer: RequestSigner | None = None,
         *,
         client: ValidatorClient | None = None,
+        on_results: Callable[[dict[int, MinerResult]], None] | None = None,
         **client_options: Any,
     ) -> None:
-        """Pass a ``signer`` (plus ``ValidatorClient`` options) or a ``client``."""
+        """Pass a ``signer`` (plus ``ValidatorClient`` options) or a ``client``.
+
+        ``on_results`` is called with every query's raw ``{uid: MinerResult}``
+        (``TemplateValidatorAdapter`` uses it for the round report).
+        """
         if client is None:
             if signer is None:
                 raise TypeError("Dendrite needs signer= or client=")
@@ -111,6 +124,7 @@ class Dendrite:
         elif signer is not None or client_options:
             raise TypeError("pass signer/options or client, not both")
         self.client = client
+        self._on_results = on_results
 
     @property
     def hotkey(self) -> str:
@@ -184,6 +198,8 @@ class Dendrite:
             legacy_synapse=synapse,
             timeout_s=timeout,
         )
+        if self._on_results is not None:
+            self._on_results(results)
         items = [
             self._item(
                 axon,
@@ -210,7 +226,10 @@ class Dendrite:
             )
         data = result.data
         if result.ok and isinstance(data, Synapse):
+            fields = type(item).model_fields
             for name, value in data.user_fields().items():
+                if name in fields and fields[name].frozen:
+                    continue  # a request field the miner cannot change (as in v10)
                 setattr(item, name, value)
         code = status_code_for(result)
         message = "Success" if result.ok else result.status_message or result.error_code

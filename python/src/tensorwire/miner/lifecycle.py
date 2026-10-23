@@ -11,8 +11,9 @@ Startup, in order:
 3. Connect the chain gateway and fetch the first metagraph (blocking, at
    most ``TW_STARTUP_TIMEOUT_S``).
 4. Exit with code 3 if our hotkey is not registered on ``TW_NETUID``.
-5. Build the nonce store, verifier, caller gate and per-hotkey limiter; refuse
-   a per-process nonce store when several workers or instances run.
+5. Build the nonce store, verifier, caller gate and both rate limiters (Redis
+   when ``TW_REDIS_URL`` is set, else per process); refuse a per-process
+   nonce store or rate limiter when several workers or instances run.
 6. Check the clock against NTP.
 7. Publish the axon if the on-chain one differs from
    ``TW_EXTERNAL_IP:TW_EXTERNAL_PORT`` (only when ``TW_AUTO_SERVE_AXON=1`` and
@@ -22,9 +23,10 @@ Startup, in order:
    metagraph gauges.
 9. Mark ready.
 
-Shutdown cancels the background tasks and closes the metagraph source, the
-gateway and the nonce store. Draining in-flight requests is the server's job
-(``Miner.run`` gives uvicorn ``TW_DRAIN_S`` for it).
+Shutdown marks the miner not ready, cancels the background tasks and closes
+the metagraph source, the gateway, the nonce store and the rate limiters.
+Draining in-flight requests is the server's job (``Miner.run`` gives uvicorn
+``TW_DRAIN_S`` for it).
 """
 
 from __future__ import annotations
@@ -61,7 +63,12 @@ from tensorwire.chain.metagraph_cache import (
 from tensorwire.config import MinerSettings
 from tensorwire.crypto import HotkeySigner
 from tensorwire.errors import StartupError
-from tensorwire.limits.ratelimit import MemoryRateLimiter, RateLimiter
+from tensorwire.limits.ratelimit import (
+    MemoryRateLimiter,
+    RateDecision,
+    RateLimiter,
+    RedisRateLimiter,
+)
 from tensorwire.miner.legacy import (
     LegacyServerFactory,
     LegacyServerLike,
@@ -108,6 +115,8 @@ class MinerParts:
     axon_retry_poll_s: float = 12.0
     legacy_server: LegacyServerFactory | None = None
     """Builds the v10 bridge (default: ``legacy_v10.server.LegacyServer``)."""
+    ip_limiter: RateLimiter | None = None
+    hotkey_limiter: RateLimiter | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +140,9 @@ class Runtime:
     store_backend: str
     verifier: RequestVerifier
     gate: CallerGate
+    ip_limiter: RateLimiter
     hotkey_limiter: RateLimiter
+    limiter_backend: str
     clock: ClockGuard
     legacy: LegacyServerLike | None = None
     axon_in_sync: bool | None = None
@@ -182,6 +193,7 @@ class Lifecycle:
             direction="inbound",
             monotonic=parts.monotonic,
             until=settings.legacy_v10_until,
+            clock_ns=parts.clock_ns,
         )
 
     @property
@@ -332,11 +344,17 @@ class Lifecycle:
                 "memory_nonce_store_multiworker",
                 hint="replays across workers/instances are NOT detected",
             )
-        if multi:
+        ip_limiter, hotkey_limiter, limiter_backend = self._build_limiters()
+        if limiter_backend == "memory" and multi:
+            if not s.unsafe_allow_memory_nonce_multiworker:
+                raise StartupError(
+                    "per-process rate limits with TW_WORKERS > 1 or "
+                    "TW_INSTANCE_COUNT > 1 multiply every limit by the number of "
+                    "processes; set TW_REDIS_URL (spec 8.6.2)"
+                )
             _log.warning(
                 "per_process_rate_limits",
-                hint="rate limits apply per worker/instance until the Redis "
-                "limiter is configured",
+                hint="rate limits apply per worker/instance, not in total",
             )
         verifier = RequestVerifier(
             hotkey_ss58,
@@ -375,14 +393,45 @@ class Lifecycle:
             gate=CallerGate(
                 metagraph, strict=s.metagraph_strict, clock=self.parts.monotonic
             ),
-            hotkey_limiter=MemoryRateLimiter(
-                rate=s.rate_hotkey_per_s,
-                burst=s.rate_hotkey_burst,
-                clock=self.parts.monotonic,
-            ),
+            ip_limiter=ip_limiter,
+            hotkey_limiter=hotkey_limiter,
+            limiter_backend=limiter_backend,
             clock=clock,
             legacy=legacy,
         )
+
+    def _build_limiters(self) -> tuple[RateLimiter, RateLimiter, str]:
+        """``(ip, hotkey, backend)``: Redis when ``TW_REDIS_URL`` is set (8.6.2)."""
+        s = self.settings
+        p = self.parts
+        url = None if s.redis_url is None else s.redis_url.get_secret_value()
+
+        def build(rate: float, burst: int, layer: str) -> RateLimiter:
+            if url is None:
+                return MemoryRateLimiter(rate=rate, burst=burst, clock=p.monotonic)
+            try:
+                return RedisRateLimiter(
+                    url,
+                    rate=rate,
+                    burst=burst,
+                    prefix=f"tw:rl:{layer}:",
+                    clock=p.monotonic,
+                )
+            except RuntimeError as exc:  # the redis extra is not installed
+                raise StartupError(str(exc)) from None
+
+        ip = p.ip_limiter or build(s.rate_ip_per_s, s.rate_ip_burst, "ip")
+        hotkey = p.hotkey_limiter or build(
+            s.rate_hotkey_per_s, s.rate_hotkey_burst, "hk"
+        )
+        shared = all(isinstance(x, RedisRateLimiter) for x in (ip, hotkey))
+        return ip, hotkey, "redis" if shared else "memory"
+
+    async def acquire_ip(self, key: str) -> RateDecision:
+        """Layer 1 (pre-auth, per IP). Allows everything before startup."""
+        if self._runtime is None:
+            return RateDecision(allowed=True, retry_after_s=0.0)
+        return await self._runtime.ip_limiter.acquire(key)
 
     def _on_clock_reading(self, reading: ClockReading) -> None:
         offset = reading.offset_s
@@ -523,6 +572,11 @@ class Lifecycle:
         ping = getattr(rt.store, "ping", None)
         if ping is not None and not await anyio.to_thread.run_sync(ping):
             reasons.append("nonce_store_unreachable")
+        for limiter in (rt.ip_limiter, rt.hotkey_limiter):
+            limiter_ping = getattr(limiter, "ping", None)
+            if limiter_ping is not None and not await limiter_ping():
+                reasons.append("rate_limiter_unreachable")
+                break
         if rt.clock.skewed:
             reasons.append("clock_skew")
         if rt.axon_in_sync is False:
@@ -553,4 +607,9 @@ class Lifecycle:
         if close is not None:
             with contextlib.suppress(Exception):
                 close()
+        for limiter in (rt.ip_limiter, rt.hotkey_limiter):
+            aclose = getattr(limiter, "aclose", None)
+            if aclose is not None:
+                with contextlib.suppress(Exception):
+                    await aclose()
         _log.info("miner_stopped")

@@ -9,6 +9,9 @@ from functools import partial
 from starlette.types import Send
 
 import bittensor as bt
+import logging
+from tensorwire import Miner
+from tensorwire.compat import Axon
 from transformers import GPT2Tokenizer
 from typing import List, Dict, Tuple, Union, Callable, Awaitable
 
@@ -24,30 +27,33 @@ class StreamMiner(ABC):
         self.config.merge(base_config)
 
         check_config(StreamMiner, self.config)
-        bt.logging.info(self.config)  # TODO: duplicate print?
+        logging.info(self.config)  # TODO: duplicate print?
 
         self.prompt_cache: Dict[str, Tuple[str, int]] = {}
 
         # Activating Bittensor's logging with the set configurations.
+        # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
         bt.logging.set_config(config=self.config.logging)
 
         # Wallet holds cryptographic information, ensuring secure transactions and communication.
+        # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
         self.wallet = wallet or bt.wallet(config=self.config)
-        bt.logging.info(f"Wallet {self.wallet}")
+        logging.info(f"Wallet {self.wallet}")
 
         # subtensor manages the blockchain connection, facilitating interaction with the Bittensor blockchain.
+        # TW-MIGRATE: TWM008 the kit's chain gateway and MetagraphCache, or bt.Subtensor directly
         self.subtensor = subtensor or bt.subtensor(config=self.config)
-        bt.logging.info(f"Subtensor: {self.subtensor}")
-        bt.logging.info(
+        logging.info(f"Subtensor: {self.subtensor}")
+        logging.info(
             f"Running miner for subnet: {self.config.netuid} on network: {self.subtensor.chain_endpoint} with config:"
         )
 
         # metagraph provides the network's current state, holding state about other participants in a subnet.
         self.metagraph = self.subtensor.metagraph(self.config.netuid)
-        bt.logging.info(f"Metagraph: {self.metagraph}")
+        logging.info(f"Metagraph: {self.metagraph}")
 
         if self.wallet.hotkey.ss58_address not in self.metagraph.hotkeys:
-            bt.logging.error(
+            logging.error(
                 f"\nYour validator: {self.wallet} if not registered to chain connection: {self.subtensor} \nRun btcli register and try again. "
             )
             exit()
@@ -56,19 +62,17 @@ class StreamMiner(ABC):
             self.my_subnet_uid = self.metagraph.hotkeys.index(
                 self.wallet.hotkey.ss58_address
             )
-            bt.logging.info(f"Running miner on uid: {self.my_subnet_uid}")
+            logging.info(f"Running miner on uid: {self.my_subnet_uid}")
 
         # The axon handles request processing, allowing validators to send this process requests.
-        self.axon = axon or bt.axon(
-            wallet=self.wallet, port=self.config.axon.port
-        )
+        self.axon = axon or Axon(miner=Miner.from_env())
         # Attach determiners which functions are called when servicing a request.
-        bt.logging.info(f"Attaching forward function to axon.")
+        logging.info(f"Attaching forward function to axon.")
         print(f"Attaching forward function to axon. {self._prompt}")
         self.axon.attach(
             forward_fn=self._prompt,
         )
-        bt.logging.info(f"Axon created: {self.axon}")
+        logging.info(f"Axon created: {self.axon}")
 
         # Instantiate runners
         self.should_exit: bool = False
@@ -77,6 +81,7 @@ class StreamMiner(ABC):
         self.lock = asyncio.Lock()
         self.request_timestamps: Dict = {}
 
+    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
     @abstractmethod
     def config(self) -> "bt.Config":
         ...
@@ -147,7 +152,7 @@ class StreamMiner(ABC):
             netuid=self.config.netuid,
             hotkey_ss58=self.wallet.hotkey.ss58_address,
         ):
-            bt.logging.error(
+            logging.error(
                 f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}"
                 f"Please register the hotkey using `btcli subnets register` before trying again"
             )
@@ -155,23 +160,23 @@ class StreamMiner(ABC):
 
         # Serve passes the axon information to the network + netuid we are hosting on.
         # This will auto-update if the axon port of external ip have changed.
-        bt.logging.info(
+        logging.info(
             f"Serving axon {StreamPrompting} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
         )
         self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
 
         # Start  starts the miner's axon, making it active on the network.
-        bt.logging.info(
+        logging.info(
             f"Starting axon server on port: {self.config.axon.port}"
         )
         self.axon.start()
 
         # --- Run until should_exit = True.
         self.last_epoch_block = self.subtensor.get_current_block()
-        bt.logging.info(f"Miner starting at block: {self.last_epoch_block}")
+        logging.info(f"Miner starting at block: {self.last_epoch_block}")
 
         # This loop maintains the miner's operations until intentionally stopped.
-        bt.logging.info(f"Starting main loop")
+        logging.info(f"Starting main loop")
         step = 0
         try:
             while not self.should_exit:
@@ -201,7 +206,7 @@ class StreamMiner(ABC):
                 )
                 log = (
                     f"Step:{step} | "
-                    f"Block:{metagraph.block.item()} | "
+                    f"Block:{metagraph.block} | "
                     f"Stake:{metagraph.S[self.my_subnet_uid]} | "
                     f"Rank:{metagraph.R[self.my_subnet_uid]} | "
                     f"Trust:{metagraph.T[self.my_subnet_uid]} | "
@@ -209,19 +214,19 @@ class StreamMiner(ABC):
                     f"Incentive:{metagraph.I[self.my_subnet_uid]} | "
                     f"Emission:{metagraph.E[self.my_subnet_uid]}"
                 )
-                bt.logging.info(log)
+                logging.info(log)
 
                 step += 1
 
         # If someone intentionally stops the miner, it'll safely terminate operations.
         except KeyboardInterrupt:
             self.axon.stop()
-            bt.logging.success("Miner killed by keyboard interrupt.")
+            logging.info("Miner killed by keyboard interrupt.")
             exit()
 
         # In case of unforeseen errors, the miner will log the error and continue operations.
         except Exception as e:
-            bt.logging.error(traceback.format_exc())
+            logging.error(traceback.format_exc())
 
     def run_in_background_thread(self):
         """
@@ -229,23 +234,23 @@ class StreamMiner(ABC):
         This is useful for non-blocking operations.
         """
         if not self.is_running:
-            bt.logging.debug("Starting miner in background thread.")
+            logging.debug("Starting miner in background thread.")
             self.should_exit = False
             self.thread = threading.Thread(target=self.run, daemon=True)
             self.thread.start()
             self.is_running = True
-            bt.logging.debug("Started")
+            logging.debug("Started")
 
     def stop_run_thread(self):
         """
         Stops the miner's operations that are running in the background thread.
         """
         if self.is_running:
-            bt.logging.debug("Stopping miner in background thread.")
+            logging.debug("Stopping miner in background thread.")
             self.should_exit = True
             self.thread.join(5)
             self.is_running = False
-            bt.logging.debug("Stopped")
+            logging.debug("Stopped")
 
     def __enter__(self):
         """
@@ -271,6 +276,7 @@ class StreamMiner(ABC):
 
 
 class StreamingTemplateMiner(StreamMiner):
+    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
     def config(self) -> "bt.Config":
         """
         Returns the configuration object specific to this miner.
@@ -283,6 +289,7 @@ class StreamingTemplateMiner(StreamMiner):
         """
         parser = argparse.ArgumentParser(description="Streaming Miner Configs")
         self.add_args(parser)
+        # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
         return bt.config(parser)
 
     def add_args(cls, parser: argparse.ArgumentParser):
@@ -319,7 +326,7 @@ class StreamingTemplateMiner(StreamMiner):
             miner. Developers can swap out the tokenizer, model, or adjust how streaming responses
             are generated to suit their specific applications.
         """
-        bt.logging.trace("HI. PROMPT()")
+        logging.debug("HI. PROMPT()")
         tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
         # Simulated function to decode token IDs into strings. In a real-world scenario,
@@ -345,23 +352,23 @@ class StreamingTemplateMiner(StreamMiner):
                 response, or the model being used. Developers can also introduce more sophisticated
                 processing steps or modify how tokens are sent back to the client.
             """
-            bt.logging.trace("HI. _PROMPT()")
+            logging.debug("HI. _PROMPT()")
             input_ids = tokenizer(
                 text, return_tensors="pt"
             ).input_ids.squeeze()
             buffer = []
-            bt.logging.debug(f"Input text: {text}")
-            bt.logging.debug(f"Input ids: {input_ids}")
+            logging.debug(f"Input text: {text}")
+            logging.debug(f"Input ids: {input_ids}")
 
             N = 3  # Number of tokens to send back to the client at a time
             for token in model(input_ids):
-                bt.logging.trace(f"appending token: {token}")
+                logging.debug(f"appending token: {token}")
                 buffer.append(token)
                 # If buffer has N tokens, send them back to the client.
                 if len(buffer) == N:
-                    time.sleep(0.1)
+                    await asyncio.sleep(0.1)
                     joined_buffer = "".join(buffer)
-                    bt.logging.debug(f"sedning tokens: {joined_buffer}")
+                    logging.debug(f"sedning tokens: {joined_buffer}")
                     await send(
                         {
                             "type": "http.response.body",
@@ -369,7 +376,7 @@ class StreamingTemplateMiner(StreamMiner):
                             "more_body": True,
                         }
                     )
-                    bt.logging.debug(f"Streamed tokens: {joined_buffer}")
+                    logging.debug(f"Streamed tokens: {joined_buffer}")
                     buffer = []  # Clear the buffer for next batch of tokens
 
             # Send any remaining tokens in the buffer
@@ -382,12 +389,12 @@ class StreamingTemplateMiner(StreamMiner):
                         "more_body": False,  # No more tokens to send
                     }
                 )
-                bt.logging.trace(f"Streamed tokens: {joined_buffer}")
+                logging.debug(f"Streamed tokens: {joined_buffer}")
 
         message = synapse.messages[0]
-        bt.logging.trace(f"message in _prompt: {message}")
+        logging.debug(f"message in _prompt: {message}")
         token_streamer = partial(_prompt, message)
-        bt.logging.trace(f"token streamer: {token_streamer}")
+        logging.debug(f"token streamer: {token_streamer}")
         return synapse.create_streaming_response(token_streamer)
 
 

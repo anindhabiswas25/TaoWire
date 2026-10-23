@@ -299,6 +299,59 @@ async def test_legacy_auto_builds_the_real_bridge_by_default(
     assert report.n_btauth == 2  # TensorWire miners advertise tag 87: btauth/1
 
 
+async def test_legacy_auto_refuses_an_ed25519_hotkey(
+    router: AppRouter, fake_chain: FakeChain, tw_clock: FakeClock, tmp_path: Path
+) -> None:
+    # Spec 8.11.3 / D12: v10 Axons verify sr25519 only.
+    r = runner(
+        fake_chain,
+        tw_clock,
+        tmp_path,
+        router,
+        hotkey=dev_key("alice", "ed25519").keypair,
+    )
+    _auto(r)
+    with pytest.raises(StartupError) as info:
+        await r.start()
+    message = str(info.value)
+    assert "TW_LEGACY_V10_CLIENT=auto" in message
+    assert "TW_LEGACY_V10_CLIENT_UNTIL" in message
+    assert "ed25519" in message
+    assert r.client is None
+
+
+async def test_ed25519_hotkey_starts_with_the_legacy_client_off(
+    router: AppRouter, fake_chain: FakeChain, tw_clock: FakeClock, tmp_path: Path
+) -> None:
+    key = dev_key("alice", "ed25519")
+    fake_chain.register(TEST_NETUID, key.ss58, validator_permit=True)
+    gateway = fake_chain.with_signer(key.ss58)
+    r = runner(
+        fake_chain,
+        tw_clock,
+        tmp_path,
+        router,
+        hotkey=key.keypair,
+        gateway=gateway,
+        metagraph=FakeMetagraphSource(gateway, TEST_NETUID, clock=tw_clock.monotonic),
+    )
+    async with r.running():
+        assert r.client is not None
+        assert not r.client.legacy_enabled
+
+
+async def test_tls_pinning_policy_is_refused_at_startup(
+    router: AppRouter, fake_chain: FakeChain, tw_clock: FakeClock, tmp_path: Path
+) -> None:
+    r = runner(fake_chain, tw_clock, tmp_path, router)
+    r.settings = r.settings.model_copy(
+        update={"scheme_policy": "https-if-tls-published"}
+    )
+    with pytest.raises(StartupError, match="TW_SCHEME_POLICY=https-if-tls-published"):
+        await r.start()
+    assert r.client is None
+
+
 async def test_legacy_auto_without_the_bridge(
     router: AppRouter,
     fake_chain: FakeChain,
@@ -341,3 +394,51 @@ async def test_legacy_auto_uses_an_injected_bridge(
     assert built == [dev_key("alice").ss58]
     assert report is not None
     assert report.n_ok == 2
+
+
+def _days_left(r: ValidatorRunner, direction: str) -> float | None:
+    return r.metrics.registry.get_sample_value(
+        "tw_legacy_v10_days_remaining", {"direction": direction}
+    )
+
+
+async def test_outbound_days_remaining_is_current_at_every_scrape(
+    router: AppRouter, fake_chain: FakeChain, tw_clock: FakeClock, tmp_path: Path
+) -> None:
+    # Spec 8.11.2 / G3-5: computed at scrape time, not once at startup.
+    r = runner(
+        fake_chain,
+        tw_clock,
+        tmp_path,
+        router,
+        legacy=lambda settings, signer: (object(), _StaticSelector()),
+    )
+    today = dt.datetime.fromtimestamp(tw_clock.time(), dt.timezone.utc).date()
+    r.settings = r.settings.model_copy(
+        update={
+            "legacy_v10_client": "auto",
+            "legacy_v10_client_until": today + dt.timedelta(days=3),
+        }
+    )
+    assert _days_left(r, "outbound") is None
+    async with r.running():
+        assert _days_left(r, "outbound") == 3.0
+        tw_clock.advance(86_400)  # the date changes in a running process
+        assert _days_left(r, "outbound") == 2.0
+        assert b'tw_legacy_v10_days_remaining{direction="outbound"} 2.0' in (
+            r.metrics.render()
+        )
+        tw_clock.advance(3 * 86_400)
+        assert _days_left(r, "outbound") == 0.0  # never negative
+
+
+class _StaticSelector:
+    def choose(self, n: Any) -> str:
+        return "btauth/1"
+
+    def after_btauth(self, n: Any, **kw: Any) -> bool:
+        return False
+
+    def reprobe(self) -> None: ...
+
+    def forget(self, hk: str) -> None: ...

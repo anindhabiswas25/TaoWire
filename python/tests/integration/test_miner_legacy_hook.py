@@ -23,7 +23,7 @@ from pydantic import BaseModel
 from tensorwire.auth.verifier import Caller
 from tensorwire.compat.synapse import Synapse
 from tensorwire.crypto import CRYPTO_SR25519
-from tensorwire.errors import LegacyAuthFailed, StartupError, TWError
+from tensorwire.errors import HandlerError, LegacyAuthFailed, StartupError, TWError
 from tensorwire.miner.app import Miner
 from tensorwire.miner.routes import RouteContext
 from tensorwire.testing.client import BASE_URL, SignedClient
@@ -101,6 +101,8 @@ class FakeLegacyServer:
         self.responses.append(
             {"request": request, "status": status, "error": error, "raw": raw_body}
         )
+        if status == 200 and getattr(synapse, "result", None) == "REFUSE":
+            raise HandlerError()  # as B's encode_response does for a non-finite answer
         if synapse is not None:
             body = synapse.model_dump_json().encode()
         elif raw_body is not None:
@@ -186,6 +188,17 @@ async def test_v10_request_on_a_synapse_route(
     text = tw_miner.metrics.render().decode()
     assert 'tw_legacy_v10_requests_total{direction="inbound",result="ok"} 1.0' in text
     assert 'tw_legacy_v10_days_remaining{direction="inbound"}' in text
+
+
+async def test_answer_refused_by_respond_counts_once(
+    miner_app: Any, tw_miner: Miner
+) -> None:
+    r = await post_v10(miner_app, "/Syn", Syn(text="refuse").model_dump_json().encode())
+    assert r.status_code == 500
+    assert r.headers["bt_header_axon_status_code"] == "500"
+    text = tw_miner.metrics.render().decode()
+    assert 'result="tw.handler_error"} 1.0' in text
+    assert 'result="ok"' not in text
 
 
 async def test_native_route_answers_through_its_synapse_alias(
@@ -343,3 +356,29 @@ def test_route_options_are_checked(tw_miner_kwargs: dict[str, Any]) -> None:
 
     with pytest.raises(ValueError, match="v10 path"):
         _ = miner.app
+
+
+async def test_inbound_days_remaining_is_current_at_every_scrape(
+    tw_miner_kwargs: dict[str, Any], tw_clock: FakeClock
+) -> None:
+    # Spec 8.11.2 / G3-5: a long-running miner reports the real count.
+    today = dt.datetime.fromtimestamp(tw_clock.time(), dt.timezone.utc).date()
+    kwargs = dict(tw_miner_kwargs)
+    kwargs["settings"] = kwargs["settings"].model_copy(
+        update={"legacy_v10_until": today + dt.timedelta(days=15)}
+    )
+    miner = Miner(**kwargs, legacy_server=lambda **kw: FakeLegacyServer(kw))
+
+    def days_left() -> float | None:
+        return miner.metrics.registry.get_sample_value(
+            "tw_legacy_v10_days_remaining", {"direction": "inbound"}
+        )
+
+    async with miner.running():
+        assert days_left() == 15.0
+        tw_clock.advance(86_400)
+        assert days_left() == 14.0
+        tw_clock.advance(86_400)
+        assert days_left() == 13.0  # below the 14-day alert line, no restart
+        tw_clock.advance(20 * 86_400)
+        assert days_left() == 0.0

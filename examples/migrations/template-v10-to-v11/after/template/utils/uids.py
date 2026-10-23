@@ -1,8 +1,7 @@
 import random
+from tensorwire.compat import Metagraph
 import numpy as np
 from typing import List
-
-from tensorwire.compat import Metagraph
 
 
 def check_uid_availability(

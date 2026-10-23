@@ -1,4 +1,4 @@
-"""The archived v10 template, hand-ported to ``tensorwire.compat`` (10b.6, Phase 2).
+"""The archived v10 template, ported to ``tensorwire.compat`` (10b.6).
 
 ``examples/migrations/template-v10-to-v11/after/`` must run: its own test
 starts the template's miner and validator in process on FakeChain, queries,
@@ -40,8 +40,6 @@ def test_port_removes_the_core_findings() -> None:
     core = ("neurons/", "template/")
     left = [f for f in scan_repo(PORT / "after").findings if f.path.startswith(core)]
     assert ("template/protocol.py", "TWM100") in before
-    # Left: metagraph.axons[uid] (works through compat.Metagraph; `apply` may
-    # rewrite it) and the template's own permit flag, which no longer matters:
-    # the kit enforces the permit (TW_REQUIRE_PERMIT=1) before blacklist_fn.
-    assert {f.rule for f in left if f.severity != "auto"} == {"TWM103"}
-    assert {f.rule for f in left if f.severity == "auto"} == {"TWM013"}
+    # Left: only the template's own permit flag, which no longer matters: the
+    # kit enforces the permit (TW_REQUIRE_PERMIT=1) before blacklist_fn.
+    assert {f.rule for f in left} == {"TWM103"}

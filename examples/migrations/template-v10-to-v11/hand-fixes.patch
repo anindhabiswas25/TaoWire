@@ -1,0 +1,1995 @@
+diff --git a/neurons/miner.py b/neurons/miner.py
+index 9c32979..2721e2d 100644
+--- a/neurons/miner.py
++++ b/neurons/miner.py
+@@ -17,7 +17,6 @@
+ # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ # DEALINGS IN THE SOFTWARE.
+ 
+-import time
+ import typing
+ import logging
+ 
+@@ -37,8 +36,8 @@ class Miner(BaseMinerNeuron):
+     This class provides reasonable default behavior for a miner such as blacklisting unrecognized hotkeys, prioritizing requests based on stake, and forwarding requests to the forward function. If you need to define custom
+     """
+ 
+-    def __init__(self, config=None):
+-        super(Miner, self).__init__(config=config)
++    def __init__(self, config=None, miner=None):
++        super(Miner, self).__init__(config=config, miner=miner)
+ 
+         # TODO(developer): Anything specific to your use case you can do here
+ 
+@@ -167,7 +166,4 @@ class Miner(BaseMinerNeuron):
+ 
+ # This is the main function, which runs the miner.
+ if __name__ == "__main__":
+-    with Miner() as miner:
+-        while True:
+-            logging.info(f"Miner running... {time.time()}")
+-            time.sleep(5)
++    Miner().run()
+diff --git a/neurons/validator.py b/neurons/validator.py
+index d3c9b0d..1cee12f 100644
+--- a/neurons/validator.py
++++ b/neurons/validator.py
+@@ -39,8 +39,8 @@ class Validator(BaseValidatorNeuron):
+     This class provides reasonable default behavior for a validator such as keeping a moving average of the scores of the miners and using them to set weights at the end of each epoch. Additionally, the scores are reset for new hotkeys at the end of each epoch.
+     """
+ 
+-    def __init__(self, config=None):
+-        super(Validator, self).__init__(config=config)
++    def __init__(self, config=None, **kit_parts):
++        super(Validator, self).__init__(config=config, **kit_parts)
+ 
+         logging.info("load_state()")
+         self.load_state()
+diff --git a/requirements.txt b/requirements.txt
+index 196e138..dac9619 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,3 +1,4 @@
++tensorwire>=0.1.0.dev0
+ starlette>=0.30.0
+ pydantic>=2
+ rich>=13
+diff --git a/template/__init__.py b/template/__init__.py
+index cb07b8c..37cbcc5 100644
+--- a/template/__init__.py
++++ b/template/__init__.py
+@@ -31,5 +31,4 @@ __spec_version__ = (
+ from . import protocol
+ from . import base
+ from . import validator
+-from . import api
+ from .subnet_links import SUBNET_LINKS
+diff --git a/template/api/__init__.py b/template/api/__init__.py
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/template/api/dummy.py b/template/api/dummy.py
+deleted file mode 100644
+index a3dac36..0000000
+--- a/template/api/dummy.py
++++ /dev/null
+@@ -1,47 +0,0 @@
+-# The MIT License (MIT)
+-# Copyright © 2021 Yuma Rao
+-# Copyright © 2023 Opentensor Foundation
+-# Copyright © 2023 Opentensor Technologies Inc
+-
+-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+-
+-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+-# the Software.
+-
+-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+-# DEALINGS IN THE SOFTWARE.
+-
+-import bittensor as bt
+-from tensorwire.compat import Synapse
+-from typing import List, Optional, Union, Any, Dict
+-from template.protocol import Dummy
+-# TW-MIGRATE: TWM016 call the subnet with compat.Dendrite or ValidatorClient
+-from bittensor.subnets import SubnetsAPI
+-
+-
+-class DummyAPI(SubnetsAPI):
+-    # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
+-    def __init__(self, wallet: "bt.wallet"):
+-        super().__init__(wallet)
+-        self.netuid = 33
+-        self.name = "dummy"
+-
+-    def prepare_synapse(self, dummy_input: int) -> Dummy:
+-        synapse.dummy_input = dummy_input
+-        return synapse
+-
+-    def process_responses(
+-        self, responses: List[Union["Synapse", Any]]
+-    ) -> List[int]:
+-        outputs = []
+-        for response in responses:
+-            if response.dendrite.status_code != 200:
+-                continue
+-            return outputs.append(response.dummy_output)
+-        return outputs
+diff --git a/template/api/get_query_axons.py b/template/api/get_query_axons.py
+deleted file mode 100644
+index aa3643a..0000000
+--- a/template/api/get_query_axons.py
++++ /dev/null
+@@ -1,133 +0,0 @@
+-# The MIT License (MIT)
+-# Copyright © 2021 Yuma Rao
+-# Copyright © 2023 Opentensor Foundation
+-# Copyright © 2023 Opentensor Technologies Inc
+-
+-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+-
+-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+-# the Software.
+-
+-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+-# DEALINGS IN THE SOFTWARE.
+-import numpy as np
+-import random
+-import bittensor as bt
+-import logging
+-from tensorwire import RequestSigner
+-from tensorwire.compat import Dendrite, Synapse, axons_from
+-
+-
+-async def ping_uids(dendrite, metagraph, uids, timeout=3):
+-    """
+-    Pings a list of UIDs to check their availability on the Bittensor network.
+-
+-    Args:
+-        dendrite (bittensor.dendrite): The dendrite instance to use for pinging nodes.
+-        metagraph (bittensor.metagraph): The metagraph instance containing network information.
+-        uids (list): A list of UIDs (unique identifiers) to ping.
+-        timeout (int, optional): The timeout in seconds for each ping. Defaults to 3.
+-
+-    Returns:
+-        tuple: A tuple containing two lists:
+-            - The first list contains UIDs that were successfully pinged.
+-            - The second list contains UIDs that failed to respond.
+-    """
+-    axons = axons_from(metagraph, uids)
+-    try:
+-        responses = await dendrite(
+-            axons,
+-            Synapse(),  # TODO: potentially get the synapses available back?
+-            deserialize=False,
+-            timeout=timeout,
+-        )
+-        successful_uids = [
+-            uid
+-            for uid, response in zip(uids, responses)
+-            if response.dendrite.status_code == 200
+-        ]
+-        failed_uids = [
+-            uid
+-            for uid, response in zip(uids, responses)
+-            if response.dendrite.status_code != 200
+-        ]
+-    except Exception as e:
+-        logging.error(f"Dendrite ping failed: {e}")
+-        successful_uids = []
+-        failed_uids = uids
+-    logging.debug(f"ping() successful uids: {successful_uids}")
+-    logging.debug(f"ping() failed uids    : {failed_uids}")
+-    return successful_uids, failed_uids
+-
+-
+-async def get_query_api_nodes(dendrite, metagraph, n=0.1, timeout=3):
+-    """
+-    Fetches the available API nodes to query for the particular subnet.
+-
+-    Args:
+-        wallet (bittensor.wallet): The wallet instance to use for querying nodes.
+-        metagraph (bittensor.metagraph): The metagraph instance containing network information.
+-        n (float, optional): The fraction of top nodes to consider based on stake. Defaults to 0.1.
+-        timeout (int, optional): The timeout in seconds for pinging nodes. Defaults to 3.
+-
+-    Returns:
+-        list: A list of UIDs representing the available API nodes.
+-    """
+-    logging.debug(
+-        f"Fetching available API nodes for subnet {metagraph.netuid}"
+-    )
+-    vtrust_uids = [
+-        uid.item()
+-        for uid in metagraph.uids
+-        if metagraph.validator_trust[uid] > 0
+-    ]
+-    top_uids = np.where(metagraph.S > np.quantile(metagraph.S, 1 - n))[
+-        0
+-    ].tolist()
+-    init_query_uids = set(top_uids).intersection(set(vtrust_uids))
+-    query_uids, _ = await ping_uids(
+-        dendrite, metagraph, list(init_query_uids), timeout=timeout
+-    )
+-    logging.debug(
+-        f"Available API node UIDs for subnet {metagraph.netuid}: {query_uids}"
+-    )
+-    if len(query_uids) > 3:
+-        query_uids = random.sample(query_uids, 3)
+-    return query_uids
+-
+-
+-async def get_query_api_axons(
+-    wallet, metagraph=None, n=0.1, timeout=3, uids=None
+-):
+-    """
+-    Retrieves the axons of query API nodes based on their availability and stake.
+-
+-    Args:
+-        wallet (bittensor.wallet): The wallet instance to use for querying nodes.
+-        metagraph (bittensor.metagraph, optional): The metagraph instance containing network information.
+-        n (float, optional): The fraction of top nodes to consider based on stake. Defaults to 0.1.
+-        timeout (int, optional): The timeout in seconds for pinging nodes. Defaults to 3.
+-        uids (Union[List[int], int], optional): The specific UID(s) of the API node(s) to query. Defaults to None.
+-
+-    Returns:
+-        list: A list of axon objects for the available API nodes.
+-    """
+-    dendrite = Dendrite(signer=RequestSigner(wallet))
+-
+-    if metagraph is None:
+-        # TW-MIGRATE: TWM009 the kit's MetagraphCache (refreshes itself); compat.Metagraph for hotkeys / S / validator_permit
+-        metagraph = bt.metagraph(netuid=21)
+-
+-    if uids is not None:
+-        query_uids = [uids] if isinstance(uids, int) else uids
+-    else:
+-        query_uids = await get_query_api_nodes(
+-            dendrite, metagraph, n=n, timeout=timeout
+-        )
+-    return axons_from(metagraph, query_uids)
+diff --git a/template/base/miner.py b/template/base/miner.py
+index 564d794..473cf75 100644
+--- a/template/base/miner.py
++++ b/template/base/miner.py
+@@ -15,21 +15,16 @@
+ # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ # DEALINGS IN THE SOFTWARE.
+ 
+-import time
+-import asyncio
+-import threading
+-import argparse
+-import traceback
+ 
+ import logging
+-from tensorwire import Miner
+-from tensorwire.compat import Axon
++import argparse
++
++from tensorwire import Miner as KitMiner
++from tensorwire.compat import Axon, Metagraph
+ 
+ from template.base.neuron import BaseNeuron
+ from template.utils.config import add_miner_args
+ 
+-from typing import Union
+-
+ 
+ class BaseMinerNeuron(BaseNeuron):
+     """
+@@ -43,7 +38,7 @@ class BaseMinerNeuron(BaseNeuron):
+         super().add_args(parser)
+         add_miner_args(cls, parser)
+ 
+-    def __init__(self, config=None):
++    def __init__(self, config=None, miner: KitMiner = None):
+         super().__init__(config=config)
+ 
+         # Warn if allowing incoming requests from anyone.
+@@ -55,8 +50,11 @@ class BaseMinerNeuron(BaseNeuron):
+             logging.warning(
+                 "You are allowing non-registered entities to send requests to your miner. This is a security risk."
+             )
++
+         # The axon handles request processing, allowing validators to send this miner requests.
+-        self.axon = Axon(miner=Miner.from_env())
++        # TensorWire verifies every request and applies its caller policy before blacklist().
++        self.axon = Axon(miner=miner or KitMiner.from_env())
++        self.metagraph = Metagraph.of_miner(self.axon.miner)
+ 
+         # Attach determiners which functions are called when servicing a request.
+         logging.info(f"Attaching forward function to miner axon.")
+@@ -67,130 +65,10 @@ class BaseMinerNeuron(BaseNeuron):
+         )
+         logging.info(f"Axon created: {self.axon}")
+ 
+-        # Instantiate runners
+-        self.should_exit: bool = False
+-        self.is_running: bool = False
+-        self.thread: Union[threading.Thread, None] = None
+-        self.lock = asyncio.Lock()
+-
+     def run(self):
+         """
+-        Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
+-
+-        This function performs the following primary tasks:
+-        1. Check for registration on the Bittensor network.
+-        2. Starts the miner's axon, making it active on the network.
+-        3. Periodically resynchronizes with the chain; updating the metagraph with the latest network state and setting weights.
+-
+-        The miner continues its operations until `should_exit` is set to True or an external interruption occurs.
+-        During each epoch of its operation, the miner waits for new blocks on the Bittensor network, updates its
+-        knowledge of the network (metagraph), and sets its weights. This process ensures the miner remains active
+-        and up-to-date with the network's latest state.
+-
+-        Note:
+-            - The function leverages the global configurations set during the initialization of the miner.
+-            - The miner's axon serves as its interface to the Bittensor network, handling incoming and outgoing requests.
+-
+-        Raises:
+-            KeyboardInterrupt: If the miner is stopped by a manual interruption.
+-            Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
++        Starts the miner: TensorWire checks registration, publishes the axon
++        (TW_EXTERNAL_IP), keeps the metagraph fresh and serves until SIGTERM.
+         """
+-
+-        # Check that miner is registered on the network.
+-        self.sync()
+-
+-        # Serve passes the axon information to the network + netuid we are hosting on.
+-        # This will auto-update if the axon port of external ip have changed.
+-        logging.info(
+-            f"Serving miner axon {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
+-        )
+-        self.axon.serve(netuid=self.config.netuid, subtensor=self.subtensor)
+-
+-        # Start  starts the miner's axon, making it active on the network.
++        self.axon.serve(netuid=self.config.netuid)
+         self.axon.start()
+-
+-        logging.info(f"Miner starting at block: {self.block}")
+-
+-        # This loop maintains the miner's operations until intentionally stopped.
+-        try:
+-            while not self.should_exit:
+-                while (
+-                    self.block - self.metagraph.last_update[self.uid]
+-                    < self.config.neuron.epoch_length
+-                ):
+-                    # Wait before checking again.
+-                    time.sleep(1)
+-
+-                    # Check if we should exit.
+-                    if self.should_exit:
+-                        break
+-
+-                # Sync metagraph and potentially set weights.
+-                self.sync()
+-                self.step += 1
+-
+-        # If someone intentionally stops the miner, it'll safely terminate operations.
+-        except KeyboardInterrupt:
+-            self.axon.stop()
+-            logging.info("Miner killed by keyboard interrupt.")
+-            exit()
+-
+-        # In case of unforeseen errors, the miner will log the error and continue operations.
+-        except Exception as e:
+-            logging.error(traceback.format_exc())
+-
+-    def run_in_background_thread(self):
+-        """
+-        Starts the miner's operations in a separate background thread.
+-        This is useful for non-blocking operations.
+-        """
+-        if not self.is_running:
+-            logging.debug("Starting miner in background thread.")
+-            self.should_exit = False
+-            self.thread = threading.Thread(target=self.run, daemon=True)
+-            self.thread.start()
+-            self.is_running = True
+-            logging.debug("Started")
+-
+-    def stop_run_thread(self):
+-        """
+-        Stops the miner's operations that are running in the background thread.
+-        """
+-        if self.is_running:
+-            logging.debug("Stopping miner in background thread.")
+-            self.should_exit = True
+-            if self.thread is not None:
+-                self.thread.join(5)
+-            self.is_running = False
+-            logging.debug("Stopped")
+-
+-    def __enter__(self):
+-        """
+-        Starts the miner's operations in a background thread upon entering the context.
+-        This method facilitates the use of the miner in a 'with' statement.
+-        """
+-        self.run_in_background_thread()
+-        return self
+-
+-    def __exit__(self, exc_type, exc_value, traceback):
+-        """
+-        Stops the miner's background operations upon exiting the context.
+-        This method facilitates the use of the miner in a 'with' statement.
+-
+-        Args:
+-            exc_type: The type of the exception that caused the context to be exited.
+-                      None if the context was exited without an exception.
+-            exc_value: The instance of the exception that caused the context to be exited.
+-                       None if the context was exited without an exception.
+-            traceback: A traceback object encoding the stack trace.
+-                       None if the context was exited without an exception.
+-        """
+-        self.stop_run_thread()
+-
+-    def resync_metagraph(self):
+-        """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
+-        logging.info("resync_metagraph()")
+-
+-        # Sync the metagraph.
+-        # TW-MIGRATE: TWM009 the kit's MetagraphCache (refreshes itself); compat.Metagraph for hotkeys / S / validator_permit
+-        self.metagraph.sync(subtensor=self.subtensor)
+diff --git a/template/base/neuron.py b/template/base/neuron.py
+index b4a6d30..a264771 100644
+--- a/template/base/neuron.py
++++ b/template/base/neuron.py
+@@ -16,33 +16,30 @@
+ # DEALINGS IN THE SOFTWARE.
+ 
+ import copy
+-import typing
+ 
+-import bittensor as bt
+ import logging
+-from tensorwire.compat import Metagraph, Synapse
+-
+ from abc import ABC, abstractmethod
+ 
+-# Sync calls set weights and also resyncs the metagraph.
++from tensorwire.compat import Synapse
++
+ from template.utils.config import check_config, add_args, config
+-from template.utils.misc import ttl_get_block
+ from template import __spec_version__ as spec_version
+-from template.mock import MockSubtensor, MockMetagraph
+ 
+ 
+ class BaseNeuron(ABC):
+     """
+     Base class for Bittensor miners. This class is abstract and should be inherited by a subclass. It contains the core logic for all neurons; validators and miners.
+ 
+-    In addition to creating a wallet, subtensor, and metagraph, this class also handles the synchronization of the network state via a basic checkpointing mechanism based on epoch length.
++    On TensorWire the kit loads the hotkey (never the coldkey), connects to the
++    chain, keeps the metagraph fresh, checks registration and publishes the
++    axon; settings come from TW_* variables. This class keeps the template's
++    own config (neuron.*, blacklist.*).
+     """
+ 
+     neuron_type: str = "BaseNeuron"
+ 
+-    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
+     @classmethod
+-    def check_config(cls, config: "bt.Config"):
++    def check_config(cls, config):
+         check_config(cls, config)
+ 
+     @classmethod
+@@ -53,68 +50,17 @@ class BaseNeuron(ABC):
+     def config(cls):
+         return config(cls)
+ 
+-    # TW-MIGRATE: TWM008 the kit's chain gateway and MetagraphCache, or bt.Subtensor directly
+-    subtensor: "bt.subtensor"
+-    # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
+-    wallet: "bt.wallet"
+-    metagraph: "Metagraph"
+     spec_version: int = spec_version
+ 
+-    @property
+-    def block(self):
+-        return ttl_get_block(self)
+-
+     def __init__(self, config=None):
+-        base_config = copy.deepcopy(config or BaseNeuron.config())
+-        self.config = self.config()
+-        self.config.merge(base_config)
++        self.config = config or self.config()
+         self.check_config(self.config)
+ 
+-        # Set up logging with the provided configuration.
+-        # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
+-        bt.logging.set_config(config=self.config.logging)
+-
+         # If a gpu is required, set the device to cuda:N (e.g. cuda:0)
+         self.device = self.config.neuron.device
+ 
+         # Log the configuration for reference.
+         logging.info(self.config)
+-
+-        # Build Bittensor objects
+-        # These are core Bittensor classes to interact with the network.
+-        logging.info("Setting up bittensor objects.")
+-
+-        # The wallet holds the cryptographic key pairs for the miner.
+-        if self.config.mock:
+-            # TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-            self.wallet = bt.MockWallet(config=self.config)
+-            self.subtensor = MockSubtensor(
+-                self.config.netuid, wallet=self.wallet
+-            )
+-            self.metagraph = MockMetagraph(
+-                self.config.netuid, subtensor=self.subtensor
+-            )
+-        else:
+-            # TW-MIGRATE: TWM014 load the hotkey only (TW_WALLET_*); the kit never touches the coldkey
+-            self.wallet = bt.wallet(config=self.config)
+-            # TW-MIGRATE: TWM008 the kit's chain gateway and MetagraphCache, or bt.Subtensor directly
+-            self.subtensor = bt.subtensor(config=self.config)
+-            self.metagraph = self.subtensor.metagraph(self.config.netuid)
+-
+-        logging.info(f"Wallet: {self.wallet}")
+-        logging.info(f"Subtensor: {self.subtensor}")
+-        logging.info(f"Metagraph: {self.metagraph}")
+-
+-        # Check if the miner is registered on the Bittensor network before proceeding further.
+-        self.check_registered()
+-
+-        # Each miner gets a unique identity (UID) in the network for differentiation.
+-        self.uid = self.metagraph.hotkeys.index(
+-            self.wallet.hotkey.ss58_address
+-        )
+-        logging.info(
+-            f"Running neuron on subnet: {self.config.netuid} with uid {self.uid} using network: {self.subtensor.chain_endpoint}"
+-        )
+         self.step = 0
+ 
+     @abstractmethod
+@@ -125,58 +71,6 @@ class BaseNeuron(ABC):
+     def run(self):
+         ...
+ 
+-    def sync(self):
+-        """
+-        Wrapper for synchronizing the state of the network for the given miner or validator.
+-        """
+-        # Ensure miner or validator hotkey is still registered on the network.
+-        self.check_registered()
+-
+-        if self.should_sync_metagraph():
+-            self.resync_metagraph()
+-
+-        if self.should_set_weights():
+-            self.set_weights()
+-
+-        # Always save state.
+-        self.save_state()
+-
+-    def check_registered(self):
+-        # --- Check for registration.
+-        if not self.subtensor.is_hotkey_registered(
+-            netuid=self.config.netuid,
+-            hotkey_ss58=self.wallet.hotkey.ss58_address,
+-        ):
+-            logging.error(
+-                f"Wallet: {self.wallet} is not registered on netuid {self.config.netuid}."
+-                f" Please register the hotkey using `btcli subnets register` before trying again"
+-            )
+-            exit()
+-
+-    def should_sync_metagraph(self):
+-        """
+-        Check if enough epoch blocks have elapsed since the last checkpoint to sync.
+-        """
+-        return (
+-            self.block - self.metagraph.last_update[self.uid]
+-        ) > self.config.neuron.epoch_length
+-
+-    def should_set_weights(self) -> bool:
+-        # Don't set weights on initialization.
+-        if self.step == 0:
+-            return False
+-
+-        # Check if enough epoch blocks have elapsed since the last epoch.
+-        if self.config.neuron.disable_set_weights:
+-            return False
+-
+-        # Define appropriate logic for when set weights.
+-        return (
+-            (self.block - self.metagraph.last_update[self.uid])
+-            > self.config.neuron.epoch_length
+-            and self.neuron_type != "MinerNeuron"
+-        )  # don't set weights if you're a miner
+-
+     def save_state(self):
+         logging.debug(
+             "save_state() not implemented for this neuron. You can implement this function to save model checkpoints or other useful data."
+diff --git a/template/base/utils/__init__.py b/template/base/utils/__init__.py
+deleted file mode 100644
+index e69de29..0000000
+diff --git a/template/base/utils/weight_utils.py b/template/base/utils/weight_utils.py
+deleted file mode 100644
+index 65feac5..0000000
+--- a/template/base/utils/weight_utils.py
++++ /dev/null
+@@ -1,229 +0,0 @@
+-import numpy as np
+-from typing import Tuple, List, Union, Any
+-import bittensor
+-import logging
+-from tensorwire.compat import Metagraph
+-from numpy import ndarray, dtype, floating, complexfloating
+-
+-U32_MAX = 4294967295
+-U16_MAX = 65535
+-
+-
+-def normalize_max_weight(x: np.ndarray, limit: float = 0.1) -> np.ndarray:
+-    r"""Normalizes the numpy array x so that sum(x) = 1 and the max value is not greater than the limit.
+-    Args:
+-        x (:obj:`np.ndarray`):
+-            Array to be max_value normalized.
+-        limit: float:
+-            Max value after normalization.
+-    Returns:
+-        y (:obj:`np.ndarray`):
+-            Normalized x array.
+-    """
+-    epsilon = 1e-7  # For numerical stability after normalization
+-
+-    weights = x.copy()
+-    values = np.sort(weights)
+-
+-    if x.sum() == 0 or len(x) * limit <= 1:
+-        return np.ones_like(x) / x.size
+-    else:
+-        estimation = values / values.sum()
+-
+-        if estimation.max() <= limit:
+-            return weights / weights.sum()
+-
+-        # Find the cumulative sum and sorted array
+-        cumsum = np.cumsum(estimation, 0)
+-
+-        # Determine the index of cutoff
+-        estimation_sum = np.array(
+-            [(len(values) - i - 1) * estimation[i] for i in range(len(values))]
+-        )
+-        n_values = (
+-            estimation / (estimation_sum + cumsum + epsilon) < limit
+-        ).sum()
+-
+-        # Determine the cutoff based on the index
+-        cutoff_scale = (limit * cumsum[n_values - 1] - epsilon) / (
+-            1 - (limit * (len(estimation) - n_values))
+-        )
+-        cutoff = cutoff_scale * values.sum()
+-
+-        # Applying the cutoff
+-        weights[weights > cutoff] = cutoff
+-
+-        y = weights / weights.sum()
+-
+-        return y
+-
+-
+-def convert_weights_and_uids_for_emit(
+-    uids: np.ndarray, weights: np.ndarray
+-) -> Tuple[List[int], List[int]]:
+-    r"""Converts weights into integer u32 representation that sum to MAX_INT_WEIGHT.
+-    Args:
+-        uids (:obj:`np.ndarray,`):
+-            Array of uids as destinations for passed weights.
+-        weights (:obj:`np.ndarray,`):
+-            Array of weights.
+-    Returns:
+-        weight_uids (List[int]):
+-            Uids as a list.
+-        weight_vals (List[int]):
+-            Weights as a list.
+-    """
+-    # Checks.
+-    uids = np.asarray(uids)
+-    weights = np.asarray(weights)
+-
+-    # Get non-zero weights and corresponding uids
+-    non_zero_weights = weights[weights > 0]
+-    non_zero_weight_uids = uids[weights > 0]
+-
+-    # Debugging information
+-    logging.debug(f"weights: {weights}")
+-    logging.debug(f"non_zero_weights: {non_zero_weights}")
+-    logging.debug(f"uids: {uids}")
+-    logging.debug(f"non_zero_weight_uids: {non_zero_weight_uids}")
+-
+-    if np.min(weights) < 0:
+-        raise ValueError(
+-            "Passed weight is negative cannot exist on chain {}".format(
+-                weights
+-            )
+-        )
+-    if np.min(uids) < 0:
+-        raise ValueError(
+-            "Passed uid is negative cannot exist on chain {}".format(uids)
+-        )
+-    if len(uids) != len(weights):
+-        raise ValueError(
+-            "Passed weights and uids must have the same length, got {} and {}".format(
+-                len(uids), len(weights)
+-            )
+-        )
+-    if np.sum(weights) == 0:
+-        logging.debug("nothing to set on chain")
+-        return [], []  # Nothing to set on chain.
+-    else:
+-        max_weight = float(np.max(weights))
+-        weights = [
+-            float(value) / max_weight for value in weights
+-        ]  # max-upscale values (max_weight = 1).
+-        logging.debug(
+-            f"setting on chain max: {max_weight} and weights: {weights}"
+-        )
+-
+-    weight_vals = []
+-    weight_uids = []
+-    for i, (weight_i, uid_i) in enumerate(list(zip(weights, uids))):
+-        uint16_val = round(
+-            float(weight_i) * int(U16_MAX)
+-        )  # convert to int representation.
+-
+-        # Filter zeros
+-        if uint16_val != 0:  # Filter zeros
+-            weight_vals.append(uint16_val)
+-            weight_uids.append(uid_i)
+-    logging.debug(f"final params: {weight_uids} : {weight_vals}")
+-    return weight_uids, weight_vals
+-
+-
+-# TW-MIGRATE: TWM008 the kit's chain gateway and MetagraphCache, or bt.Subtensor directly
+-def process_weights_for_netuid(
+-    uids,
+-    weights: np.ndarray,
+-    netuid: int,
+-    subtensor: "bittensor.subtensor",
+-    metagraph: "Metagraph" = None,
+-    exclude_quantile: int = 0,
+-) -> Union[
+-    tuple[
+-        ndarray[Any, dtype[Any]],
+-        Union[
+-            Union[
+-                ndarray[Any, dtype[floating[Any]]],
+-                ndarray[Any, dtype[complexfloating[Any, Any]]],
+-            ],
+-            Any,
+-        ],
+-    ],
+-    tuple[ndarray[Any, dtype[Any]], ndarray],
+-    tuple[Any, ndarray],
+-]:
+-    logging.debug("process_weights_for_netuid()")
+-    logging.debug("%s - %s", weights, "weights")
+-    logging.debug("%s - %s", netuid, "netuid")
+-    logging.debug("%s - %s", subtensor, "subtensor")
+-    logging.debug("%s - %s", metagraph, "metagraph")
+-
+-    # Get latest metagraph from chain if metagraph is None.
+-    if metagraph is None:
+-        metagraph = subtensor.metagraph(netuid)
+-
+-    # Cast weights to floats.
+-    if not isinstance(weights, np.ndarray) or weights.dtype != np.float32:
+-        weights = weights.astype(np.float32)
+-
+-    # Network configuration parameters from an subtensor.
+-    # These parameters determine the range of acceptable weights for each neuron.
+-    quantile = exclude_quantile / U16_MAX
+-    min_allowed_weights = subtensor.min_allowed_weights(netuid=netuid)
+-    max_weight_limit = subtensor.max_weight_limit(netuid=netuid)
+-    logging.debug("%s - %s", quantile, "quantile")
+-    logging.debug("%s - %s", min_allowed_weights, "min_allowed_weights")
+-    logging.debug("%s - %s", max_weight_limit, "max_weight_limit")
+-
+-    # Find all non zero weights.
+-    non_zero_weight_idx = np.argwhere(weights > 0).squeeze()
+-    non_zero_weight_idx = np.atleast_1d(non_zero_weight_idx)
+-    non_zero_weight_uids = uids[non_zero_weight_idx]
+-    non_zero_weights = weights[non_zero_weight_idx]
+-    if non_zero_weights.size == 0 or metagraph.n < min_allowed_weights:
+-        logging.warning("No non-zero weights returning all ones.")
+-        final_weights = np.ones(metagraph.n) / metagraph.n
+-        logging.debug("%s - %s", final_weights, "final_weights")
+-        return np.arange(len(final_weights)), final_weights
+-
+-    elif non_zero_weights.size < min_allowed_weights:
+-        logging.warning(
+-            "No non-zero weights less then min allowed weight, returning all ones."
+-        )
+-        weights = (
+-            np.ones(metagraph.n) * 1e-5
+-        )  # creating minimum even non-zero weights
+-        weights[non_zero_weight_idx] += non_zero_weights
+-        logging.debug("%s - %s", weights, "final_weights")
+-        normalized_weights = normalize_max_weight(
+-            x=weights, limit=max_weight_limit
+-        )
+-        return np.arange(len(normalized_weights)), normalized_weights
+-
+-    logging.debug("%s - %s", non_zero_weights, "non_zero_weights")
+-
+-    # Compute the exclude quantile and find the weights in the lowest quantile
+-    max_exclude = max(0, len(non_zero_weights) - min_allowed_weights) / len(
+-        non_zero_weights
+-    )
+-    exclude_quantile = min([quantile, max_exclude])
+-    lowest_quantile = np.quantile(non_zero_weights, exclude_quantile)
+-    logging.debug("%s - %s", max_exclude, "max_exclude")
+-    logging.debug("%s - %s", exclude_quantile, "exclude_quantile")
+-    logging.debug("%s - %s", lowest_quantile, "lowest_quantile")
+-
+-    # Exclude all weights below the allowed quantile.
+-    non_zero_weight_uids = non_zero_weight_uids[
+-        lowest_quantile <= non_zero_weights
+-    ]
+-    non_zero_weights = non_zero_weights[lowest_quantile <= non_zero_weights]
+-    logging.debug("%s - %s", non_zero_weight_uids, "non_zero_weight_uids")
+-    logging.debug("%s - %s", non_zero_weights, "non_zero_weights")
+-
+-    # Normalize weights and return.
+-    normalized_weights = normalize_max_weight(
+-        x=non_zero_weights, limit=max_weight_limit
+-    )
+-    logging.debug("%s - %s", normalized_weights, "final_weights")
+-
+-    return non_zero_weight_uids, normalized_weights
+diff --git a/template/base/validator.py b/template/base/validator.py
+deleted file mode 100644
+index 2798dc8..0000000
+--- a/template/base/validator.py
++++ /dev/null
+@@ -1,379 +0,0 @@
+-# The MIT License (MIT)
+-# Copyright © 2023 Yuma Rao
+-# TODO(developer): Set your name
+-# Copyright © 2023 <your name>
+-
+-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+-
+-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+-# the Software.
+-
+-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+-# DEALINGS IN THE SOFTWARE.
+-
+-
+-import copy
+-import numpy as np
+-import asyncio
+-import argparse
+-import threading
+-import logging
+-from tensorwire import Miner, RequestSigner
+-from tensorwire.compat import Axon, Dendrite
+-
+-from typing import List, Union
+-from traceback import print_exception
+-
+-from template.base.neuron import BaseNeuron
+-from template.mock import MockDendrite
+-from template.utils.config import add_validator_args
+-
+-
+-class BaseValidatorNeuron(BaseNeuron):
+-    """
+-    Base class for Bittensor validators. Your validator should inherit from this class.
+-    """
+-
+-    neuron_type: str = "ValidatorNeuron"
+-
+-    @classmethod
+-    def add_args(cls, parser: argparse.ArgumentParser):
+-        super().add_args(parser)
+-        add_validator_args(cls, parser)
+-
+-    def __init__(self, config=None):
+-        super().__init__(config=config)
+-
+-        # Save a copy of the hotkeys to local memory.
+-        self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
+-
+-        # Dendrite lets us send messages to other nodes (axons) in the network.
+-        if self.config.mock:
+-            self.dendrite = MockDendrite(wallet=self.wallet)
+-        else:
+-            self.dendrite = Dendrite(signer=RequestSigner(self.wallet))
+-        logging.info(f"Dendrite: {self.dendrite}")
+-
+-        # Set up initial scoring weights for validation
+-        logging.info("Building validation weights.")
+-        self.scores = np.zeros(self.metagraph.n, dtype=np.float32)
+-
+-        # Init sync with the network. Updates the metagraph.
+-        self.sync()
+-
+-        # Serve axon to enable external connections.
+-        if not self.config.neuron.axon_off:
+-            self.serve_axon()
+-        else:
+-            logging.warning("axon off, not serving ip to chain.")
+-
+-        # Create asyncio event loop to manage async tasks.
+-        self.loop = asyncio.get_event_loop()
+-
+-        # Instantiate runners
+-        self.should_exit: bool = False
+-        self.is_running: bool = False
+-        self.thread: Union[threading.Thread, None] = None
+-        self.lock = asyncio.Lock()
+-
+-    def serve_axon(self):
+-        """Serve axon to enable external connections."""
+-
+-        logging.info("serving ip to chain...")
+-        try:
+-            self.axon = Axon(miner=Miner.from_env())
+-
+-            try:
+-                # TW-MIGRATE: TWM011 nothing: the kit publishes the axon at startup (TW_EXTERNAL_IP)
+-                self.subtensor.serve_axon(
+-                    netuid=self.config.netuid,
+-                    axon=self.axon,
+-                )
+-                logging.info(
+-                    f"Running validator {self.axon} on network: {self.config.subtensor.chain_endpoint} with netuid: {self.config.netuid}"
+-                )
+-            except Exception as e:
+-                logging.error(f"Failed to serve Axon with exception: {e}")
+-                pass
+-
+-        except Exception as e:
+-            logging.error(
+-                f"Failed to create Axon initialize with exception: {e}"
+-            )
+-            pass
+-
+-    async def concurrent_forward(self):
+-        coroutines = [
+-            self.forward()
+-            for _ in range(self.config.neuron.num_concurrent_forwards)
+-        ]
+-        await asyncio.gather(*coroutines)
+-
+-    def run(self):
+-        """
+-        Initiates and manages the main loop for the miner on the Bittensor network. The main loop handles graceful shutdown on keyboard interrupts and logs unforeseen errors.
+-
+-        This function performs the following primary tasks:
+-        1. Check for registration on the Bittensor network.
+-        2. Continuously forwards queries to the miners on the network, rewarding their responses and updating the scores accordingly.
+-        3. Periodically resynchronizes with the chain; updating the metagraph with the latest network state and setting weights.
+-
+-        The essence of the validator's operations is in the forward function, which is called every step. The forward function is responsible for querying the network and scoring the responses.
+-
+-        Note:
+-            - The function leverages the global configurations set during the initialization of the miner.
+-            - The miner's axon serves as its interface to the Bittensor network, handling incoming and outgoing requests.
+-
+-        Raises:
+-            KeyboardInterrupt: If the miner is stopped by a manual interruption.
+-            Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
+-        """
+-
+-        # Check that validator is registered on the network.
+-        self.sync()
+-
+-        logging.info(f"Validator starting at block: {self.block}")
+-
+-        # This loop maintains the validator's operations until intentionally stopped.
+-        try:
+-            while True:
+-                logging.info(f"step({self.step}) block({self.block})")
+-
+-                # Run multiple forwards concurrently.
+-                self.loop.run_until_complete(self.concurrent_forward())
+-
+-                # Check if we should exit.
+-                if self.should_exit:
+-                    break
+-
+-                # Sync metagraph and potentially set weights.
+-                self.sync()
+-
+-                self.step += 1
+-
+-        # If someone intentionally stops the validator, it'll safely terminate operations.
+-        except KeyboardInterrupt:
+-            self.axon.stop()
+-            logging.info("Validator killed by keyboard interrupt.")
+-            exit()
+-
+-        # In case of unforeseen errors, the validator will log the error and continue operations.
+-        except Exception as err:
+-            logging.error(f"Error during validation: {str(err)}")
+-            logging.debug(
+-                str(print_exception(type(err), err, err.__traceback__))
+-            )
+-
+-    def run_in_background_thread(self):
+-        """
+-        Starts the validator's operations in a background thread upon entering the context.
+-        This method facilitates the use of the validator in a 'with' statement.
+-        """
+-        if not self.is_running:
+-            logging.debug("Starting validator in background thread.")
+-            self.should_exit = False
+-            self.thread = threading.Thread(target=self.run, daemon=True)
+-            self.thread.start()
+-            self.is_running = True
+-            logging.debug("Started")
+-
+-    def stop_run_thread(self):
+-        """
+-        Stops the validator's operations that are running in the background thread.
+-        """
+-        if self.is_running:
+-            logging.debug("Stopping validator in background thread.")
+-            self.should_exit = True
+-            self.thread.join(5)
+-            self.is_running = False
+-            logging.debug("Stopped")
+-
+-    def __enter__(self):
+-        self.run_in_background_thread()
+-        return self
+-
+-    def __exit__(self, exc_type, exc_value, traceback):
+-        """
+-        Stops the validator's background operations upon exiting the context.
+-        This method facilitates the use of the validator in a 'with' statement.
+-
+-        Args:
+-            exc_type: The type of the exception that caused the context to be exited.
+-                      None if the context was exited without an exception.
+-            exc_value: The instance of the exception that caused the context to be exited.
+-                       None if the context was exited without an exception.
+-            traceback: A traceback object encoding the stack trace.
+-                       None if the context was exited without an exception.
+-        """
+-        if self.is_running:
+-            logging.debug("Stopping validator in background thread.")
+-            self.should_exit = True
+-            self.thread.join(5)
+-            self.is_running = False
+-            logging.debug("Stopped")
+-
+-    def set_weights(self):
+-        """
+-        Sets the validator weights to the metagraph hotkeys based on the scores it has received from the miners. The weights determine the trust and incentive level the validator assigns to miner nodes on the network.
+-        """
+-
+-        # Check if self.scores contains any NaN values and log a warning if it does.
+-        if np.isnan(self.scores).any():
+-            logging.warning(
+-                f"Scores contain NaN values. This may be due to a lack of responses from miners, or a bug in your reward functions."
+-            )
+-
+-        # Calculate the average reward for each uid across non-zero values.
+-        # Replace any NaN values with 0.
+-        # Compute the norm of the scores
+-        norm = np.linalg.norm(self.scores, ord=1, axis=0, keepdims=True)
+-
+-        # Check if the norm is zero or contains NaN values
+-        if np.any(norm == 0) or np.isnan(norm).any():
+-            norm = np.ones_like(norm)  # Avoid division by zero or NaN
+-
+-        # Compute raw_weights safely
+-        raw_weights = self.scores / norm
+-
+-        logging.debug("%s - %s", raw_weights, "raw_weights")
+-        logging.debug("%s - %s", str(self.metagraph.uids), "raw_weight_uids")
+-        # Process the raw weights to final_weights via subtensor limitations.
+-        (
+-            processed_weight_uids,
+-            processed_weights,
+-        ) = (self.metagraph.uids, raw_weights)
+-        logging.debug("%s - %s", processed_weights, "processed_weights")
+-        logging.debug("%s - %s", processed_weight_uids, "processed_weight_uids")
+-
+-        # Convert to uint16 weights and uids.
+-        (
+-            uint_uids,
+-            uint_weights,
+-        ) = (processed_weight_uids, processed_weights)
+-        logging.debug("%s - %s", uint_weights, "uint_weights")
+-        logging.debug("%s - %s", uint_uids, "uint_uids")
+-
+-        # Set the weights on chain via our subtensor connection.
+-        # TW-MIGRATE: TWM010 the kit's weight scheduler (SubnetValidator), or bt.SetWeights
+-        result, msg = self.subtensor.set_weights(
+-            wallet=self.wallet,
+-            netuid=self.config.netuid,
+-            uids=uint_uids,
+-            weights=uint_weights,
+-            wait_for_finalization=False,
+-            wait_for_inclusion=False,
+-            version_key=self.spec_version,
+-        )
+-        if result is True:
+-            logging.info("set_weights on chain successfully!")
+-        else:
+-            logging.error("%s - %s", msg, "set_weights failed")
+-
+-    def resync_metagraph(self):
+-        """Resyncs the metagraph and updates the hotkeys and moving averages based on the new metagraph."""
+-        logging.info("resync_metagraph()")
+-
+-        # Copies state of metagraph before syncing.
+-        previous_metagraph = copy.deepcopy(self.metagraph)
+-
+-        # Sync the metagraph.
+-        # TW-MIGRATE: TWM009 the kit's MetagraphCache (refreshes itself); compat.Metagraph for hotkeys / S / validator_permit
+-        self.metagraph.sync(subtensor=self.subtensor)
+-
+-        # Check if the metagraph axon info has changed.
+-        if previous_metagraph.axons == self.metagraph.axons:
+-            return
+-
+-        logging.info(
+-            "Metagraph updated, re-syncing hotkeys, dendrite pool and moving averages"
+-        )
+-        # Zero out all hotkeys that have been replaced within overlapping range.
+-        overlap = min(len(self.hotkeys), len(self.metagraph.hotkeys))
+-        for uid in range(overlap):
+-            if self.hotkeys[uid] != self.metagraph.hotkeys[uid]:
+-                self.scores[uid] = 0
+-
+-        # Resize scores to match current metagraph size (handle growth and shrink).
+-        if len(self.scores) != int(self.metagraph.n):
+-            new_scores = np.zeros((self.metagraph.n), dtype=self.scores.dtype)
+-            copy_len = min(len(self.scores), int(self.metagraph.n))
+-            new_scores[:copy_len] = self.scores[:copy_len]
+-            self.scores = new_scores
+-
+-        # Update the hotkeys.
+-        self.hotkeys = copy.deepcopy(self.metagraph.hotkeys)
+-
+-    def update_scores(self, rewards: np.ndarray, uids: List[int]):
+-        """Performs exponential moving average on the scores based on the rewards received from the miners."""
+-
+-        # Check if rewards contains NaN values.
+-        if np.isnan(rewards).any():
+-            logging.warning(f"NaN values detected in rewards: {rewards}")
+-            # Replace any NaN values in rewards with 0.
+-            rewards = np.nan_to_num(rewards, nan=0)
+-
+-        # Ensure rewards is a numpy array.
+-        rewards = np.asarray(rewards)
+-
+-        # Check if `uids` is already a numpy array and copy it to avoid the warning.
+-        if isinstance(uids, np.ndarray):
+-            uids_array = uids.copy()
+-        else:
+-            uids_array = np.array(uids)
+-
+-        # Handle edge case: If either rewards or uids_array is empty.
+-        if rewards.size == 0 or uids_array.size == 0:
+-            logging.info(f"rewards: {rewards}, uids_array: {uids_array}")
+-            logging.warning(
+-                "Either rewards or uids_array is empty. No updates will be performed."
+-            )
+-            return
+-
+-        # Check if sizes of rewards and uids_array match.
+-        if rewards.size != uids_array.size:
+-            raise ValueError(
+-                f"Shape mismatch: rewards array of shape {rewards.shape} "
+-                f"cannot be broadcast to uids array of shape {uids_array.shape}"
+-            )
+-
+-        # Compute forward pass rewards, assumes uids are mutually exclusive.
+-        # shape: [ metagraph.n ]
+-        scattered_rewards: np.ndarray = np.zeros_like(self.scores)
+-        scattered_rewards[uids_array] = rewards
+-        logging.debug(f"Scattered rewards: {rewards}")
+-
+-        # Update scores with rewards produced by this step.
+-        # shape: [ metagraph.n ]
+-        alpha: float = self.config.neuron.moving_average_alpha
+-        self.scores: np.ndarray = (
+-            alpha * scattered_rewards + (1 - alpha) * self.scores
+-        )
+-        logging.debug(f"Updated moving avg scores: {self.scores}")
+-
+-    def save_state(self):
+-        """Saves the state of the validator to a file."""
+-        logging.info("Saving validator state.")
+-
+-        # Save the state of the validator to file.
+-        np.savez(
+-            self.config.neuron.full_path + "/state.npz",
+-            step=self.step,
+-            scores=self.scores,
+-            hotkeys=self.hotkeys,
+-        )
+-
+-    def load_state(self):
+-        """Loads the state of the validator from a file."""
+-        logging.info("Loading validator state.")
+-
+-        # Load the state of the validator from file.
+-        state = np.load(self.config.neuron.full_path + "/state.npz")
+-        self.step = state["step"]
+-        self.scores = state["scores"]
+-        self.hotkeys = state["hotkeys"]
+diff --git a/template/mock.py b/template/mock.py
+deleted file mode 100644
+index 1b670ac..0000000
+--- a/template/mock.py
++++ /dev/null
+@@ -1,128 +0,0 @@
+-import time
+-
+-import asyncio
+-import random
+-import bittensor as bt
+-import logging
+-from tensorwire.compat import Axon, Synapse
+-
+-from typing import List
+-
+-
+-# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-class MockSubtensor(bt.MockSubtensor):
+-    def __init__(self, netuid, n=16, wallet=None, network="mock"):
+-        super().__init__(network=network)
+-
+-        if not self.subnet_exists(netuid):
+-            self.create_subnet(netuid)
+-
+-        # Register ourself (the validator) as a neuron at uid=0
+-        if wallet is not None:
+-            self.force_register_neuron(
+-                netuid=netuid,
+-                hotkey=wallet.hotkey.ss58_address,
+-                coldkey=wallet.coldkey.ss58_address,
+-                balance=100000,
+-                stake=100000,
+-            )
+-
+-        # Register n mock neurons who will be miners
+-        for i in range(1, n + 1):
+-            self.force_register_neuron(
+-                netuid=netuid,
+-                hotkey=f"miner-hotkey-{i}",
+-                coldkey="mock-coldkey",
+-                balance=100000,
+-                stake=100000,
+-            )
+-
+-
+-# TW-MIGRATE: TWM009 the kit's MetagraphCache (refreshes itself); compat.Metagraph for hotkeys / S / validator_permit
+-class MockMetagraph(bt.metagraph):
+-    def __init__(self, netuid=1, network="mock", subtensor=None):
+-        super().__init__(netuid=netuid, network=network, sync=False)
+-
+-        if subtensor is not None:
+-            self.subtensor = subtensor
+-        self.sync(subtensor=subtensor)
+-
+-        for axon in self.axons:
+-            axon.ip = "127.0.0.0"
+-            axon.port = 8091
+-
+-        logging.info(f"Metagraph: {self}")
+-        logging.info(f"Axons: {self.axons}")
+-
+-
+-# TW-MIGRATE: TWM004 tensorwire.compat.Dendrite(signer=RequestSigner(wallet))
+-# TW-MIGRATE: TWM019 port by hand onto Miner routes / ValidatorClient
+-class MockDendrite(bt.dendrite):
+-    """
+-    Replaces a real bittensor network request with a mock request that just returns some static response for all axons that are passed and adds some random delay.
+-    """
+-
+-    def __init__(self, wallet):
+-        super().__init__(wallet)
+-
+-    async def forward(
+-        self,
+-        axons: List[Axon],
+-        synapse: Synapse = Synapse(),
+-        timeout: float = 12,
+-        deserialize: bool = True,
+-        run_async: bool = True,
+-        streaming: bool = False,
+-    ):
+-        if streaming:
+-            raise NotImplementedError("Streaming not implemented yet.")
+-
+-        async def query_all_axons(streaming: bool):
+-            """Queries all axons for responses."""
+-
+-            async def single_axon_response(i, axon):
+-                """Queries a single axon for a response."""
+-
+-                start_time = time.time()
+-                s = synapse.copy()
+-                # Attach some more required data so it looks real
+-                s = self.preprocess_synapse_for_request(axon, s, timeout)
+-                # We just want to mock the response, so we'll just fill in some data
+-                process_time = random.random()
+-                if process_time < timeout:
+-                    s.dendrite.process_time = str(time.time() - start_time)
+-                    # Update the status code and status message of the dendrite to match the axon
+-                    # TODO (developer): replace with your own expected synapse data
+-                    s.dummy_output = s.dummy_input * 2
+-                    s.dendrite.status_code = 200
+-                    s.dendrite.status_message = "OK"
+-                    synapse.dendrite.process_time = str(process_time)
+-                else:
+-                    s.dummy_output = 0
+-                    s.dendrite.status_code = 408
+-                    s.dendrite.status_message = "Timeout"
+-                    synapse.dendrite.process_time = str(timeout)
+-
+-                # Return the updated synapse object after deserializing if requested
+-                if deserialize:
+-                    return s.deserialize()
+-                else:
+-                    return s
+-
+-            return await asyncio.gather(
+-                *(
+-                    single_axon_response(i, target_axon)
+-                    for i, target_axon in enumerate(axons)
+-                )
+-            )
+-
+-        return await query_all_axons(streaming)
+-
+-    def __str__(self) -> str:
+-        """
+-        Returns a string representation of the Dendrite object.
+-
+-        Returns:
+-            str: The string representation of the Dendrite object in the format "dendrite(<user_wallet_address>)".
+-        """
+-        return "MockDendrite({})".format(self.keypair.ss58_address)
+diff --git a/template/protocol.py b/template/protocol.py
+index 633b177..2881a7b 100644
+--- a/template/protocol.py
++++ b/template/protocol.py
+@@ -40,7 +40,6 @@ from tensorwire.compat import Synapse
+ #   assert dummy_output == 2
+ 
+ 
+-# TW-MIGRATE: TWM100 list every request field that matters in required_hash_fields: on the v10 wire other fields can be changed without breaking the signature
+ class Dummy(Synapse):
+     """
+     A simple dummy protocol representation which uses bt.Synapse as its base.
+@@ -58,6 +57,9 @@ class Dummy(Synapse):
+     # Optional request output, filled by receiving axon.
+     dummy_output: typing.Optional[int] = None
+ 
++    # The fields a v10 request signature covers (it was empty: risk TWM100).
++    required_hash_fields: typing.ClassVar[typing.Tuple[str, ...]] = ("dummy_input",)
++
+     def deserialize(self) -> int:
+         """
+         Deserialize the dummy output. This method retrieves the response from
+diff --git a/template/utils/config.py b/template/utils/config.py
+index d3f9688..1ba8c0d 100644
+--- a/template/utils/config.py
++++ b/template/utils/config.py
+@@ -19,7 +19,7 @@
+ import os
+ import subprocess
+ import argparse
+-import bittensor as bt
++from types import SimpleNamespace
+ from .logging import setup_events_logger
+ 
+ 
+@@ -41,17 +41,11 @@ def is_cuda_available():
+     return "cpu"
+ 
+ 
+-# TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
+-def check_config(cls, config: "bt.Config"):
++def check_config(cls, config: SimpleNamespace):
+     r"""Checks/validates the config namespace object."""
+-    # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
+-    bt.logging.check_config(config)
+-
+     full_path = os.path.expanduser(
+-        "{}/{}/{}/netuid{}/{}".format(
+-            config.logging.logging_dir,  # TODO: change from ~/.bittensor/miners to ~/.bittensor/neurons
+-            config.wallet.name,
+-            config.wallet.hotkey,
++        "{}/template/netuid{}/{}".format(
++            os.environ.get("TW_STATE_DIR", "~/.tensorwire"),
+             config.netuid,
+             config.neuron.name,
+         )
+@@ -63,11 +57,9 @@ def check_config(cls, config: "bt.Config"):
+ 
+     if not config.neuron.dont_save_events:
+         # Add custom event logger for the events.
+-        events_logger = setup_events_logger(
++        setup_events_logger(
+             config.neuron.full_path, config.neuron.events_retention_size
+         )
+-        # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
+-        bt.logging.register_primary_logger(events_logger.name)
+ 
+ 
+ def add_args(cls, parser):
+@@ -75,7 +67,12 @@ def add_args(cls, parser):
+     Adds relevant arguments to the parser for operation.
+     """
+ 
+-    parser.add_argument("--netuid", type=int, help="Subnet netuid", default=1)
++    parser.add_argument(
++        "--netuid",
++        type=int,
++        help="Subnet netuid",
++        default=int(os.environ.get("TW_NETUID", 1)),
++    )
+ 
+     parser.add_argument(
+         "--neuron.device",
+@@ -144,7 +141,6 @@ def add_miner_args(cls, parser):
+         default="miner",
+     )
+ 
+-    # TW-MIGRATE: TWM103 require a permit (TW_REQUIRE_PERMIT=1, the kit default)
+     parser.add_argument(
+         "--blacklist.force_validator_permit",
+         action="store_true",
+@@ -256,14 +252,13 @@ def config(cls):
+     Returns the configuration object specific to this miner or validator after adding relevant arguments.
+     """
+     parser = argparse.ArgumentParser()
+-    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
+-    bt.wallet.add_args(parser)
+-    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
+-    bt.subtensor.add_args(parser)
+-    # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
+-    bt.logging.add_args(parser)
+-    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
+-    bt.axon.add_args(parser)
+-    cls.add_args(parser)
+-    # TW-MIGRATE: TWM006 kit settings (TW_* variables, spec 12) or the team's own config
+-    return bt.config(parser)
++    cls.add_args(parser)  # wallet, chain and axon settings come from TW_* variables
++    args, _ = parser.parse_known_args()
++    config = SimpleNamespace()
++    for key, value in vars(args).items():  # "neuron.sample_size" -> config.neuron.sample_size
++        *parents, leaf = key.split(".")
++        node = config
++        for part in parents:
++            node = node.__dict__.setdefault(part, SimpleNamespace())
++        setattr(node, leaf, value)
++    return config
+diff --git a/tests/helpers.py b/tests/helpers.py
+deleted file mode 100644
+index c400bae..0000000
+--- a/tests/helpers.py
++++ /dev/null
+@@ -1,186 +0,0 @@
+-# The MIT License (MIT)
+-# Copyright © 2023 Opentensor Foundation
+-
+-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+-
+-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+-# the Software.
+-
+-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+-# DEALINGS IN THE SOFTWARE.
+-
+-from typing import Union
+-# TW-MIGRATE: TWM022 NeuronInfo / PrometheusInfo are gone: read NeuronView from the kit's metagraph; the SS58 format is 42 (tensorwire.crypto.SS58_FORMAT)
+-from bittensor import (
+-    Balance,
+-    NeuronInfo,
+-    PrometheusInfo,
+-    __ss58_format__)
+-from tensorwire.compat import AxonInfo
+-# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-from bittensor.mock.wallet_mock import MockWallet as _MockWallet
+-# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-from bittensor.mock.wallet_mock import get_mock_coldkey as _get_mock_coldkey
+-# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-from bittensor.mock.wallet_mock import get_mock_hotkey as _get_mock_hotkey
+-# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-from bittensor.mock.wallet_mock import get_mock_keypair as _get_mock_keypair
+-# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-from bittensor.mock.wallet_mock import get_mock_wallet as _get_mock_wallet
+-
+-from rich.console import Console
+-from rich.text import Text
+-
+-
+-def __mock_wallet_factory__(*args, **kwargs) -> _MockWallet:
+-    """Returns a mock wallet object."""
+-
+-    mock_wallet = _get_mock_wallet()
+-
+-    return mock_wallet
+-
+-
+-class CLOSE_IN_VALUE:
+-    value: Union[float, int, Balance]
+-    tolerance: Union[float, int, Balance]
+-
+-    def __init__(
+-        self,
+-        value: Union[float, int, Balance],
+-        tolerance: Union[float, int, Balance] = 0.0,
+-    ) -> None:
+-        self.value = value
+-        self.tolerance = tolerance
+-
+-    def __eq__(self, __o: Union[float, int, Balance]) -> bool:
+-        # True if __o \in [value - tolerance, value + tolerance]
+-        # or if value \in [__o - tolerance, __o + tolerance]
+-        return (
+-            (self.value - self.tolerance) <= __o
+-            and __o <= (self.value + self.tolerance)
+-        ) or (
+-            (__o - self.tolerance) <= self.value
+-            and self.value <= (__o + self.tolerance)
+-        )
+-
+-
+-def get_mock_neuron(**kwargs) -> NeuronInfo:
+-    """
+-    Returns a mock neuron with the given kwargs overriding the default values.
+-    """
+-
+-    mock_neuron_d = dict(
+-        {
+-            "netuid": -1,  # mock netuid
+-            "axon_info": AxonInfo(
+-                block=0,
+-                version=1,
+-                ip=0,
+-                port=0,
+-                ip_type=0,
+-                protocol=0,
+-                placeholder1=0,
+-                placeholder2=0,
+-            ),
+-            "prometheus_info": PrometheusInfo(
+-                block=0, version=1, ip=0, port=0, ip_type=0
+-            ),
+-            "validator_permit": True,
+-            "uid": 1,
+-            "hotkey": "some_hotkey",
+-            "coldkey": "some_coldkey",
+-            "active": 0,
+-            "last_update": 0,
+-            "stake": {"some_coldkey": 1e12},
+-            "total_stake": 1e12,
+-            "rank": 0.0,
+-            "trust": 0.0,
+-            "consensus": 0.0,
+-            "validator_trust": 0.0,
+-            "incentive": 0.0,
+-            "dividends": 0.0,
+-            "emission": 0.0,
+-            "bonds": [],
+-            "weights": [],
+-            "stake_dict": {},
+-            "pruning_score": 0.0,
+-            "is_null": False,
+-        }
+-    )
+-
+-    mock_neuron_d.update(kwargs)  # update with kwargs
+-
+-    if kwargs.get("stake") is None and kwargs.get("coldkey") is not None:
+-        mock_neuron_d["stake"] = {kwargs.get("coldkey"): 1e12}
+-
+-    if kwargs.get("total_stake") is None:
+-        mock_neuron_d["total_stake"] = sum(mock_neuron_d["stake"].values())
+-
+-    mock_neuron = NeuronInfo._neuron_dict_to_namespace(mock_neuron_d)
+-
+-    return mock_neuron
+-
+-
+-def get_mock_neuron_by_uid(uid: int, **kwargs) -> NeuronInfo:
+-    return get_mock_neuron(
+-        uid=uid,
+-        hotkey=_get_mock_hotkey(uid),
+-        coldkey=_get_mock_coldkey(uid),
+-        **kwargs
+-    )
+-
+-
+-class MockStatus:
+-    def __enter__(self):
+-        return self
+-
+-    def __exit__(self, exc_type, exc_value, traceback):
+-        pass
+-
+-    def start(self):
+-        pass
+-
+-    def stop(self):
+-        pass
+-
+-    def update(self, *args, **kwargs):
+-        MockConsole().print(*args, **kwargs)
+-
+-
+-class MockConsole:
+-    """
+-    Mocks the console object for status and print.
+-    Captures the last print output as a string.
+-    """
+-
+-    captured_print = None
+-
+-    def status(self, *args, **kwargs):
+-        return MockStatus()
+-
+-    def print(self, *args, **kwargs):
+-        console = Console(
+-            width=1000, no_color=True, markup=False
+-        )  # set width to 1000 to avoid truncation
+-        console.begin_capture()
+-        console.print(*args, **kwargs)
+-        self.captured_print = console.end_capture()
+-
+-    def clear(self, *args, **kwargs):
+-        pass
+-
+-    @staticmethod
+-    def remove_rich_syntax(text: str) -> str:
+-        """
+-        Removes rich syntax from the given text.
+-        Removes markup and ansi syntax.
+-        """
+-        output_no_syntax = Text.from_ansi(Text.from_markup(text).plain).plain
+-
+-        return output_no_syntax
+diff --git a/tests/test_mock.py b/tests/test_mock.py
+deleted file mode 100644
+index d58645e..0000000
+--- a/tests/test_mock.py
++++ /dev/null
+@@ -1,109 +0,0 @@
+-import pytest
+-import asyncio
+-import bittensor as bt
+-from tensorwire.compat import AxonInfo, TerminalInfo
+-from prompting.mock import MockDendrite, MockMetagraph, MockSubtensor
+-from prompting.protocol import PromptingSynapse
+-
+-
+-@pytest.mark.parametrize("netuid", [1, 2, 3])
+-@pytest.mark.parametrize("n", [2, 4, 8, 16, 32, 64])
+-@pytest.mark.parametrize("wallet", [bt.MockWallet(), None])
+-def test_mock_subtensor(netuid, n, wallet):
+-    subtensor = MockSubtensor(netuid=netuid, n=n, wallet=wallet)
+-    neurons = subtensor.neurons(netuid=netuid)
+-    # Check netuid
+-    assert subtensor.subnet_exists(netuid)
+-    # Check network
+-    assert subtensor.network == "mock"
+-    assert subtensor.chain_endpoint == "mock_endpoint"
+-    # Check number of neurons
+-    assert len(neurons) == (n + 1 if wallet is not None else n)
+-    # Check wallet
+-    if wallet is not None:
+-        assert subtensor.is_hotkey_registered(
+-            netuid=netuid, hotkey_ss58=wallet.hotkey.ss58_address
+-        )
+-
+-    for neuron in neurons:
+-        # TW-MIGRATE: TWM022 NeuronInfo / PrometheusInfo are gone: read NeuronView from the kit's metagraph; the SS58 format is 42 (tensorwire.crypto.SS58_FORMAT)
+-        assert type(neuron) == bt.NeuronInfo
+-        assert subtensor.is_hotkey_registered(
+-            netuid=netuid, hotkey_ss58=neuron.hotkey
+-        )
+-
+-
+-@pytest.mark.parametrize("n", [16, 32, 64])
+-def test_mock_metagraph(n):
+-    mock_subtensor = MockSubtensor(netuid=1, n=n)
+-    mock_metagraph = MockMetagraph(subtensor=mock_subtensor)
+-    # Check axons
+-    axons = mock_metagraph.axons
+-    assert len(axons) == n
+-    # Check ip and port
+-    for axon in axons:
+-        assert type(axon) == AxonInfo
+-        assert axon.ip == mock_metagraph.default_ip
+-        assert axon.port == mock_metagraph.default_port
+-
+-
+-def test_mock_reward_pipeline():
+-    pass
+-
+-
+-def test_mock_neuron():
+-    pass
+-
+-
+-@pytest.mark.parametrize("timeout", [0.1, 0.2])
+-@pytest.mark.parametrize("min_time", [0, 0.05, 0.1])
+-@pytest.mark.parametrize("max_time", [0.1, 0.15, 0.2])
+-@pytest.mark.parametrize("n", [4, 16, 64])
+-def test_mock_dendrite_timings(timeout, min_time, max_time, n):
+-    mock_wallet = None
+-    mock_dendrite = MockDendrite(mock_wallet)
+-    mock_dendrite.min_time = min_time
+-    mock_dendrite.max_time = max_time
+-    mock_subtensor = MockSubtensor(netuid=1, n=n)
+-    mock_metagraph = MockMetagraph(subtensor=mock_subtensor)
+-    axons = mock_metagraph.axons
+-
+-    async def run():
+-        return await mock_dendrite(
+-            axons,
+-            synapse=PromptingSynapse(
+-                roles=["user"], messages=["What is the capital of France?"]
+-            ),
+-            timeout=timeout,
+-        )
+-
+-    responses = asyncio.run(run())
+-    for synapse in responses:
+-        assert (
+-            hasattr(synapse, "dendrite")
+-            and type(synapse.dendrite) == TerminalInfo
+-        )
+-
+-        dendrite = synapse.dendrite
+-        # check synapse.dendrite has (process_time, status_code, status_message)
+-        for field in ("process_time", "status_code", "status_message"):
+-            assert (
+-                hasattr(dendrite, field)
+-                and getattr(dendrite, field) is not None
+-            )
+-
+-        # check that the dendrite take between min_time and max_time
+-        assert min_time <= dendrite.process_time
+-        assert dendrite.process_time <= max_time + 0.1
+-        # check that responses which take longer than timeout have 408 status code
+-        if dendrite.process_time >= timeout + 0.1:
+-            assert dendrite.status_code == 408
+-            assert dendrite.status_message == "Timeout"
+-            assert synapse.dummy_output == synapse.dummy_input
+-        # check that responses which take less than timeout have 200 status code
+-        elif dendrite.process_time < timeout:
+-            assert dendrite.status_code == 200
+-            assert dendrite.status_message == "OK"
+-            # check that outputs are not empty for successful responses
+-            assert synapse.dummy_output == synapse.dummy_input * 2
+-        # dont check for responses which take between timeout and max_time because they are not guaranteed to have a status code of 200 or 408
+diff --git a/tests/test_template_on_tensorwire.py b/tests/test_template_on_tensorwire.py
+new file mode 100644
+index 0000000..c00f2b4
+--- /dev/null
++++ b/tests/test_template_on_tensorwire.py
+@@ -0,0 +1,70 @@
++# The MIT License (MIT)
++# Copyright © 2023 Yuma Rao
++# TensorWire port: the template's miner and validator, in process on FakeChain.
++
++import sys
++import types
++
++import pytest
++
++from tensorwire import Miner as KitMiner, ValidatorSettings
++from tensorwire.testing.keys import dev_key
++from tensorwire.testing.metagraph import FakeMetagraphSource
++from tensorwire.testing.pytest_plugin import TEST_NETUID
++from tensorwire.testing.transport import AppRouter
++
++import template.validator  # noqa: F401 - loads template.validator.forward
++from neurons.miner import Miner
++from neurons.validator import Validator
++
++MINER_AXON = "44.1.2.3:8091"  # published by the TensorWire miner at startup
++
++
++async def _no_pause(seconds):
++    return None
++
++
++@pytest.mark.asyncio
++async def test_template_miner_and_validator(
++    tw_miner_kwargs, fake_chain, tw_clock, tmp_path, monkeypatch
++):
++    monkeypatch.setenv("TW_STATE_DIR", str(tmp_path / "state"))
++    monkeypatch.setattr(sys, "argv", ["neuron", "--netuid", str(TEST_NETUID)])
++    monkeypatch.setattr(
++        sys.modules["template.validator.forward"],
++        "asyncio",
++        types.SimpleNamespace(sleep=_no_pause),
++    )
++    kit_miner = KitMiner(**tw_miner_kwargs)
++    Miner(miner=kit_miner)  # attaches forward / blacklist / priority
++
++    async with kit_miner.running() as app:
++        gateway = fake_chain.with_signer(dev_key("alice").ss58)
++        validator = Validator(
++            settings=ValidatorSettings(
++                netuid=TEST_NETUID,
++                wallet_name="validator",
++                wallet_path=tmp_path / "wallets",
++                state_dir=tmp_path / "state",
++            ),
++            hotkey=dev_key("alice").keypair,
++            gateway=gateway,
++            metagraph_source=FakeMetagraphSource(
++                gateway, TEST_NETUID, clock=tw_clock.monotonic
++            ),
++            transport=AppRouter({MINER_AXON: app}),
++        )
++        await validator.start()
++        try:
++            await validator.step_once()  # query, score; no weights at step 0
++            miner_uid = validator.metagraph.hotkeys.index(dev_key("bob").ss58)
++            assert validator.scores[miner_uid] == pytest.approx(0.1)
++            assert fake_chain.weight_submissions() == ()
++
++            fake_chain.advance(100)  # weights rate limit and neuron.epoch_length
++            await validator.step_once()
++            (submission,) = fake_chain.weight_submissions()
++            assert submission.hotkey == dev_key("alice").ss58
++            assert set(submission.weights) == {miner_uid}
++        finally:
++            await validator.stop()
+diff --git a/tests/test_template_validator.py b/tests/test_template_validator.py
+deleted file mode 100644
+index b48adce..0000000
+--- a/tests/test_template_validator.py
++++ /dev/null
+@@ -1,112 +0,0 @@
+-# The MIT License (MIT)
+-# Copyright © 2023 Yuma Rao
+-# Copyright © 2023 Opentensor Foundation
+-
+-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+-# documentation files (the “Software”), to deal in the Software without restriction, including without limitation
+-# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+-# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+-
+-# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+-# the Software.
+-
+-# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+-# THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+-# OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+-# DEALINGS IN THE SOFTWARE.
+-
+-import sys
+-import unittest
+-
+-import bittensor as bt
+-from tensorwire.compat import axons_from
+-import torch
+-
+-from neurons.validator import Validator
+-from tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron
+-from template.protocol import Dummy
+-from template.utils.uids import get_random_uids
+-from template.validator.reward import get_rewards
+-
+-
+-class TemplateValidatorNeuronTestCase(unittest.TestCase):
+-    """
+-    This class contains unit tests for the RewardEvent classes.
+-
+-    The tests cover different scenarios where completions may or may not be successful and the reward events are checked that they don't contain missing values.
+-    The `reward` attribute of all RewardEvents is expected to be a float, and the `is_filter_model` attribute is expected to be a boolean.
+-    """
+-
+-    def setUp(self):
+-        sys.argv = sys.argv[0] + ["--config", "tests/configs/validator.json"]
+-
+-        config = BaseValidatorNeuron.config()
+-        config.wallet._mock = True
+-        config.metagraph._mock = True
+-        config.subtensor._mock = True
+-        self.neuron = Validator(config)
+-        self.miner_uids = get_random_uids(self, k=10)
+-
+-    def test_run_single_step(self):
+-        # TODO: Test a single step
+-        pass
+-
+-    def test_sync_error_if_not_registered(self):
+-        # TODO: Test that the validator throws an error if it is not registered on metagraph
+-        pass
+-
+-    def test_forward(self):
+-        # TODO: Test that the forward function returns the correct value
+-        pass
+-
+-    def test_dummy_responses(self):
+-        # TODO: Test that the dummy responses are correctly constructed
+-
+-        responses = self.neuron.dendrite.query(
+-            # Send the query to miners in the network.
+-            axons=axons_from(self.neuron.metagraph, self.miner_uids),
+-            # Construct a dummy query.
+-            synapse=Dummy(dummy_input=self.neuron.step),
+-            # All responses have the deserialize function called on them before returning.
+-            deserialize=True,
+-        )
+-
+-        for i, response in enumerate(responses):
+-            self.assertEqual(response, self.neuron.step * 2)
+-
+-    def test_reward(self):
+-        # TODO: Test that the reward function returns the correct value
+-        responses = self.dendrite.query(
+-            # Send the query to miners in the network.
+-            axons=axons_from(self.metagraph, self.miner_uids),
+-            # Construct a dummy query.
+-            synapse=Dummy(dummy_input=self.neuron.step),
+-            # All responses have the deserialize function called on them before returning.
+-            deserialize=True,
+-        )
+-
+-        rewards = get_rewards(self.neuron, responses)
+-        expected_rewards = torch.FloatTensor([1.0] * len(responses))
+-        self.assertEqual(rewards, expected_rewards)
+-
+-    def test_reward_with_nan(self):
+-        # TODO: Test that NaN rewards are correctly sanitized
+-        # TODO: Test that a bt.logging.warning is thrown when a NaN reward is sanitized
+-        responses = self.dendrite.query(
+-            # Send the query to miners in the network.
+-            axons=axons_from(self.metagraph, self.miner_uids),
+-            # Construct a dummy query.
+-            synapse=Dummy(dummy_input=self.neuron.step),
+-            # All responses have the deserialize function called on them before returning.
+-            deserialize=True,
+-        )
+-
+-        rewards = get_rewards(self.neuron, responses)
+-        expected_rewards = rewards.clone()
+-        # Add NaN values to rewards
+-        rewards[0] = float("nan")
+-
+-        # TW-MIGRATE: TWM025 remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging module for anything else
+-        with self.assertLogs(bt.logging, level="WARNING") as cm:
+-            self.neuron.update_scores(rewards, self.miner_uids)

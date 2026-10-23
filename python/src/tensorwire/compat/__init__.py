@@ -12,6 +12,7 @@ Import changes for a template-derived subnet::
     [metagraph.axons[uid] for uid in uids]    ->  axons_from(metagraph_view, uids)
     process_weights_for_netuid(...)           ->  weights.to_mapping(uids, weights)
     bt.metagraph(...).hotkeys / .S / .axons   ->  Metagraph(source).hotkeys / .S
+    template.base.validator.BaseValidatorNeuron -> TemplateValidatorAdapter
 """
 
 from tensorwire.compat import weights
@@ -19,6 +20,7 @@ from tensorwire.compat.axon import Axon
 from tensorwire.compat.dendrite import AxonInfo, Dendrite, axons_from
 from tensorwire.compat.metagraph import Metagraph
 from tensorwire.compat.synapse import Synapse, TerminalInfo
+from tensorwire.compat.template import TemplateValidatorAdapter
 
 __all__ = [
     "Axon",
@@ -26,6 +28,7 @@ __all__ = [
     "Dendrite",
     "Metagraph",
     "Synapse",
+    "TemplateValidatorAdapter",
     "TerminalInfo",
     "axons_from",
     "weights",

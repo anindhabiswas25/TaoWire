@@ -22,18 +22,20 @@ On the btauth/1 path only the subclass's own fields go on the wire
 from the verified caller (miner side) or the HTTP result (validator side).
 On the v10 path the whole Synapse is the body (spec 8.11.1).
 
-:func:`hash_values` and :attr:`Synapse.body_hash` implement v10's
-``computed_body_hash`` and are the one implementation the legacy bridge uses.
+:attr:`Synapse.body_hash` is v10's ``computed_body_hash``. It delegates to
+:func:`tensorwire.extensions.legacy_v10.wire.body_hash`, the one
+implementation the kit has (spec 5.2, D7).
 """
 
 from __future__ import annotations
 
-import hashlib
 import sys
-from collections.abc import Iterable
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from tensorwire.extensions.legacy_v10 import wire
+from tensorwire.extensions.legacy_v10.wire import hash_values
 
 __all__ = ["BASE_FIELDS", "Synapse", "TerminalInfo", "hash_values"]
 
@@ -49,21 +51,6 @@ BASE_FIELDS: tuple[str, ...] = (
 )
 
 _DEFAULT_TIMEOUT_S = 12.0
-
-
-def _sha3_hex(text: str) -> str:
-    return hashlib.sha3_256(text.encode("utf-8")).hexdigest()
-
-
-def hash_values(values: Iterable[Any]) -> str:
-    """v10's ``computed_body_hash`` over field values, in the given order.
-
-    ``sha3_256_hex(concat(sha3_256_hex(str(value)) for each value))``, where
-    each value is as it appears in ``model_dump()`` and ``str`` is Python's
-    (``True``, ``None``, ``1e-07``, ``['a', 'b c']``). With no values this is
-    ``sha3_256("")``.
-    """
-    return _sha3_hex("".join(_sha3_hex(str(v)) for v in values))
 
 
 class TerminalInfo(BaseModel):
@@ -167,18 +154,12 @@ class Synapse(BaseModel):
         still declares ``required_hash_fields`` as a pydantic field (deprecated
         in v10) is hashed in model order, whatever order its list has.
         """
-        legacy_field = cls.model_fields.get("required_hash_fields")
-        if legacy_field is None:
-            return tuple(cls.required_hash_fields)
-        listed = set(legacy_field.default or ())
-        return tuple(name for name in cls.model_fields if name in listed)
+        return wire.hash_fields(cls)
 
     @property
     def body_hash(self) -> str:
-        """v10's ``computed_body_hash`` of this instance."""
-        names = self.hash_field_names()
-        dumped = self.model_dump() if names else {}
-        return hash_values(dumped[name] for name in names)
+        """v10's ``computed_body_hash`` of this instance (``wire.body_hash``)."""
+        return wire.body_hash(self)
 
     # ------------------------------------------------------------ wire helpers
 

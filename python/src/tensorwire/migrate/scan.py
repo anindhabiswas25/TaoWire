@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Iterator, Sequence
+import re
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -30,9 +31,22 @@ from typing import Literal
 import libcst as cst
 from libcst.metadata import MetadataWrapper, ParentNodeProvider, PositionProvider
 
-from tensorwire.migrate.rules import ATTRIBUTE_RULES, MODULE_RULES, RULES
+from tensorwire.migrate.rules import ATTRIBUTE_RULES, MODULE_RULES, RULES, V11_PUBLIC
 
-__all__ = ["Finding", "ScanReport", "render", "scan_repo", "scan_source"]
+__all__ = [
+    "LOG_LEVELS",
+    "STOCK_NEURON_METHODS",
+    "STOCK_VALIDATOR_METHODS",
+    "Finding",
+    "ScanReport",
+    "is_axons_list",
+    "is_metagraph_tensor_call",
+    "python_files",
+    "render",
+    "scan_repo",
+    "scan_source",
+    "template_bases",
+]
 
 Format = Literal["text", "json", "md"]
 
@@ -61,6 +75,48 @@ _WEIGHT_HELPERS = frozenset(
     {"process_weights_for_netuid", "convert_weights_and_uids_for_emit"}
 )
 _V10_SERVER_BASES = frozenset({"axon", "Axon", "dendrite", "Dendrite"})
+#: ``bt.logging.<name>(...)`` -> the standard ``logging`` function (TWM007).
+LOG_LEVELS: dict[str, str] = {
+    "trace": "debug",
+    "debug": "debug",
+    "info": "info",
+    "success": "info",
+    "warning": "warning",
+    "warn": "warning",
+    "error": "error",
+    "critical": "critical",
+    "exception": "exception",
+}
+#: The archived template's ``BaseValidatorNeuron`` / ``BaseNeuron`` methods.
+#: A base with more than these was customised (TWM026 instead of TWM024).
+STOCK_VALIDATOR_METHODS = frozenset(
+    {
+        "add_args", "__init__", "serve_axon", "concurrent_forward", "run",
+        "run_in_background_thread", "stop_run_thread", "__enter__", "__exit__",
+        "set_weights", "resync_metagraph", "update_scores", "save_state",
+        "load_state",
+    }
+)  # fmt: skip
+STOCK_NEURON_METHODS = frozenset(
+    {
+        "check_config", "add_args", "config", "block", "__init__", "forward",
+        "run", "sync", "check_registered", "should_sync_metagraph",
+        "should_set_weights", "save_state", "load_state",
+    }
+)  # fmt: skip
+#: ``"bt.<path>"`` string annotations that have a compat type (TWM028).
+ANNOTATION_COMPAT: dict[str, str] = {
+    "Synapse": "Synapse",
+    "AxonInfo": "AxonInfo",
+    "TerminalInfo": "TerminalInfo",
+    "Metagraph": "Metagraph",
+    "metagraph": "Metagraph",
+    "metagraph.Metagraph": "Metagraph",
+}
+#: Names v11 kept with a different API: v10-shaped uses are flagged.
+_RENAMED_V10 = {"Wallet": "TWM014", "Metagraph": "TWM009", "Subtensor": "TWM008"}
+_DOTTED_PATH = re.compile(r"[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)+")
+_IN_STRING = re.compile(r"(?<![\w.])(?:[\w.]+\.)?(bt|bittensor)\.(\w+)")
 _REGISTRATION_HINTS = (
     "hotkeys",
     "is_hotkey_registered",
@@ -177,6 +233,109 @@ def _synapse_shape(
     return fields, hash_fields
 
 
+def in_coroutine(visitor: cst.MetadataDependent, node: cst.CSTNode) -> bool:
+    """Whether ``node``'s nearest enclosing function is ``async def``."""
+    current: cst.CSTNode | None = node
+    while current is not None:
+        current = visitor.get_metadata(ParentNodeProvider, current, None)
+        if isinstance(current, cst.Lambda):
+            return False
+        if isinstance(current, cst.FunctionDef):
+            return current.asynchronous is not None
+    return False
+
+
+def resolve_module(module: str, level: int, path: str) -> str:
+    """The absolute dotted name of ``from <level dots><module> import ...``
+    written in file ``path`` (relative to the repository root)."""
+    if level == 0:
+        return module
+    package = path.removesuffix(".py").split("/")[:-1]
+    base = package[: len(package) - (level - 1)] if level > 1 else package
+    return ".".join([*base, module] if module else base)
+
+
+def _class(module: cst.Module, name: str) -> cst.ClassDef | None:
+    for statement in module.body:
+        if isinstance(statement, cst.ClassDef) and statement.name.value == name:
+            return statement
+    return None
+
+
+def _methods(module: cst.Module, name: str) -> set[str]:
+    node = _class(module, name)
+    if node is None:
+        return set()
+    return {s.name.value for s in node.body.body if isinstance(s, cst.FunctionDef)}
+
+
+def template_bases(root: Path) -> dict[str, list[str] | None]:
+    """``<package>.base.validator`` modules defining ``BaseValidatorNeuron``,
+    mapped to the methods they add beyond the archived template (with their
+    sibling ``neuron.py``'s ``BaseNeuron``). An empty list: a stock base.
+    ``None``: already ported (it subclasses ``TemplateValidatorAdapter``)."""
+    found: dict[str, list[str] | None] = {}
+    for path in root.glob("**/base/validator.py"):
+        rel = path.relative_to(root)
+        if any(part in _SKIP_DIRS for part in rel.parts) or path.is_symlink():
+            continue
+        try:
+            module = cst.parse_module(path.read_text(encoding="utf-8"))
+            neuron_path = path.with_name("neuron.py")
+            neuron = (
+                cst.parse_module(neuron_path.read_text(encoding="utf-8"))
+                if neuron_path.is_file() and not neuron_path.is_symlink()
+                else None
+            )
+        except (OSError, UnicodeDecodeError, cst.ParserSyntaxError):
+            continue
+        node = _class(module, "BaseValidatorNeuron")
+        if node is None:
+            continue
+        name = ".".join(rel.with_suffix("").parts)
+        if any(
+            (_dotted(b.value) or "").endswith("TemplateValidatorAdapter")
+            for b in node.bases
+        ):
+            found[name] = None
+            continue
+        extras = _methods(module, "BaseValidatorNeuron") - STOCK_VALIDATOR_METHODS
+        if neuron is not None:
+            extras |= _methods(neuron, "BaseNeuron") - STOCK_NEURON_METHODS
+        found[name] = sorted(extras)
+    return found
+
+
+def is_metagraph_tensor_call(node: cst.Call) -> bool:
+    """``<x>.metagraph.<v>.item()`` / ``.tolist()``, also on ``<v>[i]``."""
+    func = node.func
+    if node.args or not (
+        isinstance(func, cst.Attribute) and func.attr.value in ("item", "tolist")
+    ):
+        return False
+    receiver = func.value
+    base = receiver.value if isinstance(receiver, cst.Subscript) else receiver
+    dotted = _dotted(base) or ""
+    return ".metagraph." in f".{dotted}." and not dotted.endswith("metagraph")
+
+
+def is_axons_list(node: cst.ListComp) -> bool:
+    """``[<x>.metagraph.axons[uid] for uid in <uids>]`` (one ``for``, no ``if``)."""
+    comp = node.for_in
+    elt = node.elt
+    if comp.inner_for_in is not None or comp.ifs or comp.asynchronous is not None:
+        return False
+    if not (isinstance(elt, cst.Subscript) and isinstance(comp.target, cst.Name)):
+        return False
+    owner = _dotted(elt.value) or ""
+    if not (owner == "metagraph.axons" or owner.endswith(".metagraph.axons")):
+        return False
+    if len(elt.slice) != 1 or not isinstance(elt.slice[0].slice, cst.Index):
+        return False
+    index = elt.slice[0].slice.value
+    return isinstance(index, cst.Name) and index.value == comp.target.value
+
+
 def _is_bool(node: cst.BaseExpression, value: bool) -> bool:
     return isinstance(node, cst.Name) and node.value == ("True" if value else "False")
 
@@ -184,13 +343,21 @@ def _is_bool(node: cst.BaseExpression, value: bool) -> bool:
 class _Visitor(cst.CSTVisitor):
     METADATA_DEPENDENCIES = (PositionProvider, ParentNodeProvider)
 
-    def __init__(self, path: str, module: cst.Module, lines: Sequence[str]) -> None:
+    def __init__(
+        self,
+        path: str,
+        module: cst.Module,
+        lines: Sequence[str],
+        custom_bases: Mapping[str, list[str] | None],
+    ) -> None:
         super().__init__()
         self.path = path
+        self.custom_bases = custom_bases
         self.module = module
         self.lines = lines
         self.bt_aliases: set[str] = set()
         self.findings: list[Finding] = []
+        self._annotation_depth = 0
         self.template = False
 
     def add(self, node: cst.CSTNode, rule: str, detail: str = "") -> None:
@@ -210,6 +377,9 @@ class _Visitor(cst.CSTVisitor):
     def visit_Import(self, node: cst.Import) -> None:  # noqa: N802 - libcst API
         for alias in node.names:
             name = _dotted(alias.name) or ""
+            if name == "bittensor_wallet" or name.startswith("bittensor_wallet."):
+                self.add(node, self.module_rule(name) or "TWM014", f"import {name}")
+                continue
             if name != "bittensor" and not name.startswith("bittensor."):
                 continue
             asname = alias.asname.name if alias.asname is not None else None
@@ -220,7 +390,15 @@ class _Visitor(cst.CSTVisitor):
                 self.add(node, rule, f"import {name}")
 
     def visit_ImportFrom(self, node: cst.ImportFrom) -> None:  # noqa: N802 - libcst API
+        self.check_template_import(node)
         module = _dotted(node.module) if node.module is not None else None
+        if module is not None and (
+            module == "bittensor_wallet" or module.startswith("bittensor_wallet.")
+        ):
+            self.add(
+                node, self.module_rule(module) or "TWM014", f"from {module} import ..."
+            )
+            return
         if module is None or not (
             module == "bittensor" or module.startswith("bittensor.")
         ):
@@ -235,39 +413,133 @@ class _Visitor(cst.CSTVisitor):
             return
         for alias in node.names:
             name = _dotted(alias.name) or ""
-            rule = ATTRIBUTE_RULES.get(name)
+            rule = "TWM025" if name == "logging" else ATTRIBUTE_RULES.get(name)
+            if rule is None and name in ("Wallet", "Metagraph"):
+                rule = _RENAMED_V10[name]
+            elif rule is None and name not in V11_PUBLIC:
+                rule = "TWM030"
             if rule:
                 self.add(node, rule, f"from bittensor import {name}")
+
+    def check_template_import(self, node: cst.ImportFrom) -> None:
+        module = _dotted(node.module) if node.module is not None else ""
+        if not module or not (
+            module == "base.validator" or module.endswith(".base.validator")
+        ):
+            return
+        if isinstance(node.names, cst.ImportStar):
+            return
+        if any(_dotted(a.name) == "BaseValidatorNeuron" for a in node.names):
+            target = resolve_module(module, len(node.relative), self.path)
+            extras = self.custom_bases.get(target, [])
+            if extras is None:
+                return  # already on TemplateValidatorAdapter
+            if extras:
+                self.add(node, "TWM026", f"{target} adds: {', '.join(extras)}")
+            else:
+                self.add(node, "TWM024", f"from {module} import BaseValidatorNeuron")
 
     def visit_Attribute(self, node: cst.Attribute) -> None:  # noqa: N802 - libcst API
         if not (
             isinstance(node.value, cst.Name) and node.value.value in self.bt_aliases
         ):
             return
-        rule = ATTRIBUTE_RULES.get(node.attr.value)
-        if rule is None:
-            return
+        attr = node.attr.value
         full = self.full_name(node)
+        rule = ATTRIBUTE_RULES.get(attr)
+        if rule is None:
+            rule = self.v10_shaped(node, attr, full)
+            if rule:
+                self.add(node, rule, full)
+            return
         if "weight_utils" in full:
             rule = "TWM012"
+        elif (
+            full.rsplit(".", 1)[-1] in ("add_args", "check_config") and rule != "TWM007"
+        ):
+            rule = "TWM006"  # bt.axon.add_args(parser), bt.wallet.add_args(...)
+        elif rule == "TWM007" and (
+            full.rsplit(".", 1)[-1] not in LOG_LEVELS or not self.is_called(node)
+        ):
+            rule = "TWM025"  # bt.logging.set_config(...), a monkeypatch, ...
         self.add(node, rule, full)
 
-    def full_name(self, node: cst.Attribute) -> str:
+    def v10_shaped(self, node: cst.Attribute, attr: str, full: str) -> str | None:
+        """The rule for a ``bt.<name>`` v11 also has (or none): only v10-shaped
+        uses of ``Wallet`` / ``Metagraph`` / ``Subtensor``, and the catch-all."""
+        if attr not in V11_PUBLIC:
+            return "TWM030"
+        if attr not in _RENAMED_V10:
+            return None
+        if full.rsplit(".", 1)[-1] in ("add_args", "check_config", "config"):
+            return "TWM006"
+        if attr != "Subtensor" or self._annotation_depth:
+            return _RENAMED_V10[attr]
+        parent = self.get_metadata(ParentNodeProvider, node, None)
+        if isinstance(parent, cst.Call) and any(
+            a.keyword is not None and a.keyword.value == "config" for a in parent.args
+        ):
+            return "TWM008"  # bt.Subtensor(config=...): v10's constructor
+        return None  # bt.Subtensor("test"): v11
+
+    def outermost(self, node: cst.Attribute) -> cst.Attribute:
         current = node
         while True:
             parent = self.get_metadata(ParentNodeProvider, current, None)
             if isinstance(parent, cst.Attribute) and parent.value is current:
                 current = parent
             else:
-                break
-        return _dotted(current) or ""
+                return current
+
+    def is_called(self, node: cst.Attribute) -> bool:
+        whole = self.outermost(node)
+        parent = self.get_metadata(ParentNodeProvider, whole, None)
+        return isinstance(parent, cst.Call) and parent.func is whole
+
+    def visit_Annotation(self, _node: cst.Annotation) -> None:  # noqa: N802 - libcst API
+        self._annotation_depth += 1
+
+    def leave_Annotation(self, _node: cst.Annotation) -> None:  # noqa: N802 - libcst API
+        self._annotation_depth -= 1
+
+    def visit_SimpleString(self, node: cst.SimpleString) -> None:  # noqa: N802 - libcst API
+        value = node.evaluated_value
+        if not isinstance(value, str) or node.prefix:
+            return
+        if self._annotation_depth:
+            alias, _, path = value.partition(".")
+            if alias not in self.bt_aliases:
+                return
+            if path in ANNOTATION_COMPAT:
+                self.add(node, "TWM028", value)
+                return
+            head = path.split(".")[0]
+            rule = ATTRIBUTE_RULES.get(head) or _RENAMED_V10.get(head)
+            if rule is None and head not in V11_PUBLIC:
+                rule = "TWM030"
+            if rule:
+                self.add(node, rule, value)
+            return
+        if isinstance(self.get_metadata(ParentNodeProvider, node, None), cst.Expr):
+            return  # a docstring or a bare string statement
+        if not _DOTTED_PATH.fullmatch(value):
+            return  # prose, not a name (mock.patch targets are dotted paths)
+        for match in _IN_STRING.finditer(value):
+            if match.group(2) in ATTRIBUTE_RULES:
+                self.add(node, "TWM029", match.group(0)[:80])
+                return
+
+    def full_name(self, node: cst.Attribute) -> str:
+        return _dotted(self.outermost(node)) or ""
 
     def visit_Call(self, node: cst.Call) -> None:  # noqa: N802 - libcst API
         func = node.func
         name = _dotted(func) or ""
         last = name.rsplit(".", 1)[-1]
         receiver = name.rsplit(".", 1)[0].lower() if "." in name else ""
-        if last in _WEIGHT_HELPERS:
+        if name == "time.sleep" and in_coroutine(self, node):
+            self.add(node, "TWM027", name)
+        elif last in _WEIGHT_HELPERS:
             self.add(node, "TWM012", last)
         elif last == "set_weights" and "subtensor" in receiver:
             self.add(node, "TWM010", name)
@@ -277,8 +549,8 @@ class _Visitor(cst.CSTVisitor):
             self.add(node, "TWM009", name)
         elif last == "add_argument":
             self.check_add_argument(node)
-        elif last in ("item", "tolist") and ".metagraph." in f".{receiver}":
-            self.add(node, "TWM023", name)
+        elif is_metagraph_tensor_call(node):
+            self.add(node, "TWM023", self.module.code_for_node(node.func))
         self.check_keywords(node, last)
 
     def check_keywords(self, node: cst.Call, last: str) -> None:
@@ -323,10 +595,9 @@ class _Visitor(cst.CSTVisitor):
             ):
                 self.add(node, "TWM103", f"{name} = False")
 
-    def visit_Subscript(self, node: cst.Subscript) -> None:  # noqa: N802 - libcst API
-        name = _dotted(node.value) or ""
-        if name.endswith("metagraph.axons"):
-            self.add(node, "TWM013", name)
+    def visit_ListComp(self, node: cst.ListComp) -> None:  # noqa: N802 - libcst API
+        if is_axons_list(node):
+            self.add(node, "TWM013", self.module.code_for_node(node))
 
     def visit_ClassDef(self, node: cst.ClassDef) -> None:  # noqa: N802 - libcst API
         if node.name.value in _TEMPLATE_CLASSES:
@@ -370,20 +641,29 @@ class _Visitor(cst.CSTVisitor):
 # ---------------------------------------------------------------- scanning
 
 
-def scan_source(source: str, path: str = "<string>") -> tuple[list[Finding], bool]:
+def scan_source(
+    source: str,
+    path: str = "<string>",
+    *,
+    custom_bases: Mapping[str, list[str] | None] | None = None,
+) -> tuple[list[Finding], bool]:
     """Scan one file's source. Returns (findings, template classes seen).
 
+    ``custom_bases`` is :func:`template_bases` of the repository (without
+    it, every ``BaseValidatorNeuron`` import counts as the stock template).
     Raises ``libcst.ParserSyntaxError`` for code that does not parse.
     """
     module = cst.parse_module(source)
     wrapper = MetadataWrapper(module)
-    visitor = _Visitor(path, wrapper.module, source.splitlines())
+    visitor = _Visitor(path, wrapper.module, source.splitlines(), custom_bases or {})
     wrapper.visit(visitor)
     findings = sorted(set(visitor.findings))
     return findings, bool(visitor.template)
 
 
-def _python_files(root: Path) -> Iterator[Path]:
+def python_files(root: Path) -> Iterator[Path]:
+    """Python files under ``root``, skipping venvs, caches and VCS dirs, never
+    following a symlink out of the repository."""
     real_root = root.resolve()
     for current, dirs, files in os.walk(root, followlinks=False):
         dirs[:] = sorted(
@@ -405,19 +685,26 @@ def scan_repo(root: Path | str) -> ScanReport:
         raise NotADirectoryError(str(base))
     report = ScanReport(root=str(base))
     report.template_detected = (base / "template" / "base" / "neuron.py").is_file()
-    for path in _python_files(base):
+    bases = template_bases(base)
+    for path in python_files(base):
         rel = path.relative_to(base).as_posix()
         try:
             if path.stat().st_size > _MAX_FILE_BYTES:
                 report.parse_errors.append(f"{rel}: skipped (larger than 2 MiB)")
                 continue
             source = path.read_text(encoding="utf-8")
-            findings, template = scan_source(source, rel)
+            findings, template = scan_source(source, rel, custom_bases=bases)
         except (UnicodeDecodeError, OSError) as exc:
             report.parse_errors.append(f"{rel}: {type(exc).__name__}")
             continue
         except cst.ParserSyntaxError as exc:
             report.parse_errors.append(f"{rel}:{exc.raw_line}: syntax error")
+            continue
+        except Exception as exc:  # noqa: BLE001 - one file must not stop the others
+            report.parse_errors.append(
+                f"{rel}: not scanned, internal error ({type(exc).__name__}: {exc}); "
+                "please report it"
+            )
             continue
         report.files_scanned += 1
         report.findings.extend(findings)

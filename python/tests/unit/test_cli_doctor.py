@@ -243,6 +243,24 @@ async def test_validator(env: TWEnv, chain: FakeChain, tmp_path: Path) -> None:
     assert checks["lock"][0] == "ok"
 
 
+async def test_validator_tls_pinning_policy_fails(
+    env: TWEnv, chain: FakeChain, tmp_path: Path
+) -> None:
+    env.unset("external_ip")
+    write_key(tmp_path / "wallets" / "w" / "hotkeys" / "default", "alice")
+    env.set(scheme_policy="https-if-tls-published")
+    d = doctor(chain, "validator")
+    await d.run()
+    checks = by_name(d)
+    assert d.failed
+    assert checks["scheme"][0] == "fail"
+    assert "TW_SCHEME_POLICY=https-if-tls-published" in checks["scheme"][1]
+    env.set(scheme_policy="https")
+    d = doctor(chain, "validator")
+    await d.run()
+    assert by_name(d)["scheme"] == ("ok", "https")
+
+
 def test_cli_output(env: TWEnv, monkeypatch: pytest.MonkeyPatch) -> None:
     runner = CliRunner()
     bad = runner.invoke(app, ["doctor", "--role", "sidecar"])

@@ -78,7 +78,7 @@ FIXTURES: dict[str, tuple[str, str]] = {
     ),
     "TWM014": (
         "import bittensor as bt\nw = bt.wallet(config=c)\n",
-        "import bittensor as bt\nw = bt.Wallet(name='v')\n",
+        "from tensorwire.auth.keys import load_hotkey\nk = load_hotkey(p, n, h)\n",
     ),
     "TWM015": (
         "import bittensor as bt\nw = bt.MockWallet()\n",
@@ -116,6 +116,30 @@ FIXTURES: dict[str, tuple[str, str]] = {
         "for uid in range(self.metagraph.n.item()):\n    pass\n",
         "for uid in range(self.metagraph.n):\n    pass\n",
     ),
+    "TWM024": (
+        "from template.base.validator import BaseValidatorNeuron\n",
+        "from template.base.miner import BaseMinerNeuron\n",
+    ),
+    "TWM025": (
+        "import bittensor as bt\nbt.logging.set_config(config=c)\n",
+        "import logging\nlogging.basicConfig()\n",
+    ),
+    "TWM027": (
+        "import time\nasync def forward(self):\n    time.sleep(5)\n",
+        "import time\ndef forward(self):\n    time.sleep(5)\n",
+    ),
+    "TWM028": (
+        "import bittensor as bt\ndef f(s: 'bt.Synapse') -> None: ...\n",
+        "from tensorwire.compat import Synapse\ndef f(s: 'Synapse') -> None: ...\n",
+    ),
+    "TWM029": (
+        "patch('vali_utils.miner_evaluator.bt.logging.info')\n",
+        "patch('vali_utils.miner_evaluator.logging.info')\n",
+    ),
+    "TWM030": (
+        "import bittensor as bt\nx = bt.Epistula()\n",
+        "import bittensor as bt\nx = bt.Balance.from_tao(1)\n",
+    ),
     "TWM100": (
         "class Ask(Synapse):\n    question: str\n    answer: str | None = None\n",
         "class Ask(Synapse):\n    question: str\n"
@@ -149,8 +173,59 @@ def rules_in(source: str) -> set[str]:
     return {f.rule for f in findings}
 
 
+#: Rules that need the whole repository (tested in test_customised_template_base).
+REPO_LEVEL = {"TWM026"}
+
+
+def test_customised_template_base(tmp_path: Path) -> None:
+    base = tmp_path / "subnet" / "base"
+    base.mkdir(parents=True)
+    (base / "validator.py").write_text(
+        "class BaseValidatorNeuron(BaseNeuron):\n"
+        "    def set_weights(self): ...\n"
+        "    def log_step(self): ...\n"
+    )
+    (base / "neuron.py").write_text(
+        "class BaseNeuron:\n    def sync(self): ...\n"
+        "    def parse_versions(self): ...\n"
+    )
+    stock = tmp_path / "template" / "base"
+    stock.mkdir(parents=True)
+    (stock / "validator.py").write_text(
+        "class BaseValidatorNeuron(BaseNeuron):\n    def set_weights(self): ...\n"
+    )
+    (tmp_path / "neurons").mkdir()
+    (tmp_path / "neurons" / "v.py").write_text(
+        "from subnet.base.validator import BaseValidatorNeuron\n"
+    )
+    (tmp_path / "neurons" / "t.py").write_text(
+        "from template.base.validator import BaseValidatorNeuron\n"
+    )
+    (tmp_path / "subnet" / "x.py").write_text(
+        "from .base.validator import BaseValidatorNeuron\n"
+    )
+    ported = tmp_path / "done" / "base"
+    ported.mkdir(parents=True)
+    (ported / "validator.py").write_text(
+        "from tensorwire.compat import TemplateValidatorAdapter\n"
+        "class BaseValidatorNeuron(TemplateValidatorAdapter):\n"
+        "    def log_step(self): ...\n"
+    )
+    (tmp_path / "neurons" / "d.py").write_text(
+        "from done.base.validator import BaseValidatorNeuron\n"
+    )
+    report = scan_repo(tmp_path)
+    found = {(f.path, f.rule, f.detail) for f in report.findings}
+    assert not [f for f in report.findings if f.path == "neurons/d.py"]  # ported
+    custom = "subnet.base.validator adds: log_step, parse_versions"
+    assert ("neurons/v.py", "TWM026", custom) in found
+    assert ("subnet/x.py", "TWM026", custom) in found  # relative import
+    assert ("neurons/t.py", "TWM024", "from template.base.validator import "
+            "BaseValidatorNeuron") in found  # fmt: skip
+
+
 def test_every_rule_has_fixtures() -> None:
-    assert set(FIXTURES) == set(RULES)
+    assert set(FIXTURES) | REPO_LEVEL == set(RULES)
 
 
 @pytest.mark.parametrize("rule", sorted(FIXTURES))
@@ -195,6 +270,29 @@ def test_negative_fixture(rule: str) -> None:
         ("w = convert_weights_and_uids_for_emit(u, w)\n", "TWM012"),
         ("from bittensor.subnets import SubnetsAPI\n", "TWM016"),
         ("uids = self.metagraph.uids.tolist()\n", "TWM023"),
+        ("import bittensor as bt\nbt.logging(config=c)\n", "TWM025"),
+        ("import bittensor as bt\nbt.logging.set_trace(True)\n", "TWM025"),
+        ("from bittensor import logging\n", "TWM025"),
+        ("import bittensor as bt\nbt.logging.trace('x')\n", "TWM007"),
+        ("from .base.validator import BaseValidatorNeuron as B\n", "TWM024"),
+        # B's data-universe misses (2026-10-23)
+        ("import bittensor as bt\nw = bt.Wallet(config=self.config)\n", "TWM014"),
+        ("import bittensor as bt\ns = bt.Subtensor(config=self.config)\n", "TWM008"),
+        ("import bittensor as bt\ndef f(m: bt.Metagraph): ...\n", "TWM009"),
+        ("import bittensor as bt\ndef f(s: bt.Subtensor): ...\n", "TWM008"),
+        ("import bittensor as bt\nbt.Subtensor.add_args(p)\n", "TWM006"),
+        ("from bittensor_wallet.keypair import Keypair\n", "TWM017"),
+        ("import bittensor_wallet\n", "TWM014"),
+        ("import bittensor as bt\ndef f(c: 'bt.Config' = None): ...\n", "TWM006"),
+        ("import bittensor as bt\nt = bt.TerminalInfo(status_code=200)\n", "TWM001"),
+        ("from bittensor import Epistula\n", "TWM030"),
+        ("import bittensor as bt\noriginal = bt.logging.trace\n", "TWM025"),
+        ("import bittensor as bt\nbt.logging.trace = mine\n", "TWM025"),
+        (
+            "import time\nclass V:\n    async def f(self):\n"
+            "        if x:\n            time.sleep(1)\n",
+            "TWM027",
+        ),
     ],
 )
 def test_more_positives(source: str, rule: str) -> None:
@@ -211,8 +309,18 @@ def test_more_positives(source: str, rule: str) -> None:
         "class A(Synapse):\n    pass\n",  # no fields: nothing to hash
         "class A(Synapse):\n    limit: ClassVar[int] = 3\n",
         "import numpy as bt\nbt.Tensor\n",  # bt is not bittensor here
-        "from bittensor import Subtensor, Wallet\n",
+        "from bittensor import Subtensor, SetWeights\n",
+        "import bittensor as bt\nc = bt.Subtensor('test')\n",  # v11 constructor
+        "import bittensor as bt\nr = bt.SetWeights(netuid=1, weights=w)\n",
+        "x = f('bt.logging is mentioned in prose only as bt.unknownthing')\n",
+        'def f():\n    """Uses bt.logging.info and bt.Synapse."""\n',
         "x = values.item()\n",
+        "a = self.metagraph.axons[uid]\n",  # works through compat.Metagraph
+        "a = [self.metagraph.axons[u] for u in uids if u]\n",  # not the plain list
+        "a = [self.metagraph.axons[0] for u in uids]\n",
+        "from template.base.validator import helper\n",
+        "import time\nasync def f():\n    def g():\n        time.sleep(1)\n",
+        "import time\nasync def f():\n    g = lambda: time.sleep(1)\n",
     ],
 )
 def test_more_negatives(source: str) -> None:
@@ -227,7 +335,7 @@ def test_finding_position_and_snippet() -> None:
     assert (f.path, f.line, f.rule) == ("m.py", 3, "TWM007")
     assert f.snippet == "bt.logging.info('hi')"
     assert f.detail == "bt.logging.info"
-    assert f.severity == "manual"
+    assert f.severity == "auto"
 
 
 # ---------------------------------------------------------------- the template

@@ -39,7 +39,8 @@ def _content_length(headers: list[tuple[bytes, bytes]]) -> int | None:
     """The declared length, or ``None`` if absent or not a plain decimal.
 
     Conflicting duplicate headers count as absent here; the streaming cap
-    still applies (and h11 rejects them before they reach the app).
+    still applies (and the miner's HTTP parser rejects them before they reach
+    the app).
     """
     values = {v.strip() for k, v in headers if k.lower() == b"content-length"}
     if len(values) != 1:

@@ -26,6 +26,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from pydantic import Field
 
 from tensorwire.chain.gateway import MetagraphView
 from tensorwire.compat import Axon, AxonInfo, Dendrite, Metagraph, Synapse, axons_from
@@ -250,6 +251,35 @@ async def test_14_wire_body_is_only_the_synapse_fields(
     async with dendrite(router, tw_clock) as d:
         await d(axons_from(mg, uids=[0]), Dummy(dummy_input=3))
     assert seen == [b'{"dummy_input":3,"dummy_output":null}']
+
+
+class Frozen(Synapse):
+    text: str = Field(frozen=True)  # v10 code: Field(..., allow_mutation=False)
+    answer: str | None = None
+
+
+async def test_14_frozen_request_fields_keep_their_value(
+    setup: tuple[AppRouter, TemplateMiner, Any],  # publishes the axon
+    fake_chain: FakeChain,
+    tw_clock: FakeClock,
+) -> None:
+    async def app(scope: Any, receive: Any, send: Any) -> None:
+        await receive()
+        body = b'{"text": "changed by the miner", "answer": "ok"}'
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": body})
+
+    signer = dev_key("alice").signer(clock_ns=tw_clock.now_ns)  # type: ignore[arg-type]
+    client = ValidatorClient(
+        signer, transport=AppRouter({MINER_ADDRESS: app}), verify_responses=False
+    )
+    mg = await metagraph(fake_chain)
+    async with Dendrite(client=client) as d:
+        (item,) = await d(
+            axons_from(mg, uids=[0]), Frozen(text="mine"), deserialize=False
+        )
+    assert item.dendrite.status_code == 200
+    assert (item.text, item.answer) == ("mine", "ok")
 
 
 # 15 ---------------------------------------------------------------------------

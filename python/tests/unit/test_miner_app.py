@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from tensorwire import Miner as LazyMiner
 from tensorwire.errors import ConfigError, StartupError
 from tensorwire.miner import app as app_mod
-from tensorwire.miner.app import MAX_HEADER_BYTES, Miner
+from tensorwire.miner.app import Miner
 from tensorwire.miner.pipeline import raw_target
 from tensorwire.miner.routes import RouteContext, RouteRegistry
 from tensorwire.policy.caller import CallerPolicy
@@ -130,7 +130,9 @@ def test_uvicorn_options(tw_miner_kwargs: dict[str, Any], tmp_path: Path) -> Non
     assert opts["ssl_certfile"] == str(cert)
     assert opts["ssl_keyfile"] == str(key)
     assert opts["timeout_graceful_shutdown"] == 1
-    assert opts["h11_max_incomplete_event_size"] == MAX_HEADER_BYTES
+    assert opts["http"].keywords == {
+        "read_timeout_s": settings.auth_max_age_s + settings.auth_allowed_skew_s
+    }
     assert opts["timeout_keep_alive"] == 5
     assert opts["proxy_headers"] is False
     assert opts["server_header"] is False

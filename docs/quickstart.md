@@ -185,11 +185,29 @@ whole loop: a signed request, a signed answer, a score, a weight on chain.
 Press Ctrl-C in both terminals (the miner drains in-flight requests first).
 `"$TENSORWIRE_REPO/scripts/localnet_down.sh"` stops the chain.
 
+## Before testnet or mainnet
+
+The localnet settings above are not for public networks. Change these:
+
+- Drop `TW_ALLOW_PRIVATE_AXONS` and `TW_REFUSE_IF_COLDKEY_PRESENT=0`. Copy
+  only the hotkey to the server; the kit never needs the coldkey.
+- `TW_EXTERNAL_IP` is the miner's public address; open only the miner port in
+  the firewall. Keep `TW_METRICS_BIND` on 127.0.0.1 or a private network.
+- More than one miner process (`TW_WORKERS > 1`) or host
+  (`TW_INSTANCE_COUNT > 1`) needs Redis (`TW_REDIS_URL`) for the shared replay
+  store and rate limits; the miner refuses to start without it. Run Redis
+  where the miner reaches it directly (`docs/benchmarks.md` shows why).
+- Set `TW_CHAIN_FALLBACKS` (or run your own lite node).
+- `deploy/` has Docker images and hardened systemd units.
+
 ## Where next
 
 - `docs/miner-guide.md`: routes, caller policy, limits, health and metrics.
 - `docs/validator-guide.md`: `SubnetValidator`, scores, weights, the client.
-- `docs/migration-from-v10.md`: moving an existing v10 subnet onto TensorWire.
+- `docs/security.md`: what the kit defends against and what you still have to do.
+- `docs/benchmarks.md`: throughput, latency and abuse-test numbers.
+- `docs/migration-from-v10.md`: moving an existing v10 subnet onto TensorWire,
+  and `docs/migration-rollout.md` for rolling it out.
 
 ## Measured
 

@@ -94,7 +94,15 @@ routes with their own policy.
 
 ## What happens to a request
 
-1. Per-IP rate limit (`TW_RATE_IP_PER_S` / `TW_RATE_IP_BURST`): 429.
+0. The HTTP layer (httptools): the request must arrive completely within
+   `TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S` of its first byte (silent and
+   slow connections are closed); request line plus headers at most 16 KiB and
+   100 fields; ambiguous framing (`Content-Length` with `Transfer-Encoding`,
+   two lengths) refused. Each of these answers 400 and closes the connection.
+1. Per-IP rate limit (`TW_RATE_IP_PER_S` / `TW_RATE_IP_BURST`): 429. This is
+   the outermost layer, so a flood costs as little as possible. Refusals are
+   counted in the metrics and logged as one `ip_rate_limited` WARNING per
+   client per 10 s with the count, not one line per request.
 2. Body size cap, declared and streamed: 413, before any signature work.
 3. Route lookup: 404 / 405.
 4. Metagraph check: with `TW_METAGRAPH_STRICT=1` and a snapshot past its max
@@ -181,8 +189,15 @@ again; unknown callers are never admitted on stale data. Set at least one
    unencrypted.
 3. Connect to the chain and fetch the metagraph (`TW_STARTUP_TIMEOUT_S`).
 4. Exit with **code 3** if the hotkey is not registered on `TW_NETUID`.
-5. Build the replay store: memory for one process, Redis (`TW_REDIS_URL`) when
-   `TW_WORKERS > 1` or `TW_INSTANCE_COUNT > 1` (refused otherwise).
+5. Build the replay store and both rate limiters (per IP before auth, per
+   hotkey and route after it): memory for one process, Redis
+   (`TW_REDIS_URL`) when `TW_WORKERS > 1` or `TW_INSTANCE_COUNT > 1`. A
+   per-process store or limiter is refused in that case (the
+   `TW_UNSAFE_ALLOW_MEMORY_NONCE_MULTIWORKER=1` override covers both and is
+   logged as unsafe). The Redis limiter is one atomic Lua token bucket per
+   key on Redis's clock, so all workers and hosts share one limit. If Redis
+   is unreachable, protected routes answer 503 `tw.replay_store_unavailable`
+   (fail closed); `/healthz` and `/readyz` still answer.
 6. Check the clock against NTP (`TW_NTP_SERVERS`).
 7. Publish the axon (`TW_EXTERNAL_IP:TW_EXTERNAL_PORT`, protocol
    `TW_PROTOCOL_TAG`) when the chain shows something else and
@@ -195,15 +210,24 @@ that reads it from the metagraph can reach the miner a moment before it
 accepts connections. Clients and deployment checks should wait for `/readyz`
 to return 200 rather than for the axon to appear on chain.
 
-On SIGTERM or Ctrl-C the server stops accepting, gives in-flight requests
-`TW_DRAIN_S`, then closes the chain connection and the replay store
-(`miner_stopped` in the log). Ctrl-C exits with status 130.
+On SIGTERM or Ctrl-C the server stops accepting new connections, gives
+in-flight requests up to `TW_DRAIN_S` (10 s) to finish, cancels whatever is
+still running after that, then closes the chain connection, the replay store
+and the rate limiters (`miner_stopped` in the log). Ctrl-C exits with status
+130. Give your process manager a stop timeout longer than `TW_DRAIN_S`
+(systemd `TimeoutStopSec`, Kubernetes `terminationGracePeriodSeconds`).
 
 `TW_EXTERNAL_IP` is never `0.0.0.0`, `::` or `127.0.0.1` (the chain rejects or
 un-serves them). On localnet use `127.0.0.2` (Linux) or the LAN IP with
 `TW_ALLOW_PRIVATE_AXONS=1`.
 
-With `TW_WORKERS > 1`, pass the import path: `miner.run(app_import="my_miner:miner.app")`.
+With `TW_WORKERS > 1`, pass the import path:
+`miner.run(app_import="my_miner:miner.app")`, and guard the call with
+`if __name__ == "__main__":` (each worker imports the module). The
+supervising process runs the startup checks once first, so a refusal still
+exits with its code (3 = not registered); then every worker starts. Metrics
+from all workers are served together on `TW_METRICS_BIND` (counters and
+histograms summed, gauges most recent).
 
 ## Health and metrics
 
@@ -211,7 +235,10 @@ With `TW_WORKERS > 1`, pass the import path: `miner.run(app_import="my_miner:min
 - `GET /readyz`: `{"status": "ready", "degraded": [...]}` or 503
   `{"status": "not_ready", "reasons": [...]}`; reasons are `starting`,
   `stopping`, `not_registered`, `metagraph_stale`, `nonce_store_unreachable`,
-  `clock_skew`; degraded entries `metagraph_stale`, `axon_not_published`.
+  `rate_limiter_unreachable`, `clock_skew`; degraded entries
+  `metagraph_stale`, `axon_not_published`. The clock is checked at startup
+  and every 10 minutes; `clock_skew` clears at the first check that finds
+  the clock back within `TW_AUTH_ALLOWED_SKEW_S`.
 - Prometheus metrics on `TW_METRICS_BIND` (127.0.0.1:9100), never on the
   public port. See [metrics.md](metrics.md).
 
