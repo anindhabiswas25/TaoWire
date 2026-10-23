@@ -406,6 +406,8 @@ def test_negative_covers_spec_11_7() -> None:
         # weak keys and lax hex (kit rules, every language)
         "N45": "tw.auth_malformed", "N46": "tw.auth_malformed",
         "N63": "tw.auth_bad_signature", "N64": "tw.auth_bad_signature",
+        # sender length before base58 decoding (D19), incl. a very long one
+        "N65": "tw.auth_malformed", "N66": "tw.auth_malformed",
     }  # fmt: skip
     for vid, code in required.items():
         assert by_id[vid] == code, vid
@@ -425,14 +427,9 @@ def test_python_reference_agrees(vector: dict[str, Any]) -> None:
     assert (valid, code) == (want["valid"], want["code"])
 
 
-def test_divergences_are_only_the_documented_ones() -> None:
-    """The Python reference differs only on <Bytes> wrapping (spec 11.7)."""
-    divergent = {v["id"] for v in VERIFY if "python_reference" in v}
-    assert divergent == {"N19", "N20"}
-    for v in VERIFY:
-        if v["id"] in divergent:
-            assert v["python_reference"]["note"]
-            assert v["expected"]["valid"] is False
+def test_python_has_no_divergence_left() -> None:
+    """D22: the Python request verifier is strict on <Bytes> too (spec 11.7)."""
+    assert {v["id"] for v in VERIFY if "python_reference" in v} == set()
 
 
 def test_signed_payload_of_negative_cases_is_the_spec_payload() -> None:

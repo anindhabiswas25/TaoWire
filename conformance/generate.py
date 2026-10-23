@@ -836,13 +836,6 @@ def negative() -> dict[str, Any]:
     signed_post = good
     ed_pub_ss58 = KEYS["alice_ed25519"]["ss58"]
     sender_wrong_len = _b58encode(b"\x2a" + pk_alice + b"\x00")  # 34 bytes
-    py_wrapped = {
-        "valid": True,
-        "code": None,
-        "note": "spec 11.7: the Python request verifier (bittensor.http_auth over "
-        "sp_core.verify) accepts <Bytes>-wrapped signatures; strict "
-        "implementations (TypeScript, Go, Rust) reject them.",
-    }
     universal_note = [
         "Weak key: the identity point has a signature (R = identity, S = 0) "
         "that verifies for every payload. bittensor.http_auth accepts it; kit "
@@ -892,12 +885,11 @@ def negative() -> dict[str, Any]:
           code="tw.auth_bad_signature"),
         v("N18", "sr25519 signature declared as ed25519",
           with_headers(_set(gh, H_CRYPTO, "ed25519")), code="tw.auth_bad_signature"),
-        v("N19", "<Bytes>-wrapped sr25519 signature (strict: rejected)",
-          _request(sign=wrap(alice)), code="tw.auth_bad_signature",
-          python_reference=py_wrapped),
-        v("N20", "<Bytes>-wrapped ed25519 signature (strict: rejected)",
-          _request("alice_ed25519", sign=wrap(alice_ed)),
-          code="tw.auth_bad_signature", python_reference=py_wrapped),
+        v("N19", "<Bytes>-wrapped sr25519 signature (strict: rejected, Python "
+          "included, D22)", _request(sign=wrap(alice)), code="tw.auth_bad_signature"),
+        v("N20", "<Bytes>-wrapped ed25519 signature (strict: rejected, Python "
+          "included, D22)", _request("alice_ed25519", sign=wrap(alice_ed)),
+          code="tw.auth_bad_signature"),
         # -- step 5
         v("N21", "replay of an accepted request (inputs.prior is the same "
           "request, verified first with the same store)", good,
@@ -1001,6 +993,9 @@ def negative() -> dict[str, Any]:
         v("N65", "sender of 49 characters: longer than any prefix-42 address, "
           "refused before base58 decoding (quadratic in the input length)",
           with_headers(_set(gh, H_HOTKEY, "1" + ALICE_SS58)), code="tw.auth_malformed"),
+        v("N66", "very long sender (16 KiB, the miner's header limit): refused "
+          "before base58 decoding without decoding work (D19)",
+          with_headers(_set(gh, H_HOTKEY, "z" * 16384)), code="tw.auth_malformed"),
         # -- order of the checks (spec 4.3)
         v("N59", "order: duplicate header and wrong receiver -> shape first",
           with_headers([*gh, [H_SIG, sig]]), code="tw.auth_malformed",

@@ -50,8 +50,7 @@ def test_every_committed_vector_passes() -> None:
     assert out.strip().splitlines()[-1].startswith("PASS:")
     for name in REQUIRED_FILES:
         assert f"ok   {name}" in out
-    assert "2 known divergence(s)" in out
-    assert "divergence N19" in out
+    assert "divergence" not in out  # D22: none left
 
 
 def test_without_verbose_divergences_are_counted_not_listed() -> None:
@@ -62,7 +61,7 @@ def test_without_verbose_divergences_are_counted_not_listed() -> None:
 
 def test_run_vectors_counts() -> None:
     results = {r.name: r for r in run_vectors(VECTORS)}
-    assert results["negative.json"].passed == 78
+    assert results["negative.json"].passed == 79
     assert results["payload.json"].passed == 10
     assert not any(r.failures for r in results.values())
 
@@ -97,8 +96,10 @@ TAMPERS: list[tuple[str, str, str, Change]] = [
     (
         "negative.json",
         "N19",
-        "want valid=False code=tw.auth_bad_signature",
-        lambda d: vector(d, "N19").pop("python_reference"),
+        "want valid=True code=None",
+        lambda d: vector(d, "N19").update(
+            python_reference={"valid": True, "code": None, "note": "pre-D22"}
+        ),
     ),
     (
         "negative.json",
