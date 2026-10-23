@@ -14,3 +14,5 @@ extend-ignore = [
 # Runs only inside the bittensor==10.5.0 venv (legacy_venv.sh), on purpose.
 "capture_v10_vectors.py" = ["TID251"]
 "v10_peer.py" = ["TID251"]
+# Orchestrates local processes (fixed commands) from one async loop, on purpose.
+"rollout_walkthrough.py" = ["S603", "S607", "ASYNC221"]

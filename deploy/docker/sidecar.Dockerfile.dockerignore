@@ -1,0 +1,8 @@
+# Build context is the repository root; send only what the image needs.
+*
+!python/pyproject.toml
+!python/uv.lock
+!python/README.md
+!python/src/
+!deploy/docker/healthcheck.py
+**/__pycache__

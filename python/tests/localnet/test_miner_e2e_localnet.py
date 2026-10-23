@@ -112,7 +112,10 @@ async def _published_axon(
 ) -> tuple[Endpoint, int]:
     want = Endpoint(EXTERNAL_IP, port, is_ipv6=False)
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + PUBLISH_TIMEOUT_S
+    # A publish less than ServingRateLimit blocks after the last one waits
+    # (default 50 blocks: 10 min of 12 s blocks, 12.5 s of fast blocks).
+    limit = await gw.serving_rate_limit(localnet.netuid)
+    deadline = loop.time() + localnet.wait_s(limit, PUBLISH_TIMEOUT_S)
     while loop.time() < deadline:
         neuron = (await gw.metagraph(localnet.netuid)).by_hotkey(hotkey)
         if neuron is not None and neuron.axon == want:

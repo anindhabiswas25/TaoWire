@@ -41,6 +41,7 @@ __all__ = [
     "V10_VERSION",
     "DecodedResponse",
     "EncodedRequest",
+    "NonFiniteAnswer",
     "RequestHeaders",
     "SignerLike",
     "WireError",
@@ -55,6 +56,7 @@ __all__ = [
     "is_legacy_request",
     "is_synapse_name",
     "is_v10_response",
+    "non_finite_field",
     "parse_request_headers",
     "request_message",
     "response_message",
@@ -124,6 +126,15 @@ Headers = Mapping[str, str] | Iterable[tuple[str, str]]
 
 class WireError(ValueError):
     """A v10 message that does not follow the format. The text is safe to log."""
+
+
+class NonFiniteAnswer(WireError):
+    """A Synapse answer holding ``inf`` / ``nan`` that JSON would turn into ``null``."""
+
+    def __init__(self, field: str) -> None:
+        super().__init__(f"non-finite float in answer field {field!r}")
+        self.field = field
+        """Where the value sits (``meta.r``, ``w[0]``)."""
 
 
 class SignerLike(Protocol):
@@ -552,6 +563,9 @@ def encode_response(
     is echoed as v10 does. With ``signer`` (plus ``axon_nonce`` and
     ``axon_uuid``) the answer carries the v10 axon signature over
     :func:`response_message`, using ``axon_hotkey`` as the receiver.
+
+    Raises :class:`NonFiniteAnswer` when a 200 ``synapse`` holds a value the
+    JSON answer would change (see :func:`non_finite_field`).
     """
     axon = _terminal(
         status_code=status,
@@ -576,6 +590,9 @@ def encode_response(
     if status == 200 and raw_body is not None:
         body = raw_body
     elif status == 200 and synapse is not None:
+        field = non_finite_field(synapse)
+        if field is not None:
+            raise NonFiniteAnswer(field)
         dumped = synapse.model_dump(mode="json")
         dumped["axon"] = axon
         if request is not None:
@@ -601,6 +618,73 @@ def encode_response(
         headers.append(("computed_body_hash", request.computed_body_hash))
     headers.append(("Content-Type", "application/json"))
     return body, headers
+
+
+_MISSING = object()
+
+
+def _child(container: Any, key: str | int) -> Any:
+    # JSON mode turns tuples into lists and dict keys into strings.
+    if isinstance(container, dict):
+        if key in container:
+            return container[key]
+        return container.get(str(key), _MISSING)
+    if isinstance(container, list) and isinstance(key, int) and key < len(container):
+        return container[key]
+    return _MISSING
+
+
+def _non_finite_paths(value: Any, path: str) -> Iterable[tuple[str, list[Any]]]:
+    # Yields (printable path, key list) for every non-finite float in a
+    # Python-mode dump, depth first, in field order.
+    if isinstance(value, float) and not math.isfinite(value):
+        yield path, []
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            step = (
+                f".{key}"
+                if isinstance(key, str) and _FIELD.fullmatch(key)
+                else f"[{key!r}]"
+            )
+            for sub, keys in _non_finite_paths(item, path + step):
+                yield sub, [key, *keys]
+    elif isinstance(value, (list, tuple)):
+        for index, item in enumerate(value):
+            for sub, keys in _non_finite_paths(item, f"{path}[{index}]"):
+                yield sub, [index, *keys]
+    elif isinstance(value, (set, frozenset)) and any(
+        isinstance(v, float) and not math.isfinite(v) for v in value
+    ):
+        yield path, [_MISSING]  # no stable position to compare: counted as changed
+
+
+def non_finite_field(synapse: BaseModel) -> str | None:
+    """The first field where ``synapse`` holds an ``inf`` / ``nan`` that the
+    JSON answer would turn into ``null`` (``meta.r``, ``w[0]``, ``by_uid[7]``,
+    ``m['a b']``), or ``None``.
+
+    v10 answers are JSON-mode dumps. Pydantic keeps a value of a ``float``
+    field as is (sent as ``Infinity`` / ``NaN``, which v10 Dendrites parse
+    back), but writes one held under ``Any`` (``dict[str, Any]``, ...) as
+    ``null``. The answer must never silently change a value (8.11.2), so such
+    a Synapse is refused. Values in a set have no position to compare and are
+    always refused.
+    """
+    python = synapse.model_dump()
+    json_mode: Any = None
+    for path, keys in _non_finite_paths(
+        {k: v for k, v in python.items() if k not in ENVELOPE_FIELDS}, ""
+    ):
+        if json_mode is None:
+            json_mode = synapse.model_dump(mode="json")
+        node: Any = json_mode
+        for key in keys:
+            node = _MISSING if key is _MISSING else _child(node, key)
+            if node is _MISSING:
+                break
+        if node is _MISSING or node is None:
+            return path.lstrip(".")
+    return None
 
 
 def _request_dendrite(request: RequestHeaders) -> dict[str, Any]:

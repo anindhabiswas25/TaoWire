@@ -20,6 +20,10 @@
 #                        before giving up (and falling back); 1 forces the fallback
 #                        path quickly, for testing it.
 #   LOCALNET_CONTAINER   default local_chain
+#   LOCALNET_RPC_PORT    default 9944: host port for the chain's RPC (127.0.0.1 only);
+#                        the chain's 9945 goes to LOCALNET_RPC_PORT + 1. A second
+#                        chain (e.g. 12 s blocks next to the shared fast one) needs
+#                        its own port, LOCALNET_CONTAINER and LOCALNET_DIR.
 #   LOCALNET_DIR         default ~/.tensorwire/localnet (never ~/.bittensor)
 #   LOCALNET_PYTHON      Python with bittensor 11.x; default: uv run in ./python
 set -euo pipefail
@@ -31,6 +35,7 @@ LOCALNET_FALLBACK="${LOCALNET_FALLBACK:-1}"
 LOCALNET_FAST_ATTEMPTS="${LOCALNET_FAST_ATTEMPTS:-10}"
 LOCALNET_CONTAINER="${LOCALNET_CONTAINER:-local_chain}"
 LOCALNET_DIR="${LOCALNET_DIR:-$HOME/.tensorwire/localnet}"
+LOCALNET_RPC_PORT="${LOCALNET_RPC_PORT:-9944}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -51,6 +56,12 @@ case "$LOCALNET_FAST_BLOCKS" in
   0|1) ;;
   *) die "LOCALNET_FAST_BLOCKS must be 0 or 1" ;;
 esac
+[[ "$LOCALNET_RPC_PORT" =~ ^[1-9][0-9]{3,4}$ && "$LOCALNET_RPC_PORT" -lt 65535 ]] ||
+  die "LOCALNET_RPC_PORT must be a port number from 1000 to 65534"
+rpc_port="$LOCALNET_RPC_PORT"
+p2p_port="$((LOCALNET_RPC_PORT + 1))"
+endpoint="ws://127.0.0.1:$rpc_port"
+
 case "$LOCALNET_FALLBACK" in
   0|1) ;;
   *) die "LOCALNET_FALLBACK must be 0 or 1" ;;
@@ -64,13 +75,13 @@ start_chain() {  # $1 = 1 for fast blocks, 0 for 12 s blocks
   [[ "$1" == 0 ]] && args=(False)
   log "starting $LOCALNET_IMAGE:$LOCALNET_TAG as $LOCALNET_CONTAINER (fast blocks: $1)"
   docker run -d --rm --name "$LOCALNET_CONTAINER" \
-    -p 127.0.0.1:9944:9944 -p 127.0.0.1:9945:9945 \
+    -p "127.0.0.1:$rpc_port:9944" -p "127.0.0.1:$p2p_port:9945" \
     "$LOCALNET_IMAGE:$LOCALNET_TAG" "${args[@]}" >/dev/null
 }
 
 run_setup() {  # $1 = submissions per step
   "${python_cmd[@]}" -I "$repo_root/scripts/localnet_setup.py" \
-    --state-dir "$LOCALNET_DIR" --endpoint ws://127.0.0.1:9944 --attempts "$1"
+    --state-dir "$LOCALNET_DIR" --endpoint "$endpoint" --attempts "$1"
 }
 
 started_here=0
@@ -84,7 +95,7 @@ else
   if [[ -n "$state" ]]; then
     docker rm -f "$LOCALNET_CONTAINER" >/dev/null
   fi
-  for port in 9944 9945; do
+  for port in "$rpc_port" "$p2p_port"; do
     if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
       die "port $port is already in use"
     fi
@@ -105,7 +116,7 @@ if [[ "$status" == "$EXIT_TRANSIENT" && "$started_here" == 1 &&
   # The chain was created by this run, so nothing on it is worth keeping.
   log "fast-block setup kept failing on transient errors; falling back to 12 s blocks"
   docker rm -f "$LOCALNET_CONTAINER" >/dev/null
-  until ! (exec 3<>"/dev/tcp/127.0.0.1/9944") 2>/dev/null; do sleep 1; done
+  until ! (exec 3<>"/dev/tcp/127.0.0.1/$rpc_port") 2>/dev/null; do sleep 1; done
   start_chain 0
   status=0
   run_setup 10 || status=$?

@@ -19,6 +19,10 @@ A new subnet's tempo is 360 blocks without fast blocks (72 minutes at 12 s),
 and validator permits only change once per tempo. Alice, the localnet sudo
 key, therefore sets the subnet's tempo to ``LOCALNET_TEMPO``, the fast-block
 default, so the validator gets its permit within minutes on either chain.
+Alice also shrinks the admin freeze window (default 10 blocks, refused owner
+hyperparameter changes at the end of every tempo) to
+``LOCALNET_ADMIN_FREEZE_WINDOW``: with a tempo of 10 the default would refuse
+every owner change.
 
 LOCALNET ONLY. Every key below is derived from a public seed printed in
 this file. Anyone can recompute them. Never fund them on a real network.
@@ -75,6 +79,11 @@ VALIDATOR_STAKE_TAO = 500.0
 
 LOCALNET_TEMPO = 10
 """Subnet tempo in blocks; the fast-block localnet's default."""
+
+LOCALNET_ADMIN_FREEZE_WINDOW = 2
+"""Blocks at the end of each tempo in which owner hyperparameter changes are
+refused. The chain default (10) equals ``LOCALNET_TEMPO``, which would refuse
+every owner change (``weights_version`` in rollout stage 3, spec 10b.5)."""
 
 ATTEMPTS = 10
 """Submissions per step before giving up."""
@@ -144,6 +153,11 @@ def check_wallet(wallet: bt.Wallet, coldkey_seed: str, hotkey_seed: str) -> None
             f"wallet {wallet.name!r} in the state directory is not the expected dev "
             "wallet; remove the state directory (localnet_down.sh --purge) and retry"
         )
+
+
+async def sudo(client: Any, call: Any) -> Any:
+    """``call`` wrapped in ``Sudo.sudo``, for Alice (the localnet sudo key)."""
+    return bt.calls.Sudo.sudo(call=await client.compose(call))
 
 
 async def ensure(
@@ -317,12 +331,27 @@ async def setup(
             tempo_set,
             # Sudo.sudo is "ok" even when the inner call fails; ensure() reads
             # the tempo back, so a refused change still fails the step.
-            bt.calls.Sudo.sudo(
-                call=await client.compose(
-                    bt.calls.AdminUtils.sudo_set_tempo(
-                        netuid=netuid, tempo=LOCALNET_TEMPO
-                    )
-                )
+            await sudo(
+                client,
+                bt.calls.AdminUtils.sudo_set_tempo(netuid=netuid, tempo=LOCALNET_TEMPO),
+            ),
+            alice,
+            attempts=attempts,
+        )
+
+        async def freeze_window_set() -> bool:
+            window = await client.query(("SubtensorModule", "AdminFreezeWindow"), [])
+            return int(window) <= LOCALNET_ADMIN_FREEZE_WINDOW
+
+        await ensure(
+            client,
+            f"set the admin freeze window to {LOCALNET_ADMIN_FREEZE_WINDOW} (sudo)",
+            freeze_window_set,
+            await sudo(
+                client,
+                bt.calls.AdminUtils.sudo_set_admin_freeze_window(
+                    window=LOCALNET_ADMIN_FREEZE_WINDOW
+                ),
             ),
             alice,
             attempts=attempts,
@@ -468,7 +497,7 @@ def write_outputs(state_dir: Path, endpoint: str, info: dict[str, Any]) -> None:
     (state_dir / "localnet.json").write_text(json.dumps(info, indent=2) + "\n")
     env = [
         "# Written by scripts/localnet_setup.py. Localnet only.",
-        "TW_NETWORK=local",
+        f"TW_NETWORK={endpoint}",
         f"TW_NETUID={info['netuid']}",
         f"TW_WALLET_PATH={info['wallet_path']}",
         "TW_ALLOW_PRIVATE_AXONS=1",

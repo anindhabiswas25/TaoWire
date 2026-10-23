@@ -1,0 +1,46 @@
+# Optional: your own subtensor TESTNET lite node for a validator host (spec 15.3,
+# `val-1`). The validator then uses TW_NETWORK=ws://127.0.0.1:9944 and keeps
+# the public endpoint as a fallback (TW_CHAIN_FALLBACKS=test).
+#
+#   docker compose -f deploy/compose/testnet-node.yml up -d
+#   docker compose -f deploy/compose/testnet-node.yml logs -f      # warp sync: minutes to hours
+#
+# Testnet only: the chain spec, bootnode and flags follow the upstream
+# subtensor compose file (RaoFoundation/subtensor docker-compose.yml,
+# `testnet-lite`). The image is pinned by digest; check the upstream release
+# notes before bumping it, because testnet runtime upgrades need a recent node.
+# RPC is published on the host's loopback only; P2P (30333) is public so the
+# node can sync. Needs ~4 vCPU, 16+ GB RAM and fast disk for the database.
+# Not part of the localnet tests; nothing in this repository starts it.
+
+name: tensorwire-testnet-node
+
+volumes:
+  testnet-lite:
+
+services:
+  subtensor:
+    image: ghcr.io/raofoundation/subtensor:latest@sha256:f4e473627a6cc899a3330e3a851ac95a872ebc509173580ccf4c0290707ce4fc
+    container_name: subtensor-testnet-lite
+    restart: unless-stopped
+    command:
+      - --base-path=/data
+      - --chain=./chainspecs/raw_spec_testfinney.json
+      - --rpc-external
+      - --rpc-cors=all
+      - --rpc-methods=safe
+      - --no-mdns
+      - --bootnodes=/dns/bootnode.test.finney.opentensor.ai/tcp/30333/p2p/12D3KooWPM4mLcKJGtyVtkggqdG84zWrd7Rij6PGQDoijh1X86Vr
+      - --sync=warp
+      - --database=paritydb
+      - --db-cache=4096
+      - --trie-cache-size=2048
+    volumes:
+      - testnet-lite:/data
+    ports:
+      - "127.0.0.1:9944:9944"   # RPC: this host only (the validator)
+      - "30333:30333"           # P2P
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 24g
+    stop_grace_period: 60s
