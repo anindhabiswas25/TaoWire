@@ -74,6 +74,10 @@ VALIDATORS: dict[str, dict[str, Any]] = {
     "validator": {"metrics": 9102},
     "owner": {"metrics": 9104},
 }
+#: TW_METAGRAPH_REFRESH_S for the TensorWire nodes (the config minimum).
+REFRESH_S = 10
+#: Validator log event of spec 8.11.3 step 5 (D16).
+TAG_CHANGED = "legacy_v10_protocol_tag_changed"
 #: Weights version key the stage 1 release sends (template sends 0).
 NEW_KEY = 1
 V_PORTS = [int(v["metrics"]) for v in VALIDATORS.values()]
@@ -151,7 +155,7 @@ class Fleet:
             "TW_STATE_DIR": str(state),
             "TW_ALLOW_PRIVATE_AXONS": "1",
             "TW_REFUSE_IF_COLDKEY_PRESENT": "0",  # localnet dev wallets hold coldkeys
-            "TW_METAGRAPH_REFRESH_S": "10",  # localnet: see switches within seconds
+            "TW_METAGRAPH_REFRESH_S": str(REFRESH_S),  # localnet: see switches fast
             **extra,
         }
 
@@ -551,6 +555,17 @@ class Walk:
             },
         )
 
+    def log_event(self, hotkey: str, event: str, needle: str, since: Node) -> None:
+        """``event`` was logged by ``since`` (the running node) for ``needle``."""
+        marker = f'"event": "{event}"'
+        hits = [x for x in since.lines() if marker in x and needle in x]
+        record(
+            self.stage,
+            f"{since.name} logged {event} for {needle}",
+            bool(hits) and self.f.nodes.get(hotkey) is since,
+            {"lines": hits[-2:]},
+        )
+
     async def v10_round(
         self, hotkey: str, want_ok: int, timeout_s: float = 120
     ) -> None:
@@ -668,13 +683,16 @@ class Walk:
 
     stage = "setup"
 
-    async def run(self, owner: bt.Wallet) -> None:
-        """Every stage in order; the first failing check raises."""
+    async def run(self, owner: bt.Wallet, through: int = 4) -> None:
+        """Every stage up to ``through`` in order; the first failing check raises."""
         await self.pre(owner)
         await self.stage1()
-        await self.stage2()
-        await self.stage3(owner)
-        await self.stage4()
+        if through >= 2:
+            await self.stage2()
+        if through >= 3:
+            await self.stage3(owner)
+        if through >= 4:
+            await self.stage4()
 
     @property
     def miner_uids(self) -> list[int]:
@@ -767,20 +785,25 @@ class Walk:
         f.v10_miner("miner_go")
         await self.axon_is("miner_go", V10_PROTOCOL)
         await self.v10_round("owner", 2)
-        # Spec 8.11.3 item 4 (no downgrade): this validator saw miner_go answer
-        # btauth/1, so it keeps sending btauth/1 and the v10 Axon answers 500.
-        # 10b.5 says "validators still reach them"; that holds only after the
-        # validator restarts (the memory is per process). Walk both.
-        await asyncio.sleep(30.0)
+        # Spec 8.11.3 step 5 (D16): the v10 release re-published the axon without
+        # the kit's tag, so the running validator forgets miner_go at its next
+        # metagraph refresh and reaches it over v10 again. No restart.
+        validator = f.nodes["validator"]
         await self.tw_round(
             "validator",
-            {"n_ok": 1, "n_btauth": 1, "n_v10": 0},
-            timeout_s=30,
-            label="8.11.3 no downgrade: v10 miner not reached until restart",
+            {"n_ok": 2, "n_btauth": 1, "n_v10": 1},
+            timeout_s=REFRESH_S + 90,
+            label="D16: v10 miner reached again after the next metagraph refresh",
         )
-        f.stop("validator")
-        f.tw_validator("validator", "auto", UNTIL28)
-        await self.tw_round("validator", {"n_ok": 2, "n_btauth": 1, "n_v10": 1})
+        self.log_event(
+            "validator", TAG_CHANGED, self.ss58["miner_go"][:8], since=validator
+        )
+        record(
+            self.stage,
+            "validator was not restarted (same process, still running)",
+            f.nodes["validator"] is validator and validator.proc.poll() is None,
+            {"pid": validator.proc.pid, "node": validator.name},
+        )
         await self.weights_land(["validator", "owner"])
         self.stage = "2-undo"
         f.stop("miner_go")
@@ -914,6 +937,13 @@ async def main() -> int:
     parser.add_argument(
         "--state-dir", type=Path, default=Path("~/.tensorwire/localnet")
     )
+    parser.add_argument(
+        "--through",
+        type=int,
+        choices=[1, 2, 3, 4],
+        default=4,
+        help="last stage to walk (the earlier ones set it up); default 4",
+    )
     args = parser.parse_args()
     state = args.state_dir.expanduser()
     info = json.loads((state / "localnet.json").read_text(encoding="utf-8"))
@@ -934,6 +964,7 @@ async def main() -> int:
         ).stdout.strip(),
         "endpoint": ENDPOINT,
         "netuid": NETUID,
+        "through_stage": args.through,
         "uids": uid,
     }
     owner = bt.Wallet(name="owner", hotkey="default", path=str(wallets))
@@ -947,7 +978,7 @@ async def main() -> int:
         walk = Walk(fleet, chain, ss58, uid)
         walk.block_time = float(info.get("block_time_s", 0.25))
         try:
-            await walk.run(owner)
+            await walk.run(owner, args.through)
         except CheckFailedError as e:
             note(f"stopped at the first failing check: {e}")
             code = 1
