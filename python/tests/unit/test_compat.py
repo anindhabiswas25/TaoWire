@@ -8,6 +8,7 @@ import threading
 from typing import Any
 
 import pytest
+import structlog
 
 from tensorwire.chain.axon import parse_axon
 from tensorwire.chain.gateway import MetagraphView, NeuronView
@@ -313,8 +314,11 @@ async def test_dendrite_construction() -> None:
     d = Dendrite(signer, timeout_s=3.0)
     assert d.hotkey == dev_key("alice").ss58
     assert d.client.timeout_s == 3.0
-    with pytest.raises(NotImplementedError):
-        await d.forward([], Ping(), streaming=True)
+    with structlog.testing.capture_logs() as logs:
+        assert (
+            await d.forward([], Ping(), streaming=True) == []
+        )  # v10: follows the class
+    assert any(e["event"] == "dendrite_streaming_mismatch" for e in logs)
     await d.aclose()
     await client.aclose()
 

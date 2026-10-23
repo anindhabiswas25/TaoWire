@@ -151,12 +151,13 @@ defaults come from the `TW_*` variables, and the kit itself only ever reads
 ## The compat layer
 
 ```python
-from tensorwire.compat import Synapse, Axon, Dendrite, AxonInfo, axons_from, Metagraph, weights
+from tensorwire.compat import Synapse, StreamingSynapse, Axon, Dendrite, AxonInfo, axons_from, Metagraph, weights
 ```
 
 | v10 | TensorWire |
 |---|---|
 | `class Dummy(bt.Synapse)` | `class Dummy(Synapse)`: same fields, `deserialize()`, `required_hash_fields`, `dendrite`/`axon` `TerminalInfo`, `is_success` / `is_timeout` / ... |
+| `class StreamPrompting(bt.StreamingSynapse)` | `class StreamPrompting(StreamingSynapse)`: same `process_streaming_response` / `extract_response_json` / `deserialize`; the miner's `forward` still returns `create_streaming_response(token_streamer)` (TWM002, auto) |
 | `bt.axon(wallet=..., config=...)` | `Axon(miner=Miner.from_env())` (settings from `TW_*`) |
 | `axon.attach(forward_fn, blacklist_fn, priority_fn)` | the same call; each Synapse becomes `POST /<SynapseName>` |
 | `axon.serve(netuid, subtensor)` / `axon.start()` | `serve(netuid=...)` only checks the netuid; `start()` runs the miner (blocks) |
@@ -186,6 +187,18 @@ What changes in behaviour:
   `dendrite.status_message` set to the `tw.*` code.
 - On the btauth/1 wire only your Synapse's own fields travel; `dendrite` and
   `axon` are filled locally. The v10 bridge still sends the whole Synapse.
+- **Streaming** (`StreamingSynapse`) runs on the kit's signed SSE streams
+  ([streaming.md](streaming.md)): each body frame your token streamer sends
+  is one signed chunk, with a `tw-end` trailer at the end.
+  `Dendrite(..., streaming=True)` returns one async generator per axon, as in
+  v10: what your `process_streaming_response` yields (it reads
+  `response.content.iter_any()`), then the final item. The bytes your code
+  reads are **not verified yet**; the final item is your filled Synapse only
+  when the trailer verified, otherwise a fresh copy of the request with
+  `dendrite.status_code` set (408 timeout, 500 bad signature, ...). Score from
+  the final item. Streaming works TensorWire to TensorWire only (D33): a v10
+  Dendrite gets the v10-shaped `tw.invalid_request` from a streaming route
+  (TWM034).
 
 ## Old and new nodes together (the legacy bridge)
 
@@ -216,9 +229,9 @@ customised base: `docs/migrations/llm-detection.md`.
 From tensorwire.compat import Synapse (TerminalInfo likewise).
 
 <a id="twm002"></a>
-### TWM002: bt.StreamingSynapse (`manual`)
+### TWM002: bt.StreamingSynapse (`auto`)
 
-Compat.StreamingSynapse arrives with the kit's streaming support (Phase 4); until then keep the route on v10 or answer without streaming.
+From tensorwire.compat import StreamingSynapse (the kit's signed SSE streaming, spec 9.2; same process_streaming_response / extract_response_json / deserialize). The miner's `forward` still returns `synapse.create_streaming_response(token_streamer)`; `compat.Dendrite(..., streaming=True)` still returns one async generator per axon. What changes: the final item is the filled Synapse only when the stream's signed trailer verified, otherwise a fresh copy of the request with the error status (see [streaming.md](streaming.md)).
 
 <a id="twm003"></a>
 ### TWM003: bt.axon / bt.Axon (`auto`)
@@ -412,6 +425,11 @@ none.
 ### TWM102: allow_non_registered=True (`risk`)
 
 Remove it: unregistered callers are refused by the kit's caller policy.
+
+<a id="twm034"></a>
+### TWM034: StreamingSynapse route in a mixed fleet (`risk`)
+
+Streaming works TensorWire to TensorWire only: a v10 Dendrite gets tw.invalid_request from it and a v10 miner cannot stream to a TensorWire validator (D33). Move streaming routes after rollout stage 2, or give v10 peers a non-streaming route until then (`docs/migration-rollout.md`). `scan` flags every `StreamingSynapse` subclass, including subclasses of one defined earlier in the same file; a subclass of a streaming class from another file is not followed, so check those by hand.
 
 <a id="twm103"></a>
 ### TWM103: force_validator_permit=False (`risk`)

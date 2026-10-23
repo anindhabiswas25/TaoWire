@@ -1,14 +1,14 @@
 import pydantic
-import bittensor as bt
 import logging
+from tensorwire.compat import StreamingSynapse
 
 from abc import ABC, abstractmethod
 from typing import List, Union, Callable, Awaitable
 from starlette.responses import StreamingResponse
 
 
-# TW-MIGRATE: TWM002 compat.StreamingSynapse arrives with the kit's streaming support (Phase 4); until then keep the route on v10 or answer without streaming
-class StreamPrompting(bt.StreamingSynapse):
+# TW-MIGRATE: TWM034 streaming works TensorWire to TensorWire only: a v10 Dendrite gets tw.invalid_request from it and a v10 miner cannot stream to a TensorWire validator (D33); move streaming routes after rollout stage 2 or give v10 peers a non-streaming route
+class StreamPrompting(StreamingSynapse):
     """
     StreamPrompting is a specialized implementation of the `StreamingSynapse` tailored for prompting functionalities within
     the Bittensor network. This class is intended to interact with a streaming response that contains a sequence of tokens,

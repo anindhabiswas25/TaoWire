@@ -99,6 +99,7 @@ _WEIGHT_HELPERS = frozenset(
 #: ``bt.<name>`` -> the compat name it becomes when used as a value or type.
 _COMPAT_NAMES = {
     "Synapse": "Synapse",
+    "StreamingSynapse": "StreamingSynapse",
     "TerminalInfo": "TerminalInfo",
     "AxonInfo": "AxonInfo",
     "axon": "Axon",
@@ -370,6 +371,7 @@ class _Rewriter(cst.CSTTransformer):
         local = self._compat(compat)
         rule = {
             "Synapse": "TWM001",
+            "StreamingSynapse": "TWM002",
             "TerminalInfo": "TWM001",
             "AxonInfo": "TWM021",
             "Axon": "TWM003",
@@ -658,7 +660,9 @@ class _Rewriter(cst.CSTTransformer):
         if isinstance(updated_node.names, cst.ImportStar) or not module:
             return updated_node
         if module == "bittensor":
-            return self._move_names(updated_node, {"Synapse", "AxonInfo"}, "TWM001")
+            return self._move_names(
+                updated_node, {"Synapse", "StreamingSynapse", "AxonInfo"}, "TWM001"
+            )
         if module == "base.validator" or module.endswith(".base.validator"):
             target = resolve_module(module, len(updated_node.relative), self.path)
             if target in self.custom_bases and self.custom_bases[target] != []:
@@ -684,7 +688,11 @@ class _Rewriter(cst.CSTTransformer):
                 if local == _name_of(alias)
                 else f"{_name_of(alias)} as {local}"
             )
-            self.rewrites["TWM021" if _name_of(alias) == "AxonInfo" else rule] += 1
+            self.rewrites[
+                {"AxonInfo": "TWM021", "StreamingSynapse": "TWM002"}.get(
+                    _name_of(alias), rule
+                )
+            ] += 1
         if not keep:
             return cst.RemoveFromParent()
         return node.with_changes(names=_strip_trailing_comma(keep))

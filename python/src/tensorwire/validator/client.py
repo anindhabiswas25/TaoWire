@@ -89,6 +89,7 @@ __all__ = [
     "ValidatorClient",
     "WireProtocol",
     "check_scheme_policy",
+    "failed_result",
 ]
 
 WireProtocol = Literal["btauth/1", "v10"]
@@ -445,7 +446,7 @@ class ValidatorClient:
                 )
             except Exception:  # noqa: BLE001 - one miner must never break the round
                 _log.exception("query_failed", uid=neuron.uid)
-                result = _failed(neuron, "tw.internal", attempts=1)
+                result = failed_result(neuron, "tw.internal", attempts=1)
         self._count(result)
         return result
 
@@ -541,7 +542,7 @@ class ValidatorClient:
                             yield item
             except Exception:  # noqa: BLE001 - one miner must never break the round
                 _log.exception("query_failed", uid=neuron.uid)
-                result = _failed(neuron, "tw.internal", attempts=1)
+                result = failed_result(neuron, "tw.internal", attempts=1)
         if result is not None:
             self._count(result)
             yield result
@@ -559,7 +560,7 @@ class ValidatorClient:
         limits: StreamLimits,
     ) -> AsyncGenerator[UnverifiedChunk | MinerResult, None]:
         if neuron.axon is None:
-            yield _failed(neuron, "tw.no_axon", attempts=0)
+            yield failed_result(neuron, "tw.no_axon", attempts=0)
             return
         budget = _Budget(self._monotonic, deadline_s, self.max_attempts)
         url = self._url(neuron, route)
@@ -645,7 +646,7 @@ class ValidatorClient:
         deadline_s: float,
     ) -> MinerResult:
         if neuron.axon is None:
-            return _failed(neuron, "tw.no_axon", attempts=0)
+            return failed_result(neuron, "tw.no_axon", attempts=0)
         budget = _Budget(self._monotonic, deadline_s, self.max_attempts)
         selector = self._selector
         if (
@@ -799,7 +800,7 @@ class ValidatorClient:
     ) -> MinerResult:
         answer = attempt.answer
         if answer is None:
-            return _failed(
+            return failed_result(
                 neuron,
                 attempt.error_code or "tw.invalid_response",
                 attempts=attempts,
@@ -869,7 +870,7 @@ class ValidatorClient:
         if deadline_s <= 0:
             # The btauth/1 attempts used the whole budget (spec 8.8).
             return replace(
-                _failed(neuron, "tw.timeout", attempts=attempts), protocol="v10"
+                failed_result(neuron, "tw.timeout", attempts=attempts), protocol="v10"
             )
         started = time.perf_counter()
         legacy: LegacyResultLike
@@ -952,9 +953,10 @@ class _LegacyTimeout:
     status_message: str | None = None
 
 
-def _failed(
+def failed_result(
     neuron: NeuronView, code: str, *, attempts: int, latency_ms: float | None = None
 ) -> MinerResult:
+    """A failed :class:`MinerResult` for ``neuron`` with ``code`` and no answer."""
     return MinerResult(
         uid=neuron.uid,
         hotkey=neuron.hotkey,

@@ -108,6 +108,7 @@ STOCK_NEURON_METHODS = frozenset(
 #: ``"bt.<path>"`` string annotations that have a compat type (TWM028).
 ANNOTATION_COMPAT: dict[str, str] = {
     "Synapse": "Synapse",
+    "StreamingSynapse": "StreamingSynapse",
     "AxonInfo": "AxonInfo",
     "TerminalInfo": "TerminalInfo",
     "Metagraph": "Metagraph",
@@ -381,6 +382,7 @@ class _Visitor(cst.CSTVisitor):
         self.findings: list[Finding] = []
         self._annotation_depth = 0
         self.template = False
+        self.streaming_classes: set[str] = set()  # this module's StreamingSynapses
 
     def add(self, node: cst.CSTNode, rule: str, detail: str = "") -> None:
         line = self.get_metadata(PositionProvider, node).start.line
@@ -713,6 +715,10 @@ class _Visitor(cst.CSTVisitor):
                 self.add(node, "TWM019", f"class {node.name.value}({name})")
             if tail in ("Synapse", "StreamingSynapse"):
                 self.check_synapse(node)
+            if tail == "StreamingSynapse" or name in self.streaming_classes:
+                # also a subclass of one defined above in this module (TWM034)
+                self.streaming_classes.add(node.name.value)
+                self.add(node, "TWM034", f"class {node.name.value}({name})")
 
     def check_synapse(self, node: cst.ClassDef) -> None:
         fields, hash_fields = _synapse_shape(self.module, node)

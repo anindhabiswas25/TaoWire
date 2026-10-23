@@ -45,7 +45,9 @@ the new imports take its place. String annotations such as
 The 57 comments mark what a person has to do: `bt.subtensor` /
 `bt.wallet` / `bt.metagraph` / `bt.config` and `bt.axon.add_args` in the template's framework and
 in `docs/stream_tutorial/`, the v10 mocks, `bt.logging.set_config`, the
-`StreamingSynapse` tutorial (Phase 4), and the two security findings
+mixed-fleet limit of the `StreamingSynapse` tutorial (TWM034: streaming is
+TensorWire to TensorWire only; since Phase 4 `apply` ports the class itself,
+TWM002), and the two security findings
 (`Dummy` has no `required_hash_fields`, TWM100; `force_validator_permit`
 defaults to `False`, TWM103).
 

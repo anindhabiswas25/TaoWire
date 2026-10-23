@@ -25,6 +25,7 @@ from tensorwire.compat.config import Config, add_v10_args, config
 from tensorwire.compat.dendrite import AxonInfo, Dendrite, axons_from
 from tensorwire.compat.metagraph import Metagraph
 from tensorwire.compat.neuron import HotkeyWallet, SubtensorView
+from tensorwire.compat.stream import StreamingSynapse
 from tensorwire.compat.synapse import Synapse, TerminalInfo
 from tensorwire.compat.template import TemplateValidatorAdapter
 from tensorwire.compat.template_miner import TemplateMinerAdapter
@@ -36,6 +37,7 @@ __all__ = [
     "Dendrite",
     "HotkeyWallet",
     "Metagraph",
+    "StreamingSynapse",
     "SubtensorView",
     "Synapse",
     "TemplateMinerAdapter",

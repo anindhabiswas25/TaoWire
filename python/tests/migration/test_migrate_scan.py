@@ -154,6 +154,14 @@ FIXTURES: dict[str, tuple[str, str]] = {
         "import bittensor as bt\nw = bt.Wallet(config=c)\n",
         "import bittensor as bt\nw = bt.Wallet(name='a', hotkey='b', path='/p')\n",
     ),
+    "TWM034": (
+        "from tensorwire.compat import StreamingSynapse\n"
+        "class Ask(StreamingSynapse):\n    question: str\n"
+        "    required_hash_fields: ClassVar[tuple[str, ...]] = ('question',)\n",
+        "from tensorwire.compat import Synapse\n"
+        "class Ask(Synapse):\n    question: str\n"
+        "    required_hash_fields: ClassVar[tuple[str, ...]] = ('question',)\n",
+    ),
     "TWM100": (
         "class Ask(Synapse):\n    question: str\n    answer: str | None = None\n",
         "class Ask(Synapse):\n    question: str\n"
@@ -236,6 +244,18 @@ def test_customised_template_base(tmp_path: Path) -> None:
     assert ("subnet/x.py", "TWM026", custom) in found  # relative import
     assert ("neurons/t.py", "TWM024", "from template.base.validator import "
             "BaseValidatorNeuron") in found  # fmt: skip
+
+
+def test_twm034_follows_subclasses_in_the_same_module() -> None:
+    source = (
+        "import bittensor as bt\n"
+        "class BaseStream(bt.StreamingSynapse):\n    pass\n"
+        "class Chat(BaseStream):\n    pass\n"
+        "class Plain(bt.Synapse):\n    pass\n"
+    )
+    findings, _ = scan_source(source, "x.py")
+    lines = sorted(f.line for f in findings if f.rule == "TWM034")
+    assert lines == [2, 4]  # BaseStream and Chat, not Plain
 
 
 def test_every_rule_has_fixtures() -> None:

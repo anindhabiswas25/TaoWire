@@ -134,6 +134,11 @@ REWRITES: dict[str, tuple[str, str]] = {
         "import bittensor as bt\nw = bt.Wallet(name=self.config.wallet.name, "
         "hotkey=self.config.wallet.hotkey, path=self.config.wallet.path)\n",
     ),
+    "TWM002": (
+        "import bittensor as bt\ndef f(s: bt.StreamingSynapse) -> None:\n    pass\n",
+        "from tensorwire.compat import StreamingSynapse\n"
+        "def f(s: StreamingSynapse) -> None:\n    pass\n",
+    ),
     "TWM024": (
         "# base\nfrom template.base.validator import BaseValidatorNeuron\n",
         "# base\nfrom tensorwire.compat import TemplateValidatorAdapter as "

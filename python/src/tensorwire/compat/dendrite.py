@@ -19,22 +19,40 @@ Failures never raise. As in v10, the item comes back with
 ``dendrite.status_code`` set (408 timeout, 503 connect error or no axon,
 401/403/... passed through, 500 for an answer that failed verification or
 did not parse) and ``dendrite.status_message`` set to the ``tw.*`` code.
+
+Streaming (a ``StreamingSynapse``, or ``streaming=True``): one async
+generator per axon, as v10's ``call_stream``. It yields what the Synapse's
+``process_streaming_response`` yields (unverified bytes, see
+``compat.stream``) and then the final item: the filled Synapse when the
+stream's trailer verified, else a fresh copy of the request with the error
+status. Built on :meth:`ValidatorClient.stream` (spec 9.2).
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Sequence
+import contextlib
+from collections.abc import AsyncIterator, Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar, overload
 
+import structlog
+
 from tensorwire.auth.signer import RequestSigner
 from tensorwire.chain.gateway import MetagraphView, NeuronView
+from tensorwire.compat.stream import Frame, StreamingSynapse, StreamResponse
 from tensorwire.compat.synapse import Synapse, TerminalInfo
-from tensorwire.validator.client import MinerResult, ValidatorClient
+from tensorwire.extensions.streaming import MAX_S_RANGE
+from tensorwire.validator.client import (
+    MinerResult,
+    MinerStream,
+    ValidatorClient,
+    failed_result,
+)
 
 __all__ = ["AxonInfo", "Dendrite", "axons_from", "status_code_for"]
 
 _S = TypeVar("_S", bound=Synapse)
+_log = structlog.stdlib.get_logger("tensorwire.compat")
 
 _STATUS_FOR_CODE = {
     "tw.timeout": 408,
@@ -181,10 +199,17 @@ class Dendrite:
         run_async: bool = True,
         streaming: bool = False,
     ) -> Any:
-        """v10's ``dendrite.forward`` (``run_async`` is ignored; no streaming yet)."""
+        """v10's ``dendrite.forward`` (``run_async`` is ignored)."""
         del run_async
-        if streaming:
-            raise NotImplementedError("compat.StreamingSynapse arrives with streaming")
+        if streaming != isinstance(synapse, StreamingSynapse):
+            _log.warning(
+                "dendrite_streaming_mismatch",
+                streaming=streaming,
+                synapse=type(synapse).__name__,
+                hint="streaming follows whether the Synapse is a StreamingSynapse",
+            )
+        if isinstance(synapse, StreamingSynapse):
+            return self._streams(axons, synapse, timeout, deserialize)
         single = isinstance(axons, AxonInfo)
         targets = [axons] if isinstance(axons, AxonInfo) else list(axons)
         synapse.timeout = float(timeout)
@@ -211,6 +236,67 @@ class Dendrite:
         out = [s.deserialize() if deserialize else s for s in items]
         return out[0] if single else out
 
+    def _streams(
+        self,
+        axons: AxonInfo | Sequence[AxonInfo],
+        synapse: StreamingSynapse,
+        timeout: float,
+        deserialize: bool,
+    ) -> Any:
+        synapse.timeout = float(timeout)
+        if isinstance(axons, AxonInfo):
+            return self._stream(axons, synapse, timeout, deserialize)
+        return [self._stream(a, synapse, timeout, deserialize) for a in axons]
+
+    async def _stream(
+        self,
+        axon: AxonInfo,
+        request: StreamingSynapse,
+        timeout: float,
+        deserialize: bool,
+    ) -> AsyncIterator[Any]:
+        """v10's ``call_stream``: the user's chunks, then the final item."""
+        neuron = axon.neuron
+        if neuron is None:
+            final = self._item(axon, request, None)
+            yield final.deserialize() if deserialize else final
+            return
+        item = request.model_copy(deep=True)
+        # v10's timeout bounds the stream; it never loosens TW_STREAM_MAX_S.
+        max_s = min(max(timeout, MAX_S_RANGE[0]), self.client.stream_limits.max_s)
+        stream = self.client.stream(
+            neuron,
+            "/" + type(request).__name__,
+            request.user_json(),
+            chunk_model=Frame,
+            timeout_s=timeout,
+            max_s=max_s,
+        )
+        response = StreamResponse(
+            _bytes(stream), name=type(request).__name__, timeout=timeout
+        )
+        user_failed = False
+        async with stream:
+            try:
+                async for chunk in item.process_streaming_response(response):
+                    yield chunk
+            except Exception:  # noqa: BLE001 - as v10: a failure is the final status
+                _log.exception("stream_processing_failed", uid=neuron.uid)
+                user_failed = True
+            # The miner's real outcome, also when the user code stopped early.
+            result = stream.result or await stream.finish()
+        if self._on_results is not None:
+            self._on_results({result.uid: result})
+        if result.ok and not user_failed:
+            user_failed = not _merge_response_json(item, response)
+        if result.ok and not user_failed:
+            final = self._status(axon, item, result)
+        else:
+            if result.ok:  # the miner's stream verified; the validator's code failed
+                result = failed_result(neuron, "tw.invalid_response", attempts=1)
+            final = self._item(axon, request, result)  # none of the unverified values
+        yield final.deserialize() if deserialize else final
+
     def _item(self, axon: AxonInfo, request: _S, result: MinerResult | None) -> _S:
         item = request.model_copy(deep=True)
         if result is None:
@@ -231,6 +317,10 @@ class Dendrite:
                 if name in fields and fields[name].frozen:
                     continue  # a request field the miner cannot change (as in v10)
                 setattr(item, name, value)
+        return self._status(axon, item, result)
+
+    def _status(self, axon: AxonInfo, item: _S, result: MinerResult) -> _S:
+        """Fill the v10 status fields of ``item.dendrite`` and ``.axon``."""
         code = status_code_for(result)
         message = "Success" if result.ok else result.status_message or result.error_code
         process_time = None if result.latency_ms is None else result.latency_ms / 1000
@@ -249,3 +339,30 @@ class Dendrite:
             hotkey=axon.hotkey,
         )
         return item
+
+
+async def _bytes(stream: MinerStream) -> AsyncIterator[bytes]:
+    """The raw frames of a compat stream, as they arrive (unverified)."""
+    async for chunk in stream:
+        yield chunk.data.b
+
+
+def _merge_response_json(item: StreamingSynapse, response: StreamResponse) -> bool:
+    """v10's ``process_server_response`` after a 200: ``extract_response_json``'s
+    fields onto ``item``. False when the user's method raised."""
+    try:
+        values = item.extract_response_json(response)
+    except Exception:  # noqa: BLE001 - user code; the final item says it failed
+        _log.exception("extract_response_json_failed")
+        return False
+    try:
+        server = type(item)(**values)
+    except Exception:  # noqa: BLE001 - v10 ignores a dict that does not build
+        return True
+    fields = type(item).model_fields
+    for name in item.user_field_names():
+        if name in fields and fields[name].frozen:
+            continue  # a request field the miner cannot change (as in v10)
+        with contextlib.suppress(Exception):
+            setattr(item, name, getattr(server, name))
+    return True

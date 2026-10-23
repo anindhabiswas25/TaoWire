@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import importlib.util
 import json
 import os
 import socket
@@ -22,6 +23,7 @@ import threading
 import time
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -50,6 +52,10 @@ LEGACY_PY = Path(
     )
 )
 CHARLIE = crypto.keypair_from_uri("//Charlie").ss58_address
+PROTOCOL = (
+    REPO
+    / "examples/migrations/template-v10-to-v11/after/docs/stream_tutorial/protocol.py"
+)
 
 pytestmark = pytest.mark.skipif(
     not LEGACY_PY.exists(), reason="legacy venv missing: run scripts/legacy_venv.sh"
@@ -265,3 +271,106 @@ def test_denied_v10_caller_gets_a_v10_shaped_403(kit_server: int) -> None:
     assert answer["status_code"] == 403
     assert answer["status_message"] == Forbidden().public_message
     assert answer["axon_signature"]
+
+
+# ------------------------------------------------------------ D33: no v10 streaming
+
+
+@pytest.fixture(scope="module")
+def compat_stream_miner(tmp_path_factory: pytest.TempPathFactory) -> Iterator[int]:
+    """A kit miner serving the template's StreamPrompting on compat.Axon, bridge on."""
+    import warnings
+
+    from tensorwire.compat import Axon
+    from tensorwire.config import MinerSettings
+    from tensorwire.miner.app import Miner
+    from tensorwire.testing.fake_chain import FakeChain
+    from tensorwire.testing.metagraph import FakeMetagraphSource
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # the template's pydantic v1 Field options
+        spec = importlib.util.spec_from_file_location("stream_protocol_live", PROTOCOL)
+        assert spec is not None
+        assert spec.loader is not None
+        protocol = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(protocol)
+    port = free_port()
+    chain = FakeChain()
+    chain.add_subnet(2)
+    chain.register(2, BOB)
+    chain.register(
+        2, crypto.keypair_from_uri("//Alice").ss58_address, validator_permit=True
+    )
+    gateway = chain.with_signer(BOB)
+    settings = MinerSettings(
+        netuid=2,
+        wallet_name="bob",
+        wallet_path=tmp_path_factory.mktemp("wallets"),
+        external_ip="127.0.0.2",
+        allow_private_axons=True,
+        bind_host="127.0.0.2",
+        bind_port=port,
+        ntp_servers=(),
+        legacy_v10_until=dt.datetime.now(dt.timezone.utc).date()
+        + dt.timedelta(days=30),
+    )
+    miner = Miner(
+        settings,
+        gateway=gateway,
+        metagraph=FakeMetagraphSource(gateway, 2),
+        hotkey=crypto.keypair_from_uri("//Bob"),
+        check_sdk=False,
+    )
+
+    def forward(synapse: Any) -> Any:
+        async def streamer(send: Any) -> None:
+            await send(
+                {"type": "http.response.body", "body": b"never", "more_body": True}
+            )
+
+        return synapse.create_streaming_response(streamer)
+
+    forward.__annotations__ = {"synapse": protocol.StreamPrompting}
+    Axon(miner=miner).attach(forward_fn=forward)
+    server = uvicorn.Server(
+        uvicorn.Config(miner.app, host="127.0.0.2", port=port, log_level="warning")
+    )
+    thread = threading.Thread(target=lambda: asyncio.run(server.serve()), daemon=True)
+    thread.start()
+    deadline = time.monotonic() + 20
+    while not server.started:
+        assert time.monotonic() < deadline
+        time.sleep(0.05)
+    yield port
+    server.should_exit = True
+    thread.join(timeout=10)
+
+
+def test_d33_real_v10_streaming_dendrite_gets_invalid_request(
+    compat_stream_miner: int,
+) -> None:
+    """A real v10 StreamingSynapse Dendrite against a TensorWire streaming route."""
+    from tensorwire.errors import InvalidRequest
+
+    out = subprocess.run(  # noqa: S603 - fixed interpreter and script
+        [
+            str(LEGACY_PY),
+            "-I",
+            str(PEER),
+            "stream-dendrite",
+            "--ip",
+            "127.0.0.2",
+            "--port",
+            str(compat_stream_miner),
+            "--axon-hotkey",
+            BOB,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=True,
+    ).stdout.splitlines()
+    answer = json.loads(out[-1])
+    assert answer["status_code"] == 422, answer
+    assert answer["status_message"] == InvalidRequest().public_message
+    assert answer["completion"] != "never"  # nothing was streamed to it

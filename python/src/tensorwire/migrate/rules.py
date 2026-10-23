@@ -67,9 +67,10 @@ RULES: Mapping[str, Rule] = _table(
     Rule(
         "TWM002",
         "bt.StreamingSynapse",
-        "manual",
-        "compat.StreamingSynapse arrives with the kit's streaming support "
-        "(Phase 4); until then keep the route on v10 or answer without streaming",
+        "auto",
+        "from tensorwire.compat import StreamingSynapse (the kit's signed SSE "
+        "streaming, spec 9.2; same process_streaming_response / "
+        "extract_response_json / deserialize)",
     ),
     Rule(
         "TWM003",
@@ -297,6 +298,15 @@ RULES: Mapping[str, Rule] = _table(
         "allow_non_registered=True",
         "risk",
         "remove it: unregistered callers are refused by the kit's caller policy",
+    ),
+    Rule(
+        "TWM034",
+        "StreamingSynapse route in a mixed fleet",
+        "risk",
+        "streaming works TensorWire to TensorWire only: a v10 Dendrite gets "
+        "tw.invalid_request from it and a v10 miner cannot stream to a "
+        "TensorWire validator (D33); move streaming routes after rollout "
+        "stage 2 or give v10 peers a non-streaming route",
     ),
     Rule(
         "TWM103",

@@ -24,6 +24,10 @@ after it and can only narrow access:
 - ``verify_fn`` must be ``None``: signature checking is the kit's job.
 - ``forward_fn(synapse) -> synapse`` keeps its v10 signature; ``def``
   functions run in a worker thread.
+- A ``StreamingSynapse`` route is a kit streaming route (spec 9.2):
+  ``forward_fn`` returns ``synapse.create_streaming_response(streamer)``,
+  each body frame the streamer sends becomes one signed chunk, and v10
+  Dendrites get the v10-shaped ``tw.invalid_request`` (D33).
 """
 
 from __future__ import annotations
@@ -34,17 +38,21 @@ import heapq
 import inspect
 import itertools
 import typing
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 
 import anyio.to_thread
+import structlog
 
+from tensorwire.compat.stream import BTStreamingResponse, StreamingSynapse, frames
 from tensorwire.compat.synapse import Synapse, TerminalInfo
-from tensorwire.errors import Forbidden, RateLimited
+from tensorwire.errors import Forbidden, HandlerError, RateLimited
 from tensorwire.miner.app import Miner
 from tensorwire.miner.routes import RouteContext
 
 __all__ = ["DEFAULT_ROUTE_CONCURRENCY", "Axon", "PriorityGate"]
+
+_log = structlog.stdlib.get_logger("tensorwire.compat")
 
 #: Concurrent ``forward_fn`` calls per Synapse route when ``priority_fn`` is set.
 DEFAULT_ROUTE_CONCURRENCY = 16
@@ -168,13 +176,18 @@ class Axon:
             else PriorityGate(max_concurrency, self.miner.settings.compat_max_queue)
         )
         handler = self._handler(cls, forward_fn, blacklist_fn, priority_fn, gate)
-        self.miner.route(
-            path,
-            request=cls,
-            response=cls,
-            legacy_synapse=cls,
-            encode=_encode,
-        )(handler)
+        if issubclass(cls, StreamingSynapse):
+            self.miner.route(path, request=cls, legacy_synapse=cls, stream=True)(
+                handler
+            )
+        else:
+            self.miner.route(
+                path,
+                request=cls,
+                response=cls,
+                legacy_synapse=cls,
+                encode=_encode,
+            )(handler)
         self.routes[path] = cls
         if gate is not None:
             self.gates[path] = gate
@@ -190,7 +203,7 @@ class Axon:
     ) -> Callable[[Synapse, RouteContext], Any]:
         settings = self.miner.settings
 
-        async def handle(synapse: Synapse, ctx: RouteContext) -> Synapse:
+        async def handle(synapse: Synapse, ctx: RouteContext) -> Any:
             caller = ctx.caller
             synapse.dendrite = TerminalInfo(
                 hotkey=caller.hotkey_ss58, nonce=caller.nonce_ns
@@ -207,6 +220,10 @@ class Axon:
             if gate is None or priority_fn is None:
                 return await self._forward(cls, forward_fn, synapse)
             priority = float(await _call(priority_fn, synapse))
+            if issubclass(cls, StreamingSynapse):
+                # The work is the token streamer: hold the slot while it runs.
+                reply = await self._forward(cls, forward_fn, synapse)
+                return _gated(gate, priority, reply)
             await gate.acquire(priority)
             try:
                 return await self._forward(cls, forward_fn, synapse)
@@ -218,8 +235,17 @@ class Axon:
     @staticmethod
     async def _forward(
         synapse_cls: type[Synapse], forward_fn: Callable[..., Any], synapse: Synapse
-    ) -> Synapse:
+    ) -> Any:
         result = await _call(forward_fn, synapse)
+        if issubclass(synapse_cls, StreamingSynapse):
+            if not isinstance(result, BTStreamingResponse):
+                _log.error(
+                    "forward_bad_return",
+                    route="/" + synapse_cls.__name__,
+                    expected="synapse.create_streaming_response(token_streamer)",
+                )
+                raise HandlerError()
+            return frames(result.token_streamer)
         if not isinstance(result, synapse_cls):
             name = synapse_cls.__name__
             raise TypeError(f"forward_fn must return the {name} it was given")
@@ -242,6 +268,25 @@ class Axon:
     def app(self) -> Any:
         """The miner's ASGI app (tests, custom servers)."""
         return self.miner.app
+
+
+async def _gated(
+    gate: PriorityGate, priority: float, frames: AsyncIterator[Any]
+) -> AsyncIterator[Any]:
+    """A stream's frames under one ``gate`` slot, taken at its first chunk.
+
+    The slot covers the token streamer and is given back when the stream ends
+    or is closed; a stream that never starts never takes one.
+    """
+    await gate.acquire(priority)
+    try:
+        async for frame in frames:
+            yield frame
+    finally:
+        gate.release()
+        close = getattr(frames, "aclose", None)
+        if close is not None:
+            await close()
 
 
 def _encode(synapse: Synapse) -> bytes:

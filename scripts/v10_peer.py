@@ -12,7 +12,10 @@ Run ONLY with the legacy interpreter from ``scripts/legacy_venv.sh``:
 dummy_input * 2``) and prints ``READY <port>`` once it listens; it stops on
 SIGTERM or when stdin closes. ``dendrite`` sends ``--count`` sequential
 ``Dummy`` queries and prints one JSON object per answer, then a ``SUMMARY``
-line.
+line. ``stream-dendrite`` sends the template's ``StreamPrompting``
+(``docs/stream_tutorial``) once with ``streaming=True`` and prints one JSON
+object: the final Synapse's status and how many chunks arrived (spec 10b.3,
+D33: a TensorWire miner refuses v10 streaming).
 
 On localnet (mixed fleet, spec 13.8), ``--chain ws://127.0.0.1:9944`` with
 ``--wallet-name``/``--wallet-path`` uses a localnet dev wallet's hotkey:
@@ -75,6 +78,27 @@ class Dummy(bt.Synapse):
 
     def deserialize(self) -> int | None:
         return self.dummy_output
+
+
+class StreamPrompting(bt.StreamingSynapse):
+    """The archived template's streaming Synapse (docs/stream_tutorial/protocol.py)."""
+
+    roles: typing.List[str]  # noqa: UP006
+    messages: typing.List[str]  # noqa: UP006
+    completion: str = ""
+    required_hash_fields: ClassVar[typing.Tuple[str, ...]] = ("messages",)  # noqa: UP006
+
+    async def process_streaming_response(self, response):  # type: ignore[no-untyped-def]
+        async for chunk in response.content.iter_any():
+            tokens = chunk.decode("utf-8").split("\n")
+            self.completion += "".join(t for t in tokens if t)
+            yield tokens
+
+    def deserialize(self) -> str:
+        return self.completion
+
+    def extract_response_json(self, response) -> dict:  # type: ignore[no-untyped-def]  # noqa: ARG002 - v10 signature
+        return {"roles": self.roles, "messages": self.messages}
 
 
 async def forward_dummy(synapse: Dummy) -> Dummy:
@@ -267,6 +291,45 @@ async def run_dendrite(args: argparse.Namespace) -> None:
     print(f"SUMMARY {ok}/{args.count}", flush=True)
 
 
+async def run_stream_dendrite(args: argparse.Namespace) -> None:
+    dendrite = bt.Dendrite(wallet=bt.Keypair.create_from_uri(args.hotkey_uri))
+    target = AxonInfo(
+        version=0,
+        ip=args.ip,
+        port=args.port,
+        ip_type=4,
+        hotkey=args.axon_hotkey,
+        coldkey=args.axon_hotkey,
+    )
+    chunks, final = 0, None
+    try:
+        generator = await dendrite(
+            [target],
+            StreamPrompting(roles=["user"], messages=["hello"]),
+            timeout=args.timeout,
+            deserialize=False,
+            streaming=True,
+        )
+        async for item in generator[0]:
+            if isinstance(item, list):
+                chunks += 1
+            else:
+                final = item
+    finally:
+        await dendrite.aclose_session()
+    print(
+        json.dumps(
+            {
+                "status_code": final.dendrite.status_code if final else None,
+                "status_message": final.dendrite.status_message if final else None,
+                "chunks": chunks,
+                "completion": final.completion if final else None,
+            }
+        ),
+        flush=True,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="mode", required=True)
@@ -277,9 +340,19 @@ def main() -> None:
     dendrite.add_argument("--ip", default="127.0.0.1")
     dendrite.add_argument("--port", type=int, required=True)
     dendrite.add_argument("--axon-hotkey", required=True)
+    stream = sub.add_parser("stream-dendrite")
+    stream.add_argument("--ip", default="127.0.0.1")
+    stream.add_argument("--port", type=int, required=True)
+    stream.add_argument("--axon-hotkey", required=True)
+    stream.add_argument("--timeout", type=float, default=12.0)
     validator = sub.add_parser("validator")
     validator.add_argument("--uids", type=int, nargs="+", required=True)
-    for mode, uri in ((axon, "//Bob"), (dendrite, "//Alice"), (validator, "//Alice")):
+    for mode, uri in (
+        (axon, "//Bob"),
+        (dendrite, "//Alice"),
+        (stream, "//Alice"),
+        (validator, "//Alice"),
+    ):
         mode.add_argument("--hotkey-uri", default=uri)
         mode.add_argument("--wallet-name")
         mode.add_argument("--wallet-path")
@@ -304,6 +377,8 @@ def main() -> None:
         run_axon(args)
     elif args.mode == "validator":
         asyncio.run(run_validator(args))
+    elif args.mode == "stream-dendrite":
+        asyncio.run(run_stream_dendrite(args))
     else:
         asyncio.run(run_dendrite(args))
 
