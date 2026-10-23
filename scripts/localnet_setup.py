@@ -497,7 +497,7 @@ def write_outputs(state_dir: Path, endpoint: str, info: dict[str, Any]) -> None:
     (state_dir / "localnet.json").write_text(json.dumps(info, indent=2) + "\n")
     env = [
         "# Written by scripts/localnet_setup.py. Localnet only.",
-        "TW_NETWORK=local",
+        f"TW_NETWORK={endpoint}",
         f"TW_NETUID={info['netuid']}",
         f"TW_WALLET_PATH={info['wallet_path']}",
         "TW_ALLOW_PRIVATE_AXONS=1",

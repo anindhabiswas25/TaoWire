@@ -9,7 +9,6 @@ is missing. Only public dev keys are used; never point this at a real network.
 from __future__ import annotations
 
 import json
-import os
 import socket
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -17,7 +16,7 @@ from typing import Any
 
 import pytest
 import pytest_asyncio
-from localnet_env import ENDPOINT, Localnet
+from localnet_env import ENDPOINT, ENDPOINT_ADDR, STATE_DIR, Localnet
 
 from tensorwire.chain.gateway import BittensorGateway
 
@@ -31,7 +30,7 @@ def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
 
 def _chain_reachable() -> bool:
     try:
-        with socket.create_connection(("127.0.0.1", 9944), timeout=1):
+        with socket.create_connection(ENDPOINT_ADDR, timeout=1):
             return True
     except OSError:
         return False
@@ -39,12 +38,11 @@ def _chain_reachable() -> bool:
 
 @pytest.fixture(scope="session")
 def localnet() -> Localnet:
-    state = Path(os.environ.get("LOCALNET_DIR", "~/.tensorwire/localnet")).expanduser()
-    info_file = state / "localnet.json"
+    info_file = STATE_DIR / "localnet.json"
     if not info_file.is_file():
-        pytest.skip(f"no localnet state at {state}; run `just localnet-up`")
+        pytest.skip(f"no localnet state at {STATE_DIR}; run `just localnet-up`")
     if not _chain_reachable():
-        pytest.skip("localnet chain is not running on 127.0.0.1:9944")
+        pytest.skip(f"localnet chain is not running at {ENDPOINT}")
     info = json.loads(info_file.read_text(encoding="utf-8"))
     return Localnet(
         netuid=int(info["netuid"]),

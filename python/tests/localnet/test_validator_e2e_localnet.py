@@ -41,8 +41,11 @@ EXAMPLE = Path(__file__).resolve().parents[3] / "examples" / "text-ops-subnet"
 MINER_WALLET = "miner_py"
 VALIDATOR_WALLET = "validator"
 EXTERNAL_IP = "127.0.0.2"
+#: Floors; the waits scale with the chain's block time (``Localnet.wait_s``).
 PUBLISH_TIMEOUT_S = 180.0
 WEIGHTS_TIMEOUT_S = 600.0
+#: Blocks a timelocked commit needs to reveal: RevealPeriodEpochs (1) + slack, x tempo.
+REVEAL_BLOCKS = 3 * 10 + 10
 
 
 def _free_port(host: str) -> int:
@@ -199,7 +202,12 @@ async def _marker_row(
             since = await gw.blocks_since_last_update(localnet.netuid, validator_uid)
             return since is not None and since >= limit
 
-        await _until("the weights rate limit", window_open, 300.0, process)
+        await _until(
+            "the weights rate limit",
+            window_open,
+            localnet.wait_s(limit, 300.0),
+            process,
+        )
         await require_drand_feed(client)
         outcome = await gw.set_weights(
             localnet.netuid, {marker_uid: 1.0}, mechid=0, version_key=0
@@ -213,7 +221,7 @@ async def _marker_row(
         row: dict[int, float] = await _until(
             "the marker row",
             marker_revealed,
-            WEIGHTS_TIMEOUT_S,
+            localnet.wait_s(REVEAL_BLOCKS, WEIGHTS_TIMEOUT_S),
             process,
             DrandWatch(client),
         )
@@ -240,9 +248,11 @@ async def test_validator_scores_miner_and_weights_reveal(
             neuron = (await gw.metagraph(netuid)).by_hotkey(miner_hotkey)
             return neuron is not None and neuron.axon == want
 
-        await _until(
-            "the miner's axon on chain", published, PUBLISH_TIMEOUT_S, miner_process
+        # A publish less than ServingRateLimit blocks after the last one waits.
+        publish_s = localnet.wait_s(
+            await gw.serving_rate_limit(netuid), PUBLISH_TIMEOUT_S
         )
+        await _until("the miner's axon on chain", published, publish_s, miner_process)
 
         async def ready() -> bool:
             async with httpx.AsyncClient(timeout=2.0) as http:
@@ -252,7 +262,7 @@ async def test_validator_scores_miner_and_weights_reveal(
                     return False
                 return r.status_code == 200
 
-        await _until("miner /readyz", ready, PUBLISH_TIMEOUT_S, miner_process)
+        await _until("miner /readyz", ready, publish_s, miner_process)
         mg = await gw.metagraph(netuid)
         miner_uid = mg.by_hotkey(miner_hotkey).uid  # type: ignore[union-attr]
         validator_uid = mg.by_hotkey(validator_hotkey).uid  # type: ignore[union-attr]
@@ -283,7 +293,11 @@ async def test_validator_scores_miner_and_weights_reveal(
                         return e
                 return None
 
-            submission = await _until("weights submitted", submitted, 300.0, validator)
+            # The marker row just used the window: the validator waits a full one.
+            limit = await gw.weights_rate_limit(netuid)
+            submission = await _until(
+                "weights submitted", submitted, localnet.wait_s(limit, 300.0), validator
+            )
             results["weights_submitted"] = submission
 
             async def revealed() -> dict[int, float] | None:
@@ -296,7 +310,7 @@ async def test_validator_scores_miner_and_weights_reveal(
             row = await _until(
                 "weights revealed on chain",
                 revealed,
-                WEIGHTS_TIMEOUT_S,
+                localnet.wait_s(REVEAL_BLOCKS, WEIGHTS_TIMEOUT_S),
                 validator,
                 DrandWatch(client),
             )

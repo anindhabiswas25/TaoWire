@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 import bittensor as bt
+
 from drand_feed import drand_feed
 
 ROOT_STAKE_TAO = 100.0
