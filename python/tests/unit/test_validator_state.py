@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 import structlog
 
-from tensorwire.chain.gateway import ChainUnavailable, MetagraphView
+from tensorwire.chain.gateway import ChainUnavailable, MetagraphView, SubnetNotFound
 from tensorwire.observability.metrics import Metrics
 from tensorwire.testing.fake_chain import FakeChain
 from tensorwire.validator.lock import HotkeyLock, HotkeyLockHeld
@@ -397,6 +397,80 @@ async def test_chain_failures_never_raise() -> None:
     assert d.reason == "failed"
     assert d.outcome is not None
     assert d.outcome.code == "unknown"
+
+
+async def test_a_stale_version_key_is_never_committed(tmp_path: Path) -> None:
+    """D38: below the subnet's WeightsVersionKey nothing is committed."""
+    chain = fleet(2)  # tempo 10, weights rate limit 5
+    chain.set_hyperparameters(NETUID, weights_version_key=7)
+    chain.advance(10)
+    metrics = Metrics()
+    s = store(tmp_path)
+    sched = scheduler(chain, metrics=metrics, store=s, version_key=6)
+    mg = await metagraph(chain)
+    with structlog.testing.capture_logs() as logs:
+        d = await sched.maybe_submit({1: 1.0}, mg)
+    assert d.reason == "version_key_stale"
+    assert d.outcome is not None
+    assert d.outcome.code == "version_key_stale"
+    assert chain.calls["set_weights"] == 0
+    (event,) = [e for e in logs if e["event"] == "weights_version_key_stale"]
+    assert event["log_level"] == "error"
+    assert (event["version_key"], event["chain_version_key"]) == (6, 7)
+    assert submissions(metrics, "false", "version_key_stale") == 1
+    assert s.last_weights(1)[0].code == "version_key_stale"
+    # The next window, not before (max(rate limit, tempo) = 10 blocks).
+    chain.advance(9)
+    assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "waiting"
+    chain.advance(1)
+    assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "version_key_stale"
+    assert chain.calls["weights_version_key"] == 2  # read again for the new window
+    # An upgraded validator commits.
+    upgraded = scheduler(chain, metrics=metrics, version_key=7)
+    assert (await upgraded.maybe_submit({1: 1.0}, mg)).submitted
+    assert chain.weight_submissions()[-1].version_key == 7
+
+
+async def test_the_version_key_is_read_once_per_tempo() -> None:
+    chain = fleet(2)
+    chain.set_hyperparameters(NETUID, weights_version_key=2)
+    chain.advance(10)
+    sched = scheduler(chain, version_key=2, min_interval_blocks=0)
+    mg = await metagraph(chain)
+    assert (await sched.maybe_submit({1: 1.0}, mg)).submitted
+    chain.advance(5)
+    assert (await sched.maybe_submit({1: 1.0}, mg)).submitted
+    assert chain.calls["weights_version_key"] == 1  # cached inside the tempo
+    chain.advance(5)
+    assert (await sched.maybe_submit({1: 1.0}, mg)).submitted
+    assert chain.calls["weights_version_key"] == 2
+    # The chain raises its key: the next read (next tempo) stops the commits.
+    chain.set_hyperparameters(NETUID, weights_version_key=3)
+    chain.advance(10)
+    assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "version_key_stale"
+
+
+async def test_an_unreadable_version_key_is_a_failed_check() -> None:
+    chain = fleet(2)
+    chain.advance(10)
+    sched = scheduler(chain)
+    mg = await metagraph(chain)
+    chain.fail_next("weights_version_key")
+    with structlog.testing.capture_logs() as logs:
+        assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "failed"
+    assert any(e["event"] == "weights_check_failed" for e in logs)
+    assert chain.calls["set_weights"] == 0
+    assert (await sched.maybe_submit({1: 1.0}, mg)).submitted
+
+
+async def test_fake_chain_version_key_parity() -> None:
+    chain = fleet(1)
+    await chain.connect()
+    assert await chain.weights_version_key(NETUID) == 0
+    chain.set_hyperparameters(NETUID, weights_version_key=12)
+    assert await chain.weights_version_key(NETUID) == 12
+    with pytest.raises(SubnetNotFound):
+        await chain.weights_version_key(99)
 
 
 def test_negative_interval() -> None:

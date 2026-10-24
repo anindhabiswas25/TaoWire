@@ -156,6 +156,13 @@ is part of every tempo too.
 - **Tell straggling validators.** A v10 validator's weight commit is still
   **accepted** ("Success", and its `LastUpdate` moves), but its reveal is
   dropped without an error. They will not notice on their own.
+- **TensorWire validators with a stale key are stopped at commit time
+  (D38).** Before every commit the kit reads `WeightsVersionKey`; when
+  `TW_WEIGHTS_VERSION_KEY` is lower it commits nothing, logs
+  `weights_version_key_stale` at ERROR with both keys, counts
+  `tw_validator_weight_submissions_total{ok="false",code="version_key_stale"}`
+  and tries again in the next weight window. Alert on that counter: a validator
+  that upgraded the code but not the key shows up at once, not at reveal.
 - **Exit:** no v10 traffic to miners for one tempo, read twice one tempo
   apart against the miners' metrics:
 

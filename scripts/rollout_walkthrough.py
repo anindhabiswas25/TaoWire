@@ -176,10 +176,17 @@ class Fleet:
         node.metrics = int(m["metrics"])
         return node
 
-    def tw_validator(self, hotkey: str, legacy_client: str, until: str | None) -> Node:
+    def tw_validator(
+        self,
+        hotkey: str,
+        legacy_client: str,
+        until: str | None,
+        *,
+        version_key: int = NEW_KEY,
+    ) -> Node:
         extra = {
             "TW_METRICS_BIND": f"127.0.0.1:{VALIDATORS[hotkey]['metrics']}",
-            "TW_WEIGHTS_VERSION_KEY": str(NEW_KEY),
+            "TW_WEIGHTS_VERSION_KEY": str(version_key),
             "TW_LEGACY_V10_CLIENT": legacy_client,
             "TW_ROUND_INTERVAL_S": "3",
             "TW_MIN_WEIGHT_INTERVAL_BLOCKS": "10",
@@ -840,7 +847,9 @@ class Walk:
             t1 > t0,
             {"inbound_t0": t0, "inbound_t1": t1},
         )
-        f.stop("owner")  # the straggler upgrades
+        f.stop("owner")  # the straggler upgrades, first with its old key (D38)
+        await self.stale_key_is_stopped_at_commit("owner")
+        f.stop("owner")
         f.tw_validator("owner", "auto", UNTIL28)
         await self.tw_round("owner", {"n_ok": 2, "n_btauth": 2})
         t0, t1 = await self.inbound_over("stage3-miners-upgraded", tempo_wait)
@@ -865,6 +874,27 @@ class Walk:
         f.tw_validator("owner", "auto", UNTIL28)
         await self.tw_round("owner", {"n_ok": 2, "n_btauth": 2})
         await self.weights_land(["owner", "validator"])
+
+    async def stale_key_is_stopped_at_commit(self, hotkey: str) -> None:
+        """D38: a TensorWire validator with key 0 refuses to commit, says why."""
+        node = self.f.tw_validator(hotkey, "auto", UNTIL28, version_key=0)
+        start = await self.chain.block()
+        marker = '"event": "weights_version_key_stale"'
+
+        async def logged() -> list[str] | None:
+            return [x for x in node.lines() if marker in x] or None
+
+        await until(f"{hotkey} stale key", logged, 240)
+        self.log_event(
+            hotkey, "weights_version_key_stale", f'"chain_version_key": {NEW_KEY}', node
+        )
+        event = await self.chain.revealed_since(self.ss58[hotkey], start)
+        record(
+            self.stage,
+            f"{node.name} (key 0) committed nothing: no reveal since it started",
+            event is None,
+            {"since_block": start, "reveal": event},
+        )
 
     def restart_all(
         self, miner_until: str | None, client: str, until: str | None

@@ -133,6 +133,7 @@ class World:
     weights_rate_limit: int = 100
     blocks_since: int | None = 7
     serving: int | None = 50
+    version_key: int | None = 0
     planned: list[Any] = field(default_factory=list)
     violations: list[str] = field(default_factory=list)
     faults: dict[str, list[Any]] = field(default_factory=lambda: defaultdict(list))
@@ -209,6 +210,8 @@ class FakeSdkClient:
     async def query(self, item: tuple[str, str], params: list[int]) -> Any:
         if item == ("SubtensorModule", "ServingRateLimit"):
             return await self.world.run("serving_rate_limit", self.world.serving)
+        if item == ("SubtensorModule", "WeightsVersionKey"):
+            return await self.world.run("weights_version_key", self.world.version_key)
         if (item[1], tuple(params)) in self.world.storage:
             value = self.world.storage[item[1], tuple(params)]
             return await self.world.run("storage", value)
@@ -894,6 +897,17 @@ async def test_serving_rate_limit(world: World, sleeps: list[float]) -> None:
     assert await gw.serving_rate_limit(NETUID) == 0
     with pytest.raises(SubnetNotFound):
         await gw.serving_rate_limit(99)
+
+
+async def test_weights_version_key(world: World, sleeps: list[float]) -> None:
+    """D38: the subnet's WeightsVersionKey storage, through the gateway."""
+    gw = await _connected(world, sleeps)
+    world.version_key = 9
+    assert await gw.weights_version_key(NETUID) == 9
+    world.version_key = None
+    assert await gw.weights_version_key(NETUID) == 0
+    with pytest.raises(SubnetNotFound):
+        await gw.weights_version_key(99)
 
 
 def test_installed_sdk_has_the_surface() -> None:

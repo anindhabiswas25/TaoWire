@@ -227,6 +227,14 @@ class ChainGateway(Protocol):
         """Return the subnet's serving rate limit (blocks between ``ServeAxon``)."""
         ...
 
+    async def weights_version_key(self, netuid: int) -> int:
+        """The subnet's ``WeightsVersionKey`` hyperparameter (spec 8.9, D38).
+
+        A timelocked commit whose ``version_key`` is below it is accepted and
+        then dropped at reveal, so the weight scheduler checks it first.
+        """
+        ...
+
     async def block_hash(self, block: int) -> str | None:
         """The ``0x`` hash of ``block``, or ``None`` if there is no such block."""
         ...
@@ -713,6 +721,17 @@ class BittensorGateway:
             return await client.query(("SubtensorModule", "ServingRateLimit"), [netuid])
 
         return int(await self._call("serving_rate_limit", op) or 0)
+
+    async def weights_version_key(self, netuid: int) -> int:
+        """Return the subnet's ``WeightsVersionKey`` (D38)."""
+        await self._require_subnet(netuid)
+
+        async def op() -> Any:
+            client = await self._ensure_client()
+            key = ("SubtensorModule", "WeightsVersionKey")
+            return await client.query(key, [netuid])
+
+        return int(await self._call("weights_version_key", op) or 0)
 
     async def _require_subnet(self, netuid: int) -> None:
         async def op() -> Any:

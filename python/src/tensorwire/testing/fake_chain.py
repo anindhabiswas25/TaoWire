@@ -64,6 +64,7 @@ OPERATIONS = frozenset(
         "weights_rate_limit",
         "blocks_since_last_update",
         "serving_rate_limit",
+        "weights_version_key",
         "serve_axon",
         "set_weights",
         "timelock_seal",
@@ -498,6 +499,11 @@ class FakeChain:
         """Return the subnet's serving rate limit in blocks."""
         self._enter("serving_rate_limit")
         return self._subnet_or_raise(netuid).serving_rate_limit
+
+    async def weights_version_key(self, netuid: int) -> int:
+        """Return the subnet's ``WeightsVersionKey`` (``set_hyperparameters``)."""
+        self._enter("weights_version_key")
+        return self._subnet_or_raise(netuid).weights_version_key
 
     async def block_hash(self, block: int) -> str | None:
         """``0x`` + the block number as 64 hex digits; ``None`` past the head."""

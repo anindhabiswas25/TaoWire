@@ -139,6 +139,13 @@ passed since its last submission, with `version_key=TW_WEIGHTS_VERSION_KEY`
 and `mechid=TW_MECHID`. v11 `SetWeights` normalises, clips and quantises; the
 gateway runs the SDK preflight first.
 
+- **Version key preflight (D38).** Before committing, the scheduler reads the
+  subnet's `WeightsVersionKey` (once per tempo). If `TW_WEIGHTS_VERSION_KEY` is
+  lower it commits nothing (the chain would accept the commit and drop it at
+  reveal), logs `weights_version_key_stale` at ERROR with both keys, counts
+  `tw_validator_weight_submissions_total{ok="false",code="version_key_stale"}`
+  and tries again in the next weight window. Raise the key and restart.
+
 - **What "submitted" means.** On commit-reveal subnets (the default) a
   successful submission is a timelocked **commit included in a block**. The
   weights apply when the commit reveals; until then the chain shows the old
@@ -223,7 +230,7 @@ can end (`docs/migration-from-v10.md`).
 | `TW_MAX_RESPONSE_BYTES` | 4194304 | |
 | `TW_SCORE_ALPHA` | 0.1 | EMA |
 | `TW_MIN_WEIGHT_INTERVAL_BLOCKS` | 100 | |
-| `TW_WEIGHTS_VERSION_KEY` | 0 | must be ≥ the subnet's stored key |
+| `TW_WEIGHTS_VERSION_KEY` | 0 | must be ≥ the subnet's stored key; below it nothing is committed (`weights_version_key_stale`, D38) |
 | `TW_MECHID` | 0 | |
 | `TW_SCHEME_POLICY` | http | `http`, `https` or `https-if-tls-published` (TLS key pinning, ADR-0011) |
 | `TW_LEGACY_V10_CLIENT` | off | `auto` reaches v10 miners |
