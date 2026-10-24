@@ -1,6 +1,6 @@
 # Quickstart: your first TaoWire subnet on a local chain
 
-> **Alpha (0.1.0a1).** Not security-reviewed; APIs may change. For localnet and
+> **Alpha (0.1.0a2).** Not security-reviewed; APIs may change. For localnet and
 > testnet, **not for mainnet value**. Feedback: [GitHub issues](https://github.com/anindhabiswas25/TaoWire/issues).
 
 You will start a local Bittensor chain, scaffold a subnet project, run a
@@ -37,8 +37,8 @@ later, your subnet:
 ```bash
 uv venv ~/taowire-env
 . ~/taowire-env/bin/activate
-uv pip install "taowire[all]==0.1.0a1"
-taowire --version                        # taowire 0.1.0a1
+uv pip install "taowire[all]==0.1.0a2"
+taowire --version                        # taowire 0.1.0a2
 ```
 
 The local-chain scripts live in the repository:

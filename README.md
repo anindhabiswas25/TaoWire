@@ -3,11 +3,11 @@
 **Secure networking for Bittensor v11 subnets, and the way across from v10.**
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-![Status: alpha](https://img.shields.io/badge/status-alpha%200.1.0a1-orange.svg)
+![Status: alpha](https://img.shields.io/badge/status-alpha%200.1.0a2-orange.svg)
 ![bittensor](https://img.shields.io/badge/bittensor-%3E%3D11.3%2C%3C12-green.svg)
 ![languages](https://img.shields.io/badge/languages-Python%20%7C%20TypeScript%20%7C%20Go%20%7C%20Rust-lightgrey.svg)
 
-> **Alpha (0.1.0a1).** TaoWire has **not been security-reviewed** yet, and its APIs may change between
+> **Alpha (0.1.0a2).** TaoWire has **not been security-reviewed** yet, and its APIs may change between
 > alphas. Use it on localnet and testnet; **do not use it to protect mainnet value**. Feedback and bugs:
 > [GitHub issues](https://github.com/anindhabiswas25/TaoWire/issues). Security problems: report them privately through
 > [GitHub private vulnerability reporting](https://github.com/anindhabiswas25/TaoWire/security/advisories/new) (see
@@ -82,21 +82,21 @@ A complete working subnet (miner, validator, scoring, tests) is in
 
 | Language | Install | Registry |
 |---|---|---|
-| Python | `pip install "taowire[all]==0.1.0a1"` | [PyPI](https://pypi.org/project/taowire/0.1.0a1/) |
+| Python | `pip install "taowire[all]==0.1.0a2"` | [PyPI](https://pypi.org/project/taowire/0.1.0a2/) |
 | TypeScript | `npm install @taowire/btauth@alpha` | [npm](https://www.npmjs.com/package/@taowire/btauth) |
 | Go | `go get github.com/anindhabiswas25/TaoWire/go@v0.1.0-alpha.1` | [Go packages](https://pkg.go.dev/github.com/anindhabiswas25/TaoWire/go) |
 | Rust | `cargo add taowire-btauth@0.1.0-alpha.1` | [crates.io](https://crates.io/crates/taowire-btauth) |
 
 The alpha is a **pre-release**: a plain `pip install taowire` skips it, so name the version (or use `pip install --pre taowire`).
-Optional extras: Python `taowire[redis]`, `taowire[migrate]`, `taowire[ntp]` (`[all]` = all three); TypeScript peers
+Optional extras: Python `taowire[redis]`, `taowire[migrate]`, `taowire[ntp]` (`[all]` = all three), `taowire[mcp]` (AI agents); TypeScript peers
 `fastify` (server middleware) and `ioredis` (shared replay store); Rust features `axum`, `client`, `redis`, `sidecar`.
 
 ## Get started
 
 ```bash
 uv venv ~/taowire-env && . ~/taowire-env/bin/activate      # or: python -m venv ~/taowire-env
-uv pip install "taowire[all]==0.1.0a1"                      # or: pip install "taowire[all]==0.1.0a1"
-taowire --version                                           # taowire 0.1.0a1
+uv pip install "taowire[all]==0.1.0a2"                      # or: pip install "taowire[all]==0.1.0a2"
+taowire --version                                           # taowire 0.1.0a2
 
 git clone --depth 1 https://github.com/anindhabiswas25/TaoWire.git ~/taowire-repo   # local-chain scripts
 LOCALNET_PYTHON="$(command -v python)" ~/taowire-repo/scripts/localnet_up.sh        # local chain in Docker, a subnet, dev wallets
@@ -108,6 +108,30 @@ taowire doctor --role miner                                 # checks keys, clock
 
 Follow [docs/quickstart.md](docs/quickstart.md) from there: a miner and a validator on a local chain, up to
 weights revealed on chain, in under an hour.
+
+## Use it with your AI agent (MCP)
+
+TaoWire ships an [MCP](https://modelcontextprotocol.io) server, so Claude Code, Claude Desktop, Cursor, VS Code
+and other AI coding agents can use the kit directly. Most agents learned Bittensor from v10 and write
+`Axon`/`Dendrite`/`Synapse` code that no longer exists; the server keeps them on v11 and TaoWire.
+
+```bash
+claude mcp add taowire -- uvx --from "taowire[mcp]==0.1.0a2" taowire mcp
+```
+
+Other clients (Claude Desktop, Cursor, VS Code) take the same command in their MCP config; see
+[docs/mcp.md](docs/mcp.md). Then ask: *"Use TaoWire to build a subnet where miners caption images"* or
+*"Port the v10 subnet in this repo to v11 with TaoWire."*
+
+| Tools | What the agent can do |
+|---|---|
+| `read_doc`, `search_docs`, `list_settings`, `explain_error` | Read the right docs and settings, explain any `tw.*` error (offline, matches the installed version) |
+| `inspect_request`, `inspect_response` | Debug a 401: show the exact signed lines and which check failed |
+| `scaffold_project`, `migrate_scan`, `migrate_apply` | Create a subnet; port a v10 subnet (diff first) |
+| `doctor`, `read_metagraph` | Check a miner or validator setup; read a subnet (read-only) |
+
+Safe by design: no tool reads private keys or writes to a chain, and tools that write files only write into an
+empty directory or a clean git tree.
 
 ## Migrating a v10 subnet
 
@@ -137,7 +161,7 @@ and a live cross-language matrix on a local chain. See [docs/multi-language.md](
 ## How it was tested
 
 Every release candidate runs the full local gate (`just check`) plus localnet checks on a fresh chain.
-On `0.1.0a1`:
+On `0.1.0a1` (`0.1.0a2` adds the MCP server: 2,461 Python tests, the gate green again):
 
 - 2,395 Python tests, 277 TypeScript tests, plus the Go and Rust suites; 143/143 conformance vectors in every language; 97% Python coverage.
 - Abuse tests: invalid-signature flood, slowloris, 100 MB body, header floods, replay storm, unread streams.
@@ -151,7 +175,7 @@ What is **not** done yet: an end-to-end run on the public testnet and an externa
 
 ## Documentation
 
-- Building: [quickstart](docs/quickstart.md), [miner guide](docs/miner-guide.md), [validator guide](docs/validator-guide.md),
+- Building: [quickstart](docs/quickstart.md), [AI agents (MCP)](docs/mcp.md), [miner guide](docs/miner-guide.md), [validator guide](docs/validator-guide.md),
   [streaming](docs/streaming.md), [timelock](docs/timelock.md), [TLS](docs/tls.md), [metrics](docs/metrics.md),
   [security](docs/security.md).
 - Protocols: [btauth/1 and twresp/1](docs/protocol/), the [legacy v10 bridge](docs/protocol/legacy-v10.md).
@@ -163,7 +187,7 @@ What is **not** done yet: an end-to-end run on the public testnet and an externa
 
 | TaoWire | bittensor | Python | Node | Go | Rust |
 |---|---|---|---|---|---|
-| 0.1.0a1 (alpha) | `>=11.3.0,<12` (tested 11.3.0) | 3.10–3.14 | 20, 22 | 1.22+ | 1.80+ |
+| 0.1.0a2 (alpha) | `>=11.3.0,<12` (tested 11.3.0) | 3.10–3.14 | 20, 22 | 1.22+ | 1.80+ |
 
 ## Feedback
 
