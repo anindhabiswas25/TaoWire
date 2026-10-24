@@ -134,17 +134,27 @@ def _open_unread(port: int, count: int, body: bytes) -> list[socket.socket]:
 
 
 def _statuses(sockets: list[socket.socket]) -> dict[str, int]:
-    """The status line each attacker connection got (read now, then closed)."""
+    """What each attacker connection got (read now, then closed).
+
+    The status, and for a 503 also its ``tw.*`` code (``"503
+    tw.replay_store_unavailable"``): D42 allows only that 503.
+    """
     counts: dict[str, int] = {}
     for s in sockets:
         s.settimeout(2)
         try:
-            head = s.recv(16)
+            head = s.recv(4096)
         except OSError:
             head = b""
         finally:
             s.close()
         status = head[9:12].decode() if head.startswith(b"HTTP/1.1 ") else "none"
+        if status == "503":
+            body = head.split(b"\r\n\r\n", 1)[-1]
+            try:
+                status += " " + json.loads(body)["error"]["code"]
+            except (ValueError, KeyError, TypeError):
+                status += " ?"
         counts[status] = counts.get(status, 0) + 1
     return counts
 
@@ -205,7 +215,16 @@ async def test_unread_streams_do_not_stall_the_miner(tmp_path: Path) -> None:
     assert dict(legit.statuses) == {"200": legit.total}, legit.statuses
     assert legit.total >= 50
     assert legit.p99_ms() < 200, legit.p99_ms()
+    # Pass rule of 13.6 (D42): the attacker's requests may be 200, 429 or 503
+    # tw.replay_store_unavailable (the shared limiter failing closed on its
+    # 250 ms Redis timeout under load), nothing else.
+    allowed = {"200", "429", "503 tw.replay_store_unavailable"}
+    assert set(statuses) <= allowed, statuses
+    assert sum(statuses.values()) == streams, statuses
     accepted = statuses.get("200", 0)
-    assert accepted + statuses.get("429", 0) == streams, statuses
-    assert MAX_STREAMS_PER_CALLER <= accepted <= MAX_STREAMS_PER_CALLER * workers
+    refused_early = statuses.get("503 tw.replay_store_unavailable", 0)
+    # D36: never more open streams than the slots; a 503 was refused before it
+    # reached them, so it does not count against the slots either way.
+    assert accepted <= MAX_STREAMS_PER_CALLER * workers, statuses
+    assert accepted + refused_early >= MAX_STREAMS_PER_CALLER, statuses
     assert aborts.get("max_duration", 0) == accepted, aborts
