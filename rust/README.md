@@ -48,6 +48,9 @@ Validator side (feature `client`): `Client::new(Signer::new(validator_key), reqw
 | `MemoryStore`, `NonceStore`; `redis_store::RedisStore` | Replay stores; Redis keys match the Python kit (`tw:n:<hotkey>:<nonce>`) |
 | `sign_response`, `verify_response`, `verify_response_digest` | twresp/1 (spec 9.1; digest form for 9.2 streams) |
 | `client::Client::send` | Signed request + verified answer; client codes `tw.timeout`, `tw.connect_error`, `tw.response_too_large`, `tw.bad_response_signature` |
+| `axum::stream_response`, `axum::StreamConfig`, `axum::StreamContext` | SSE stream with a signed `tw-end` from a protected handler (spec 9.2): per-caller slots (D36), first chunk before any byte, limits, abort hook |
+| `client::Client::stream`, `client::Stream`, `client::UnverifiedChunk` | Streaming query: `next().await` gives unverified chunks, `Ok(None)` only after the trailer verified |
+| `sse::{Parser, decode_chunk, encode_chunk, parse_trailer, encode_trailer, encode_event, StreamDigest, StreamLimits, StreamSlots}` | The shared stream pieces (WHATWG SSE parser, D35 chunk rule, strict trailer) |
 | `decode_ss58`, `encode_ss58`, `is_weak_public_key` | Appendix D (prefix 42 only), weak-key rule |
 | `Error`, `codes`, `status_of`, `error_body` | Appendix A codes, statuses and the JSON error body |
 
@@ -61,8 +64,7 @@ cd rust
 cargo test --test conformance          # every vector in conformance/vectors (except legacy_v10)
 cargo test --all-features              # + integration tests; TENSORWIRE_TEST_REDIS_URL for Redis
 cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings
-cargo +nightly fuzz run verify -- -max_total_time=300
+cargo +nightly fuzz run verify -- -max_total_time=300   # also: sse, trailer
 cargo audit
 ```
 
-Not yet in this crate: SSE streaming helpers (spec 9.2) and the sidecar client (11.6).

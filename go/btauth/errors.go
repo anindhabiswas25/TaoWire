@@ -16,6 +16,8 @@ const (
 	CodePayloadTooLarge        = "tw.payload_too_large"
 	CodeReplayStoreUnavailable = "tw.replay_store_unavailable"
 	CodeHandlerError           = "tw.handler_error"
+	CodeHandlerTimeout         = "tw.handler_timeout"
+	CodeRateLimited            = "tw.rate_limited"
 	CodeInternal               = "tw.internal"
 
 	// Client-side codes (validator side, spec Appendix A).
@@ -23,6 +25,7 @@ const (
 	CodeResponseTooLarge     = "tw.response_too_large"
 	CodeTimeout              = "tw.timeout"
 	CodeConnectError         = "tw.connect_error"
+	CodeInvalidResponse      = "tw.invalid_response"
 )
 
 type errorSpec struct {
@@ -78,7 +81,7 @@ func NewError(code, detail string) *Error {
 	spec, ok := catalogue[code]
 	if !ok {
 		if code == CodeBadResponseSignature || code == CodeResponseTooLarge ||
-			code == CodeTimeout || code == CodeConnectError {
+			code == CodeTimeout || code == CodeConnectError || code == CodeInvalidResponse {
 			return &Error{Code: code, Message: code, Detail: detail}
 		}
 		code, spec = CodeInternal, catalogue[CodeInternal]

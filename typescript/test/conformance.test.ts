@@ -2,11 +2,15 @@
 // Go and Rust); python_reference notes are ignored: expected is the normative answer.
 import { beforeAll, describe, expect, it } from "vitest";
 import {
+    StreamDigest,
     TWError,
     bodySha256,
     buildPayload,
+    decodeChunk,
     decodeSS58,
+    encodeTrailer,
     initCrypto,
+    parseTrailer,
     responsePayload,
     signatureHex,
     signResponse,
@@ -177,10 +181,17 @@ describe("twresp.json", () => {
                     break;
                 }
                 case "stream_ed25519": {
-                    const all = Buffer.concat(i.chunks_base64.map(b64));
-                    const digest = bodySha256(all);
+                    const d = new StreamDigest();
+                    for (const c of i.chunks_base64) {
+                        expect(() => decodeChunk(b64(c))).not.toThrow();
+                        d.update(b64(c));
+                    }
+                    const digest = d.hexdigest();
+                    expect(digest).toBe(bodySha256(Buffer.concat(i.chunks_base64.map(b64))));
                     expect(digest).toBe(e.digest);
-                    expect(i.chunks_base64.length).toBe(e.count);
+                    expect(d.count).toBe(e.count);
+                    const trailer = { digest, count: BigInt(d.count), signature: e.signature };
+                    expect(parseTrailer(encodeTrailer(trailer))).toEqual(trailer);
                     const sb = { ...binding, status: 200 };
                     const payload = responsePayload("ed25519", sb, i.responder_ss58, digest);
                     expect(new TextDecoder().decode(payload)).toBe(e.payload_utf8);

@@ -16,6 +16,12 @@ pub mod codes {
     pub const PAYLOAD_TOO_LARGE: &str = "tw.payload_too_large";
     /// Replay store unreachable (503).
     pub const REPLAY_STORE_UNAVAILABLE: &str = "tw.replay_store_unavailable";
+    /// Bucket empty or too many open streams (429).
+    pub const RATE_LIMITED: &str = "tw.rate_limited";
+    /// Unhandled handler failure (500).
+    pub const HANDLER_ERROR: &str = "tw.handler_error";
+    /// Handler exceeded its timeout (504).
+    pub const HANDLER_TIMEOUT: &str = "tw.handler_timeout";
     /// Generic fallback (500).
     pub const INTERNAL: &str = "tw.internal";
     /// Client side: the answer's twresp/1 signature does not check out.
@@ -26,6 +32,9 @@ pub mod codes {
     pub const TIMEOUT: &str = "tw.timeout";
     /// Client side: the miner could not be reached.
     pub const CONNECT_ERROR: &str = "tw.connect_error";
+    /// Client side: the answer is not what the route returns (e.g. a stream
+    /// chunk that is not a JSON object or array).
+    pub const INVALID_RESPONSE: &str = "tw.invalid_response";
 }
 
 /// Server-side rows of Appendix A with the Python kit's fixed public messages.
@@ -57,6 +66,7 @@ const CLIENT_CODES: &[&str] = &[
     codes::RESPONSE_TOO_LARGE,
     codes::TIMEOUT,
     codes::CONNECT_ERROR,
+    codes::INVALID_RESPONSE,
 ];
 
 /// A refusal with a stable `tw.*` code. `status` is its HTTP status (0 for

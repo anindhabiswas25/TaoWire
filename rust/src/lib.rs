@@ -27,6 +27,7 @@ mod keys;
 mod nonce;
 mod payload;
 mod ss58;
+pub mod sse;
 mod store;
 mod twresp;
 mod verify;

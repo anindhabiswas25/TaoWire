@@ -2,7 +2,13 @@
 // property.test.ts (fixed run count) and fuzz.test.ts (time-boxed, TW_FUZZ_SECONDS).
 import fc from "fast-check";
 import {
+    ChunkError,
     MemoryStore,
+    SSEParser,
+    TrailerError,
+    decodeChunk,
+    encodeTrailer,
+    parseTrailer,
     SS58Error,
     Signer,
     TWError,
@@ -183,3 +189,89 @@ export const twrespHeaders = fc.property(
         }
     },
 );
+
+const sseToken = fc.oneof(
+    fc.constantFrom(
+        "event: chunk",
+        "event: tw-end",
+        "data: ",
+        "data:",
+        ":",
+        " ",
+        "\n",
+        "\r",
+        "\r\n",
+        "\ufeff",
+        "id: 1",
+        '{"a":1}',
+    ),
+    fc.string(),
+);
+const sseInput = fc
+    .array(sseToken, { maxLength: 40 })
+    .map((parts) => new TextEncoder().encode(parts.join("")));
+const sseBytes = fc.oneof(sseInput, fc.uint8Array({ maxLength: 512 }));
+
+function eventsOf(p: SSEParser, pieces: Uint8Array[]): string {
+    const out = pieces.flatMap((piece) => p.feed(piece));
+    out.push(...p.finish());
+    return JSON.stringify(out.map((e) => [e.event, Buffer.from(e.data).toString("hex")]));
+}
+
+/** SSE parser (spec 9.2): never throws, and any split gives the same events. */
+export const sseSplits = fc.property(sseBytes, fc.nat(), (input, cut) => {
+    const at = cut % (input.length + 1);
+    const whole = eventsOf(new SSEParser(), [input]);
+    const split = eventsOf(new SSEParser(), [input.subarray(0, at), input.subarray(at)]);
+    const bytewise = eventsOf(
+        new SSEParser(),
+        Array.from(input, (b) => Uint8Array.of(b)),
+    );
+    return whole === split && whole === bytewise;
+});
+
+const jsonish = fc.oneof(
+    fc.json().map((t) => new TextEncoder().encode(t)),
+    fc.uint8Array({ maxLength: 256 }),
+    fc
+        .record(
+            {
+                digest: fc.oneof(fc.stringMatching(/^[0-9a-f]{64}$/), fc.string()),
+                count: fc.oneof(fc.bigInt(), fc.double(), fc.boolean()),
+                signature: fc.string(),
+            },
+            { requiredKeys: [] },
+        )
+        .map((o) =>
+            new TextEncoder().encode(
+                JSON.stringify(o, (_k, v: unknown) => (typeof v === "bigint" ? Number(v) : v)),
+            ),
+        ),
+);
+
+/** tw-end parser: arbitrary data is a well-formed trailer that re-encodes to itself, or a TrailerError. */
+export const trailerParse = fc.property(jsonish, (data) => {
+    let t;
+    try {
+        t = parseTrailer(data);
+    } catch (err) {
+        return err instanceof TrailerError;
+    }
+    const again = parseTrailer(encodeTrailer(t));
+    return (
+        /^[0-9a-f]{64}$/.test(t.digest) &&
+        again.digest === t.digest &&
+        again.count === t.count &&
+        again.signature === t.signature
+    );
+});
+
+/** Chunk decoder (D35): arbitrary data is an object / array or a ChunkError, never anything else. */
+export const chunkDecode = fc.property(jsonish, (data) => {
+    try {
+        const v = decodeChunk(data);
+        return typeof v === "object" && v !== null;
+    } catch (err) {
+        return err instanceof ChunkError;
+    }
+});

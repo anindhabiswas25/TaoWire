@@ -222,14 +222,22 @@ fn conformance_twresp() {
                 }
             }
             "stream_ed25519" => {
-                let all: Vec<u8> = i["chunks_base64"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .flat_map(|c| b64(c.as_str().unwrap()))
-                    .collect();
-                let digest = body_sha256(&all);
+                let mut d = tensorwire_btauth::sse::StreamDigest::new();
+                for c in i["chunks_base64"].as_array().unwrap() {
+                    let data = b64(c.as_str().unwrap());
+                    tensorwire_btauth::sse::decode_chunk(&data).expect("chunk");
+                    d.update(&data);
+                }
+                let digest = d.hex();
                 assert_eq!(digest, e["digest"], "{id}");
+                assert_eq!(d.count(), e["count"].as_u64().unwrap(), "{id}");
+                let t = tensorwire_btauth::sse::Trailer {
+                    digest: digest.clone(),
+                    count: d.count(),
+                    signature: e["signature"].as_str().map(str::to_owned),
+                };
+                let encoded = tensorwire_btauth::sse::encode_trailer(&t);
+                assert_eq!(tensorwire_btauth::sse::parse_trailer(&encoded).unwrap(), t, "{id}");
                 let responder = i["responder_ss58"].as_str().unwrap();
                 let p = response_payload(Scheme::Ed25519, nonce, sender, responder, 200, &digest);
                 assert_eq!(p, e["payload_utf8"].as_str().unwrap().as_bytes(), "{id}");

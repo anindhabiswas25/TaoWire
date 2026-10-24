@@ -14,6 +14,9 @@ export {
     ClientError,
     type ClientOptions,
     type MinerResponse,
+    MinerStream,
+    type StreamOptions,
+    type UnverifiedChunk,
     type SignedRequest,
     Signer,
     requestTarget,
@@ -33,6 +36,31 @@ export { NonceSource, wallClockNs } from "./nonce.js";
 export { PROTOCOL, type PayloadInput, type Scheme, bodySha256, buildPayload } from "./payload.js";
 export { DEFAULT_HOTKEY_LIMIT, type RateLimit, TokenBuckets } from "./ratelimit.js";
 export { SS58Error, SS58_LENGTH, SS58_PREFIX, decodeSS58, encodeSS58 } from "./ss58.js";
+export {
+    CONTENT_TYPE,
+    ChunkError,
+    DEFAULT_STREAMS_PER_CALLER,
+    EVENT_CHUNK,
+    EVENT_END,
+    IDLE_S_RANGE,
+    MAX_BYTES_RANGE,
+    MAX_CHUNK_DEPTH,
+    MAX_S_RANGE,
+    type SSEEvent,
+    SSEParser,
+    STREAMS_PER_CALLER_RANGE,
+    StreamDigest,
+    StreamLimits,
+    StreamSlots,
+    TRAILER_RESERVE,
+    type Trailer,
+    TrailerError,
+    decodeChunk,
+    encodeChunk,
+    encodeEvent,
+    encodeTrailer,
+    parseTrailer,
+} from "./streaming.js";
 export { MemoryStore, type NonceStore, type StoreClocks, secondsToNs } from "./store.js";
 export {
     RESP_HEADER,

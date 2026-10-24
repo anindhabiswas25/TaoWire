@@ -41,18 +41,19 @@ export const CLIENT_CODES = [
     "tw.invalid_response",
 ] as const;
 
-/** A client-side code of Appendix A. */
-export type ClientCode = (typeof CLIENT_CODES)[number];
+/** A client-side code of Appendix A; `tw.http_<status>` is an answer without a known `tw.*` code. */
+export type ClientCode = (typeof CLIENT_CODES)[number] | `tw.http_${number}`;
 
 /** Any code this package raises. */
 export type Code = ServerCode | ClientCode;
 
-function isServerCode(code: string): code is ServerCode {
+/** Whether `code` is a server-side code of Appendix A. */
+export function isServerCode(code: string): code is ServerCode {
     return Object.hasOwn(CATALOGUE, code);
 }
 
 function isClientCode(code: string): code is ClientCode {
-    return (CLIENT_CODES as readonly string[]).includes(code);
+    return (CLIENT_CODES as readonly string[]).includes(code) || /^tw\.http_[1-9][0-9]{2}$/.test(code);
 }
 
 /**

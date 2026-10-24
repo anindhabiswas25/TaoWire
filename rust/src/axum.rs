@@ -7,8 +7,13 @@
 //!     .layer(axum::middleware::from_fn_with_state(state, tensorwire_btauth::axum::protect));
 //! // handler: Extension(caller): Extension<Caller>, body: Bytes
 //! ```
+//!
+//! A streaming route (spec 9.2) answers with [`stream_response`], taking the
+//! [`StreamContext`] the middleware puts into the request extensions.
 
+use std::convert::Infallible;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::body::{to_bytes, Body, Bytes};
 use axum::extract::{OriginalUri, Request, State};
@@ -16,9 +21,17 @@ use axum::http::{header, HeaderValue, StatusCode};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 
+use futures_util::{Stream, StreamExt as _};
+use tokio::sync::mpsc;
+use tokio::time::Instant;
+
 use crate::error::{codes, error_body, Error};
 use crate::keys::Keypair;
-use crate::twresp::sign_response;
+use crate::sse::{
+    encode_chunk, encode_event, encode_trailer, StreamDigest, StreamLimits, StreamSlot,
+    StreamSlots, Trailer, CONTENT_TYPE, EVENT_CHUNK, EVENT_END, TRAILER_RESERVE,
+};
+use crate::twresp::{response_payload, sign_response};
 use crate::verify::{Caller, Verifier};
 
 /// Default request body cap (`TW_MAX_BODY_BYTES`, 1 MiB).
@@ -31,7 +44,7 @@ pub const MAX_SIGNED_RESPONSE_BYTES: usize = 64 << 20;
 pub struct MinerAuth {
     verifier: Verifier,
     max_body_bytes: usize,
-    response_key: Option<Keypair>,
+    response_key: Option<Arc<Keypair>>,
 }
 
 impl MinerAuth {
@@ -54,7 +67,7 @@ impl MinerAuth {
             self.verifier.self_hotkey(),
             "response key must be the miner hotkey"
         );
-        self.response_key = Some(key);
+        self.response_key = Some(Arc::new(key));
         self
     }
 }
@@ -114,6 +127,9 @@ pub async fn protect(State(auth): State<Arc<MinerAuth>>, req: Request, next: Nex
         };
     parts.extensions.insert(caller.clone());
     parts.extensions.insert(body.clone());
+    parts
+        .extensions
+        .insert(StreamContext { caller: caller.clone(), key: auth.response_key.clone() });
     let resp = next.run(Request::from_parts(parts, Body::from(body))).await;
     match &auth.response_key {
         None => resp,
@@ -122,6 +138,9 @@ pub async fn protect(State(auth): State<Arc<MinerAuth>>, req: Request, next: Nex
 }
 
 async fn sign(key: &Keypair, caller: &Caller, resp: Response) -> Response {
+    if resp.extensions().get::<SseStream>().is_some() {
+        return resp; // signed by its tw-end trailer, never buffered
+    }
     let (mut parts, body) = resp.into_parts();
     let Ok(bytes): Result<Bytes, _> = to_bytes(body, MAX_SIGNED_RESPONSE_BYTES).await else {
         return error_response(&Error::new(codes::INTERNAL, "answer too large to sign"));
@@ -137,4 +156,235 @@ async fn sign(key: &Keypair, caller: &Caller, resp: Response) -> Response {
     }
     parts.headers.insert(header::CONTENT_LENGTH, HeaderValue::from(bytes.len()));
     Response::from_parts(parts, Body::from(bytes))
+}
+
+/// What [`protect`] puts into the request extensions for a streaming handler:
+/// the verified caller and the response key (if answers are signed).
+#[derive(Debug, Clone)]
+pub struct StreamContext {
+    /// The verified caller.
+    pub caller: Caller,
+    key: Option<Arc<Keypair>>,
+}
+
+/// Marks a response built by [`stream_response`]: [`protect`] passes it on
+/// unbuffered.
+#[derive(Debug, Clone, Copy)]
+struct SseStream;
+
+/// Error type a stream source may yield.
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+/// Abort reasons of a stream that ended without `tw-end` (spec 9.2, D29).
+pub mod abort {
+    /// The source yielded an error.
+    pub const HANDLER_ERROR: &str = "handler_error";
+    /// No chunk within the idle limit.
+    pub const IDLE_TIMEOUT: &str = "idle_timeout";
+    /// The whole stream took longer than `max_duration`.
+    pub const MAX_DURATION: &str = "max_duration";
+    /// The next chunk would pass `max_bytes`.
+    pub const MAX_BYTES: &str = "max_bytes";
+    /// A chunk that is not a JSON object or array, or holds a line break.
+    pub const BAD_CHUNK: &str = "bad_chunk";
+    /// The client went away.
+    pub const CANCELLED: &str = "cancelled";
+}
+
+/// Called with `(route, reason)` for every stream that ended without `tw-end`.
+pub type AbortHook = Arc<dyn Fn(&str, &str) + Send + Sync>;
+
+/// Settings of [`stream_response`].
+#[derive(Clone)]
+pub struct StreamConfig {
+    /// Stream limits (spec 12.1 defaults).
+    pub limits: StreamLimits,
+    /// Wait for the first chunk at most this long (default 10 s,
+    /// `TW_HANDLER_TIMEOUT_S`).
+    pub first_chunk_timeout: Duration,
+    /// Open streams per caller (D36); share one per process.
+    pub slots: Arc<StreamSlots>,
+    /// Names the route for [`StreamConfig::on_abort`].
+    pub route: String,
+    /// E.g. to count `tw_stream_aborted_total{side="miner",reason}`.
+    pub on_abort: Option<AbortHook>,
+}
+
+impl Default for StreamConfig {
+    fn default() -> Self {
+        Self {
+            limits: StreamLimits::default(),
+            first_chunk_timeout: Duration::from_secs(10),
+            slots: Arc::new(StreamSlots::default()),
+            route: String::new(),
+            on_abort: None,
+        }
+    }
+}
+
+impl std::fmt::Debug for StreamConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StreamConfig")
+            .field("limits", &self.limits)
+            .field("first_chunk_timeout", &self.first_chunk_timeout)
+            .field("route", &self.route)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Answer a protected request with an SSE stream and a signed `tw-end`
+/// trailer (spec 9.2). Each item of `source` is one chunk's JSON bytes (an
+/// object or array). In order:
+///
+/// 1. a stream slot for the caller (D36): when the caller holds the maximum,
+///    the answer is 429 `tw.rate_limited` with `Retry-After: 1` (signed by
+///    [`protect`]) and nothing is streamed;
+/// 2. the first item within `first_chunk_timeout`: an error is the signed
+///    JSON 500 `tw.handler_error` (an [`Error`] with a status is answered as
+///    it is), a stall the signed JSON 504 `tw.handler_timeout`;
+/// 3. `200 text/event-stream` with the `X-TW-Resp-*` identity headers, one
+///    `chunk` event per item, then `tw-end` (digest, count, signature bound
+///    to the request's nonce and sender).
+///
+/// After the first byte, a source error, a bad chunk, the idle limit, the
+/// whole-stream limit, `max_bytes` ([`TRAILER_RESERVE`] kept for the
+/// trailer) or a client disconnect ends the stream without `tw-end`, and the
+/// abort hook is called. The source is pulled by a task; the response body
+/// reads its frames through a one-frame channel, so the task stops at
+/// `max_duration` even when the client stops reading (the socket itself is
+/// then held by the server until TCP gives up; [`StreamSlots`] bounds how
+/// many such streams one caller can hold).
+pub async fn stream_response<S>(ctx: &StreamContext, cfg: &StreamConfig, source: S) -> Response
+where
+    S: Stream<Item = Result<Vec<u8>, BoxError>> + Send + 'static,
+{
+    let slot = match cfg.slots.acquire(&ctx.caller.hotkey) {
+        Ok(slot) => slot,
+        Err(e) => {
+            let mut resp = error_response(&e);
+            resp.headers_mut().insert(header::RETRY_AFTER, HeaderValue::from_static("1"));
+            return resp;
+        }
+    };
+    let mut source = Box::pin(source);
+    let first = match tokio::time::timeout(cfg.first_chunk_timeout, source.next()).await {
+        Err(_) => return error_response(&Error::new(codes::HANDLER_TIMEOUT, "no first chunk")),
+        Ok(Some(Err(e))) => {
+            return match e.downcast::<Error>() {
+                Ok(tw) if tw.status != 0 => error_response(&tw),
+                _ => error_response(&Error::new(codes::HANDLER_ERROR, "")),
+            };
+        }
+        Ok(Some(Ok(data))) => Some(data),
+        Ok(None) => None,
+    };
+    let (tx, mut rx) = mpsc::channel::<Bytes>(1);
+    let producer = Producer {
+        ctx: ctx.clone(),
+        limits: cfg.limits,
+        deadline: Instant::now() + cfg.limits.max_duration(),
+        tx,
+        _slot: slot,
+    };
+    let (route, hook) = (cfg.route.clone(), cfg.on_abort.clone());
+    tokio::spawn(async move {
+        if let Some(reason) = producer.run(first, source).await {
+            if let Some(hook) = hook {
+                hook(&route, reason);
+            }
+        }
+    });
+    let body = futures_util::stream::poll_fn(move |cx| {
+        rx.poll_recv(cx).map(|frame| frame.map(Ok::<_, Infallible>))
+    });
+    let mut resp = Response::new(Body::from_stream(body));
+    let h = resp.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static(CONTENT_TYPE));
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    h.insert("x-accel-buffering", HeaderValue::from_static("no"));
+    if let Some(key) = &ctx.key {
+        h.insert("x-tw-resp-version", HeaderValue::from_static("1"));
+        if let Ok(v) = HeaderValue::from_str(key.ss58()) {
+            h.insert("x-tw-resp-hotkey", v);
+        }
+        if key.scheme() == crate::payload::Scheme::Ed25519 {
+            h.insert("x-tw-resp-crypto", HeaderValue::from_static("ed25519"));
+        }
+    }
+    resp.extensions_mut().insert(SseStream);
+    resp
+}
+
+struct Producer {
+    ctx: StreamContext,
+    limits: StreamLimits,
+    deadline: Instant,
+    tx: mpsc::Sender<Bytes>,
+    _slot: StreamSlot, // released when the producer ends
+}
+
+impl Producer {
+    /// Send every chunk and the trailer; the abort reason, or `None` when
+    /// `tw-end` was handed over.
+    async fn run<S>(
+        self,
+        first: Option<Vec<u8>>,
+        mut source: std::pin::Pin<Box<S>>,
+    ) -> Option<&'static str>
+    where
+        S: Stream<Item = Result<Vec<u8>, BoxError>> + Send,
+    {
+        let budget = self.limits.max_bytes() - TRAILER_RESERVE;
+        let mut digest = StreamDigest::new();
+        let mut sent = 0u64;
+        let mut item = first;
+        while let Some(data) = item.take() {
+            let Ok(data) = encode_chunk(&data) else { return Some(abort::BAD_CHUNK) };
+            let Ok(frame) = encode_event(EVENT_CHUNK, data) else { return Some(abort::BAD_CHUNK) };
+            if sent + frame.len() as u64 > budget {
+                return Some(abort::MAX_BYTES);
+            }
+            sent += frame.len() as u64;
+            if let Some(reason) = self.send(frame).await {
+                return Some(reason);
+            }
+            digest.update(data);
+            tokio::select! {
+                next = source.next() => match next {
+                    None => {}
+                    Some(Ok(data)) => item = Some(data),
+                    Some(Err(_)) => return Some(abort::HANDLER_ERROR),
+                },
+                () = tokio::time::sleep(self.limits.idle()) => return Some(abort::IDLE_TIMEOUT),
+                () = tokio::time::sleep_until(self.deadline) => return Some(abort::MAX_DURATION),
+                () = self.tx.closed() => return Some(abort::CANCELLED),
+            }
+        }
+        let signature = self.ctx.key.as_ref().map(|key| {
+            let caller = &self.ctx.caller;
+            let payload = response_payload(
+                key.scheme(),
+                caller.nonce,
+                &caller.hotkey,
+                key.ss58(),
+                200,
+                &digest.hex(),
+            );
+            format!("0x{}", hex::encode(key.sign(&payload)))
+        });
+        let trailer = Trailer { digest: digest.hex(), count: digest.count(), signature };
+        if let Ok(frame) = encode_event(EVENT_END, &encode_trailer(&trailer)) {
+            // Handed over: a disconnect from here on is no abort.
+            let _ = self.send(frame).await;
+        }
+        None
+    }
+
+    async fn send(&self, frame: Vec<u8>) -> Option<&'static str> {
+        match tokio::time::timeout_at(self.deadline, self.tx.send(Bytes::from(frame))).await {
+            Err(_) => Some(abort::MAX_DURATION),
+            Ok(Err(_)) => Some(abort::CANCELLED),
+            Ok(Ok(())) => None,
+        }
+    }
 }

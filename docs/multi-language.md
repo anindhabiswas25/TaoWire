@@ -11,7 +11,7 @@ btauth/1 package for their language (spec 11). Status on `eng/lang` (Phase 5 Par
 | Server adapter | FastAPI | `net/http` `Middleware` | axum `protect` (feature) | Fastify plugin `btauth` (`/fastify`) |
 | Client | httpx | `Client` (`net/http`) | `client::Client` (reqwest, feature) | `Client` (fetch / undici) |
 | twresp/1 sign + verify | ✅ | ✅ | ✅ | ✅ |
-| SSE streaming with signed trailer | ✅ | digest verify only | digest verify only | digest verify only |
+| SSE streaming with signed trailer | ✅ | ✅ `ServeStream`, `(*Client).Stream` | ✅ `axum::stream_response`, `Client::stream` | ✅ `streamReply` (`/fastify`), `Client.stream` |
 | Caller policy / chain writes | native | via sidecar (not built yet) | via sidecar (not built yet) | `policy` hook; sidecar client not built yet |
 
 Package docs and quickstarts: [`go/README.md`](../go/README.md), [`rust/README.md`](../rust/README.md),
@@ -43,6 +43,37 @@ covers Redis stores too (Redis cannot see a step on the miner). Python reports i
 (`clock_step`) and `tw_clock_step_seconds`; Go has `(*Verifier).FailingClosed()` /
 `LastClockStep()`, Rust `Verifier::failing_closed()` / `last_clock_step()` for a server's readiness probe
 and metrics.
+
+## Streaming (spec 9.2, D29, D35, D36)
+
+Every package has the same four pieces as the Python reference (`tensorwire.extensions.streaming`): an
+incremental SSE parser (WHATWG rules, linear in the input, never fails), the chunk rule (D35: JSON objects or
+arrays only; nesting deeper than 128 is refused on both sides, see below), the strict `tw-end` parser and the
+running digest. Miner side, in this order: a stream slot for the caller (D36, 16 per process by default, 1–256;
+full → signed 429 `tw.rate_limited` with `Retry-After: 1`), the first chunk within the handler timeout (else the
+signed JSON 500 / 504), then `200 text/event-stream` with the `X-TW-Resp-*` identity headers, the chunks and the
+signed trailer. A handler error, a bad chunk, the idle limit, `max_s`, `max_bytes` or a disconnect ends the
+stream without `tw-end`; an abort hook reports the reason (`handler_error`, `idle_timeout`, `max_duration`,
+`max_bytes`, `bad_chunk`, `cancelled`). Client side: the three limits, with the idle clock restarting when the
+caller asks for the next chunk and no other read timeout on the open stream; chunks are handed out unverified
+until the trailer verifies.
+
+| | Go | Rust | TypeScript |
+|---|---|---|---|
+| Miner | `btauth.ServeStream(w, r, next ChunkFunc, StreamConfig)` inside a `Middleware` handler (the stream bypasses the signing buffer) | `axum::stream_response(&StreamContext, &StreamConfig, stream)`; `protect` passes it through unbuffered | `streamReply(request, reply, chunks, options)` in a `btauth` route |
+| Client | `(*Client).Stream(...)`, then `Next` / `Chunk` / `Err` | `Client::stream(...)`, then `next().await` / `finish()` | `client.stream(...)`, then `for await` / `result()` |
+| Slots | `StreamSlots`, `DefaultStreamSlots` | `sse::StreamSlots` (a dropped `StreamSlot` releases) | `StreamSlots`, `DEFAULT_STREAM_SLOTS` |
+| A client that stops reading | `max_s` is a write deadline (`http.ResponseController`) | the producer stops at `max_s`; hyper has no write deadline, so the socket stays until TCP gives up (bounded by the slots) | the socket is destroyed at `max_s` |
+
+Differences from the Python reference, all stricter: chunks nested deeper than 128 are refused (Python: about
+1000, its recursion limit; spec question in COORDINATION.md); a `tw-end` count written `-0` is refused (Python
+reads it as 0). Rust's `serde_json` refuses lone UTF-16 surrogate escapes in a trailer's strings (Python
+accepts them; a trailer never contains any).
+
+Interop without a chain: `conformance/interop/stream_check.py` (every language's stream client against the Python
+miner and the Python client against every language's miner, through a relay that tampers with, reorders, drops
+or adds chunks, tampers with, duplicates or removes the trailer, or adds an event after it; evidence in
+`reports/phase-5/stream-interop/`).
 
 ## TypeScript notes
 

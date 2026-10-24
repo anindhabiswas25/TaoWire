@@ -50,6 +50,9 @@ answer's twresp/1 signature verified.
 | `NewMemoryStore`, `NonceStore`; `redisstore.New` | Replay stores; the Redis one shares keys (`tw:n:<hotkey>:<nonce>`) with the Python kit |
 | `SignResponse`, `VerifyResponse`, `VerifyResponseDigest` | twresp/1 (spec 9.1; digest form for 9.2 streams) |
 | `Client.Do` | Signed request + verified answer; client codes `tw.timeout`, `tw.connect_error`, `tw.response_too_large`, `tw.bad_response_signature` |
+| `ServeStream`, `StreamConfig`, `ChunkFunc`, `StreamSlots` | SSE stream with a signed `tw-end` inside a `Middleware` handler (spec 9.2): per-caller slots (D36), first chunk before any byte, limits, abort hook |
+| `(*Client).Stream`, `Stream`, `StreamOptions`, `UnverifiedChunk` | Streaming query: unverified chunks, `Err() == nil` only after the trailer verified; `tw.invalid_response` for a chunk that is not a JSON object or array |
+| `SSEParser`, `DecodeChunk`, `EncodeChunk`, `ParseTrailer`, `EncodeTrailer`, `EncodeEvent`, `StreamDigest`, `StreamLimits` | The shared stream pieces (WHATWG SSE parser, D35 chunk rule, strict trailer) |
 | `DecodeSS58`, `EncodeSS58`, `IsWeakPublicKey` | Appendix D (prefix 42 only), weak-key rule (ADR-0010) |
 | `NewError`, `StatusOf`, `ErrorBody`, `WriteError` | Appendix A codes, statuses and the JSON error body |
 
@@ -71,4 +74,5 @@ go test ./btauth -run '^$' -fuzz FuzzVerify -fuzztime 5m
 ../scripts/go_tools.sh run govulncheck ./...
 ```
 
-Not yet in this package: SSE streaming helpers (spec 9.2) and the sidecar client (11.6).
+Fuzz targets: `FuzzVerify`, `FuzzSSEParser`, `FuzzParseTrailer`, `FuzzDecodeChunk`
+(`go test ./btauth -run '^$' -fuzz '^FuzzSSEParser$' -fuzztime 5m`).

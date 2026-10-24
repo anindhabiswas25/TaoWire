@@ -3,10 +3,18 @@
 import fc from "fast-check";
 import { beforeAll, expect, it } from "vitest";
 import { initCrypto } from "@tensorwire/btauth";
-import { arbitraryHeaders, mutatedGolden, ss58Decode, twrespHeaders } from "./properties.js";
+import {
+    arbitraryHeaders,
+    chunkDecode,
+    mutatedGolden,
+    sseSplits,
+    ss58Decode,
+    trailerParse,
+    twrespHeaders,
+} from "./properties.js";
 
 const seconds = Number(process.env.TW_FUZZ_SECONDS ?? "20");
-const share = (seconds * 1000) / 4;
+const share = (seconds * 1000) / 7;
 
 beforeAll(initCrypto);
 
@@ -31,3 +39,6 @@ fuzz("arbitraryHeaders", arbitraryHeaders);
 fuzz("mutatedGolden", mutatedGolden);
 fuzz("ss58Decode", ss58Decode);
 fuzz("twrespHeaders", twrespHeaders);
+fuzz("sseSplits", sseSplits);
+fuzz("trailerParse", trailerParse);
+fuzz("chunkDecode", chunkDecode);

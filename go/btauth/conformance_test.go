@@ -307,6 +307,7 @@ func TestConformanceTwresp(t *testing.T) {
 				ErrorCode  *string           `json:"error_code"`
 				BodySHA256 string            `json:"body_sha256"`
 				Digest     string            `json:"digest"`
+				Count      int               `json:"count"`
 				Payload    string            `json:"payload_utf8"`
 				Headers    map[string]string `json:"headers"`
 				Signature  string            `json:"signature"`
@@ -340,13 +341,21 @@ func TestConformanceTwresp(t *testing.T) {
 					t.Fatalf("code %v", err)
 				}
 			case "stream_ed25519":
-				var all []byte
+				d := NewStreamDigest()
 				for _, c := range i.Chunks {
-					all = append(all, b64(t, c)...)
+					data := b64(t, c)
+					if _, err := DecodeChunk(data); err != nil {
+						t.Fatal(err)
+					}
+					d.Update(data)
 				}
-				digest := BodySHA256(all)
-				if digest != e.Digest {
-					t.Fatalf("digest %s", digest)
+				digest := d.Hex()
+				if digest != e.Digest || d.Count != uint64(e.Count) {
+					t.Fatalf("digest %s count %d", digest, d.Count)
+				}
+				tr, err := ParseTrailer(EncodeTrailer(Trailer{Digest: digest, Count: d.Count, Signature: e.Signature}))
+				if err != nil || tr.Signature != e.Signature || tr.Digest != digest {
+					t.Fatalf("trailer round trip %+v %v", tr, err)
 				}
 				p := ResponsePayload(Ed25519, nonce, i.Sender, i.Responder, 200, digest)
 				if string(p) != e.Payload {

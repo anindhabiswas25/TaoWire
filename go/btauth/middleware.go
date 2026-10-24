@@ -22,7 +22,8 @@ type MiddlewareConfig struct {
 	// ResponseKey, when set, signs every answer of an authenticated request
 	// with twresp/1 (spec 9.1), errors included. It must be the miner's hotkey
 	// (the Verifier's SelfHotkey). The handler's answer is buffered to be
-	// signed, so streaming handlers need their own signing.
+	// signed; a handler streaming with ServeStream bypasses the buffer and
+	// signs the stream's tw-end trailer instead (spec 9.2).
 	ResponseKey *Keypair
 	// Logger receives one line per refusal (code and detail, never headers).
 	// nil = slog.Default().
@@ -34,7 +35,18 @@ type ctxKey int
 const (
 	callerKey ctxKey = iota
 	bodyKey
+	streamKey
 )
+
+// streamTarget lets ServeStream write to the connection directly: the
+// middleware's buffered writer (if any) is bypassed, and the middleware
+// writes nothing after a stream.
+type streamTarget struct {
+	w   http.ResponseWriter
+	key *Keypair
+	buf *bufferedWriter // nil when answers are not signed
+	log *slog.Logger
+}
 
 // CallerFrom returns the verified caller of a request that passed Middleware.
 func CallerFrom(ctx context.Context) (*Caller, bool) {
@@ -104,7 +116,9 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				refuse(e)
 				return
 			}
+			st := &streamTarget{w: w, key: cfg.ResponseKey, log: log}
 			ctx := context.WithValue(context.WithValue(r.Context(), callerKey, caller), bodyKey, body)
+			ctx = context.WithValue(ctx, streamKey, st)
 			r = r.WithContext(ctx)
 			r.Body = io.NopCloser(bytes.NewReader(body))
 			if cfg.ResponseKey == nil {
@@ -112,7 +126,11 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				return
 			}
 			buf := &bufferedWriter{header: http.Header{}, status: http.StatusOK}
+			st.buf = buf
 			next.ServeHTTP(buf, r)
+			if buf.streamed {
+				return // ServeStream answered on the connection itself
+			}
 			sig, err := SignResponse(cfg.ResponseKey, caller.Nonce, caller.Hotkey, buf.status, buf.body.Bytes())
 			if err != nil {
 				log.Error("btauth_response_sign_failed", "error", err.Error())
@@ -152,6 +170,7 @@ type bufferedWriter struct {
 	status      int
 	wroteHeader bool
 	body        bytes.Buffer
+	streamed    bool // ServeStream took over the connection
 }
 
 func (b *bufferedWriter) Header() http.Header { return b.header }

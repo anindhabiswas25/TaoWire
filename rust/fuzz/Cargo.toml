@@ -18,4 +18,18 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "sse"
+path = "fuzz_targets/sse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "trailer"
+path = "fuzz_targets/trailer.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]

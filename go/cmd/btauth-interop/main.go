@@ -4,11 +4,16 @@
 //	btauth-interop serve --addr 127.0.0.3:8095 --seed <hex> [--scheme sr25519]
 //	btauth-interop sign --url http://127.0.0.2:8094/v1/upper --seed <hex> --receiver <ss58> \
 //	    [--scheme ed25519] [--count 200] [--body '{"text":"hello"}']
+//	btauth-interop stream --url http://127.0.0.2:8094/v1/stream --seed <hex> --receiver <ss58> \
+//	    [--scheme ed25519] [--count 1] [--body '{"text":"hello"}']
 //
 // serve answers POST /v1/upper ({"text": s} -> {"result": upper(s)}) behind
-// btauth.Middleware with twresp/1 signing. sign sends count requests with a
-// fresh signature each and prints one JSON summary line: every answer must
-// be 200 with a verified twresp/1 signature. Seeds are public dev keys only.
+// btauth.Middleware with twresp/1 signing, and POST /v1/stream with an SSE
+// stream of five chunks {"i": n, "text": upper(s)} and a signed tw-end
+// (spec 9.2). sign sends count requests with a fresh signature each and
+// prints one JSON summary line: every answer must be 200 with a verified
+// twresp/1 signature. stream reads count streams the same way (conformance/
+// interop/stream_check.py). Seeds are public dev keys only.
 package main
 
 import (
@@ -57,6 +62,24 @@ func serve(addr string, k *btauth.Keypair) error {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"result": strings.ToUpper(req.Text)})
 	})))
+	mux.Handle("/v1/stream", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Text string `json:"text"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			btauth.WriteError(w, btauth.NewError("tw.invalid_request", err.Error()))
+			return
+		}
+		n := 0
+		next := func(context.Context) (any, error) {
+			if n == 5 {
+				return nil, io.EOF
+			}
+			n++
+			return map[string]any{"i": n - 1, "text": strings.ToUpper(req.Text)}, nil
+		}
+		btauth.ServeStream(w, r, next, btauth.StreamConfig{Route: "/v1/stream"})
+	})))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "ok") })
 	fmt.Printf("serving %s as %s\n", addr, k.SS58())
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
@@ -92,9 +115,39 @@ func sign(url, receiver, body string, count int, k *btauth.Keypair) error {
 	return nil
 }
 
+func stream(url, receiver, body string, count int, k *btauth.Keypair) error {
+	c := &btauth.Client{Signer: btauth.NewSigner(k)}
+	errs := map[string]int{}
+	ok := 0
+	var chunks []json.RawMessage
+	for i := 0; i < count; i++ {
+		s, err := c.Stream(context.Background(), "POST", url, []byte(body), receiver, btauth.StreamOptions{})
+		if err == nil {
+			for s.Next() {
+			}
+			err = s.Err()
+			chunks = s.Chunks()
+		}
+		if err != nil {
+			errs[err.(*btauth.Error).Code]++
+			continue
+		}
+		ok++
+	}
+	out, _ := json.Marshal(map[string]any{
+		"language": "go", "signer": k.SS58(), "scheme": k.Scheme(), "count": count, "ok": ok,
+		"errors": errs, "chunks": chunks,
+	})
+	fmt.Println(string(out))
+	if ok != count {
+		return fmt.Errorf("%d of %d ok", ok, count)
+	}
+	return nil
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: btauth-interop serve|sign [flags]")
+		fmt.Fprintln(os.Stderr, "usage: btauth-interop serve|sign|stream [flags]")
 		os.Exit(2)
 	}
 	fs := flag.NewFlagSet(os.Args[1], flag.ExitOnError)
@@ -113,6 +166,8 @@ func main() {
 			err = serve(*addr, k)
 		case "sign":
 			err = sign(*url, *receiver, *body, *count, k)
+		case "stream":
+			err = stream(*url, *receiver, *body, *count, k)
 		default:
 			err = fmt.Errorf("unknown mode %q", os.Args[1])
 		}
