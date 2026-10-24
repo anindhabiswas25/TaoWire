@@ -78,25 +78,35 @@ ValidatorRunner(MyValidator(), ValidatorSettings.from_env()).run()
 A complete working subnet (miner, validator, scoring, tests) is in
 [examples/text-ops-subnet](examples/text-ops-subnet), and `taowire init` creates the same project for you.
 
+## Install
+
+| Language | Install | Status |
+|---|---|---|
+| Python | `pip install "taowire[all]==0.1.0a1"` | ✅ on [PyPI](https://pypi.org/project/taowire/0.1.0a1/) |
+| Go | `go get github.com/anindhabiswas25/TaoWire/go@v0.1.0-alpha.1` | ✅ on the Go module proxy |
+| TypeScript | `npm install @taowire/btauth@alpha` | coming soon (npm) |
+| Rust | `taowire-btauth = "0.1.0-alpha.1"` | coming soon (crates.io) |
+
+The alpha is a **pre-release**: a plain `pip install taowire` skips it, so name the version (or use `pip install --pre taowire`).
+Until the TypeScript and Rust packages are published, use them from this repository ([typescript/](typescript), [rust/](rust)).
+
 ## Get started
 
-The alpha is not on PyPI, npm or crates.io yet. Until it is, install from this repository:
-
 ```bash
-git clone https://github.com/anindhabiswas25/TaoWire.git
-cd TaoWire
-uv venv ~/taowire-env && . ~/taowire-env/bin/activate
-uv pip install "./python[all]"
-taowire --version                 # taowire 0.1.0a1
+uv venv ~/taowire-env && . ~/taowire-env/bin/activate      # or: python -m venv ~/taowire-env
+uv pip install "taowire[all]==0.1.0a1"                      # or: pip install "taowire[all]==0.1.0a1"
+taowire --version                                           # taowire 0.1.0a1
 
-LOCALNET_PYTHON="$(command -v python)" ./scripts/localnet_up.sh   # local chain in Docker, a subnet and dev wallets
-taowire init ~/my-subnet          # a working example subnet
-taowire doctor --role miner       # checks keys, clock, chain, Redis and settings
+git clone --depth 1 https://github.com/anindhabiswas25/TaoWire.git ~/taowire-repo   # local-chain scripts
+LOCALNET_PYTHON="$(command -v python)" ~/taowire-repo/scripts/localnet_up.sh        # local chain in Docker, a subnet, dev wallets
+
+taowire init ~/my-subnet                                    # a working example subnet
+cd ~/my-subnet && uv pip install -e '.[dev]' && pytest -q   # 9 passed
+taowire doctor --role miner                                 # checks keys, clock, chain, Redis and settings
 ```
 
 Follow [docs/quickstart.md](docs/quickstart.md) from there: a miner and a validator on a local chain, up to
-weights revealed on chain, in under an hour. Once the packages are published, step 1 of the quickstart
-(`uv pip install "taowire[all]==0.1.0a1"`) replaces the source install.
+weights revealed on chain, in under an hour.
 
 ## Migrating a v10 subnet
 
