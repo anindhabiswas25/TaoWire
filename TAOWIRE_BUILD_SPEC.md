@@ -1,12 +1,12 @@
-# TensorWire — Build Specification
+# TaoWire — Build Specification
 
 **A production-grade networking starter kit for Bittensor v11 subnets, and the migration path for existing v10 subnets**
-Python core · btauth/1 native · v10 → v11 migration (compat layer, two-way bridge, `tensorwire migrate`) · TypeScript, Go and Rust support · testnet end-to-end
+Python core · btauth/1 native · v10 → v11 migration (compat layer, two-way bridge, `taowire migrate`) · TypeScript, Go and Rust support · testnet end-to-end
 
 | Field | Value |
 |---|---|
-| Document version | 1.9 |
-| Changes in 1.1 | Migration of existing v10 subnets is a first-class goal: new Section 10b, two-way legacy bridge (8.11), `tensorwire migrate` CLI, migration rollout runbook, success criterion S6, phase plan updated |
+| Document version | 1.10 |
+| Changes in 1.1 | Migration of existing v10 subnets is a first-class goal: new Section 10b, two-way legacy bridge (8.11), `taowire migrate` CLI, migration rollout runbook, success criterion S6, phase plan updated |
 | Changes in 1.2 | SDK version range instead of an exact pin (3, 18); staged metagraph staleness instead of a 15-minute hard stop (8.5.1); product metrics (1.6); relationship with the core team (1.7); sustainability and maintenance (Section 20) |
 | Changes in 1.3 | Phase 0–1 findings: protocol tag is a u8, default 87 (D1); stake units and `total_stake_tao` (D2, 2, 8.3); v10 marker (D3, 8.11.3); write retries and `set_weights` meaning (8.3); stricter shape rules (4.3); localnet facts (14.2, 14.5); 8.11.1 rewritten from captured vectors (by Engineer B) |
 | Changes in 1.4 | Phase 2 findings: component dependencies without a cycle (5.2); one time budget per query incl. the v10 fallback (8.8); v10 end-date wording, axon-signature scope, non-finite floats in v10 answers (8.11.2-8.11.3); `https-if-tls-published` refused until TLS ships (8.6); days-remaining gauge kept current (8.11); compat additions (10b.2); how S6 is counted (1.5, 13.8); `tw.legacy_auth_failed` covers unparseable bodies (Appendix A) |
@@ -15,13 +15,14 @@ Python core · btauth/1 native · v10 → v11 migration (compat layer, two-way b
 | Changes in 1.7 | Phase 3 re-gate and Phase 4 set-up: one partner subnet closes S6 for Phase 3 (D24, 17); D22's cost accepted (D25); `go 1.22` + x/crypto until 1.0 (D26, 18.4); retention ≥ 2 × window in the config table and `tw_clock_step_seconds` (D27, 12.2, Appendix B); `required_hash_fields` changes break a mixed fleet (D28, 10b.5); streaming rules and settings (D29, 9.2, 12.1, 13.4, 13.6); timelock behind the gateway, settings and `tw.timelock_unavailable` (D30, 8.10, 12.3, Appendix A); TLS modes, pinning and `tw.tls_pin_mismatch` (D31, 8.7.2, 12.2, 16.3); expired timelocked commits are re-planned (D32, 8.9); `StreamingSynapse` over the v10 wire not supported (D33, 10b.3); `compat.Subtensor` facade (D34, 10b.2.6); Phase 4 tasks and exit criteria (17) |
 | Changes in 1.8 | Phase 4 gate: stream chunks are JSON objects or arrays (D35, 9.2); `TW_STREAM_MAX_PER_CALLER` (D36, 9.2, 12.1); TLS with the v10 inbound bridge warns, never refused (D37, 16.3); `WeightsVersionKey` preflight before a timelocked commit (D38, 8.9); pinned cargo/npm tools before 1.0 (D39, 18.4); ADR-0001 exception for `bittensor_core` in the gateway (D40, 8.10); Phase 4 process (D41); the shared limiter fails closed and an attacker's 503 is a valid refusal (D42, 8.6.2, 13.6); Phase 5 carry-overs G6-1..G6-5 (17) |
 | Changes in 1.9 | Phase 5 gate: stream chunks nest at most 128 levels, the `tw-end` count is a plain non-negative integer and trailer strings hold no lone surrogates, in every language (D43, 9.2); `tw.sidecar_unauthorized` and the `/v1/serve-axon` refusal shapes (D44, 11.6, Appendix A); the 13.6 flood CPU bound is measured on a quiet host (D45, 13.6); Phase 6 carry-overs G7-1..G7-3 (17) |
+| Changes in 1.10 | The product is renamed **TaoWire** (was TensorWire; the name is taken by an unrelated project): package, CLI, module paths, state directory; every wire and operator name (`TW_*`, `tw.*`, `twresp/1`, `X-TW-Resp-*`, `tw-end`, `tw_*` metrics, `TWM*` rules) is unchanged (D46, 3.1, 6); a labelled alpha pre-release before Phase 6 so builders can try the kit and review it (D47, 18.5) |
 | Date | 24 October 2026 |
 | Target SDK | `bittensor>=11.3.0,<12` (baseline verified against 11.3.0, stable, released 7 Oct 2026; see Section 18.3) |
 | Target protocol | `btauth/1` (hotkey-signed HTTP, defined by the Bittensor v11 docs) |
 | Audience | Backend engineers and blockchain engineers building the kit |
 | Out of scope for this version | CI/CD workflows (`.github/`, pipelines), hosted services, a GUI |
 
-> **Product name.** "TensorWire" / `tensorwire` is a working name. Check that the name is free on PyPI, npm, crates.io and GitHub before Phase 0 ends, and rename everywhere with one search-and-replace if it is not.
+> **Product name.** "TaoWire" / `taowire` is a working name. Check that the name is free on PyPI, npm, crates.io and GitHub before Phase 0 ends, and rename everywhere with one search-and-replace if it is not.
 
 ---
 
@@ -42,7 +43,7 @@ This file is meant to be enough on its own. An engineer who has never used Bitte
 Rules for the build team:
 
 1. **The v11 SDK is the only way the Python code talks to the chain.** Never call a chain RPC directly from kit code, and never copy SDK logic into the kit.
-2. **All v11 calls go through one module** (`tensorwire/chain/gateway.py`). If v11 changes, you fix one file.
+2. **All v11 calls go through one module** (`taowire/chain/gateway.py`). If v11 changes, you fix one file.
 3. **Secure by default.** No setting may be needed to be safe. Settings that are unsafe must have names that say so (for example `unsafe_allow_unbound_receiver`).
 4. **The Python implementation is the reference.** Other languages must pass the shared conformance vectors (Section 11) before they can be released.
 5. When this document and the live v11 docs disagree, **the live docs win**. Update this document in the same pull request.
@@ -97,18 +98,18 @@ The problem is worse for **existing subnets** (about 128 on mainnet). Most start
 
 ### 1.2 The product
 
-TensorWire is an open-source kit that fills **only** that gap, securely and simply:
+TaoWire is an open-source kit that fills **only** that gap, securely and simply:
 
 | Deliverable | Language | What it is |
 |---|---|---|
-| `tensorwire` | Python | Miner server, validator client, security layer, chain gateway, validator loop, test harness, CLI |
-| `tensorwire.compat` | Python (part of `tensorwire`) | v10-shaped API (`Synapse`, `StreamingSynapse`, `Axon`, `Dendrite`, `AxonInfo`) on top of the kit, so existing subnets migrate by changing imports (Section 10b) |
-| Two-way legacy bridge | Python (part of `tensorwire`) | v10 validators → TensorWire miners, and TensorWire validators → v10 miners, during a time-boxed transition (Section 8.11) |
-| `tensorwire migrate` | Python CLI | Scans a v10 subnet repo, rewrites what is safe automatically, and reports the rest (Section 10b.4) |
-| `tensorwire-sidecar` | Python (part of `tensorwire`) | Local service that lets non-Python miners read the metagraph and publish their endpoint |
-| `@tensorwire/btauth` | TypeScript | btauth/1 sign + verify, nonce stores, Fastify plugin, fetch client |
-| `tensorwire/go/btauth` | Go | btauth/1 sign + verify, nonce stores, `net/http` middleware, client |
-| `tensorwire-btauth` | Rust | btauth/1 sign + verify, nonce stores, axum layer, reqwest client |
+| `taowire` | Python | Miner server, validator client, security layer, chain gateway, validator loop, test harness, CLI |
+| `taowire.compat` | Python (part of `taowire`) | v10-shaped API (`Synapse`, `StreamingSynapse`, `Axon`, `Dendrite`, `AxonInfo`) on top of the kit, so existing subnets migrate by changing imports (Section 10b) |
+| Two-way legacy bridge | Python (part of `taowire`) | v10 validators → TaoWire miners, and TaoWire validators → v10 miners, during a time-boxed transition (Section 8.11) |
+| `taowire migrate` | Python CLI | Scans a v10 subnet repo, rewrites what is safe automatically, and reports the rest (Section 10b.4) |
+| `taowire-sidecar` | Python (part of `taowire`) | Local service that lets non-Python miners read the metagraph and publish their endpoint |
+| `@taowire/btauth` | TypeScript | btauth/1 sign + verify, nonce stores, Fastify plugin, fetch client |
+| `taowire/go/btauth` | Go | btauth/1 sign + verify, nonce stores, `net/http` middleware, client |
+| `taowire-btauth` | Rust | btauth/1 sign + verify, nonce stores, axum layer, reqwest client |
 | `conformance/` | JSON + runners | Shared test vectors every language must pass |
 | `examples/text-ops-subnet` | Python (+ miners in TS/Go/Rust) | A working subnet used for local and testnet end-to-end tests |
 
@@ -116,7 +117,7 @@ TensorWire is an open-source kit that fills **only** that gap, securely and simp
 
 1. A new subnet team gets a working miner and validator on a local chain in **under one hour**, writing only their task logic and scoring logic.
 2. Every security trap listed in Section 16 is handled by default.
-3. Fully compatible with `btauth/1`, so a TensorWire miner can talk to any other correct btauth/1 client and the other way round.
+3. Fully compatible with `btauth/1`, so a TaoWire miner can talk to any other correct btauth/1 client and the other way round.
 4. Miners can be written in Python, TypeScript, Go or Rust; validators in Python (required) and TypeScript/Go/Rust (client signing only).
 5. Proven end to end on **Bittensor testnet**, across all four languages.
 6. An **existing template-derived v10 subnet** moves to v11 mostly by changing imports, and keeps working while its v10 and v11 miners and validators run side by side. The subnet owner controls each step of the rollout and can roll each step back (Section 10b.5).
@@ -125,9 +126,9 @@ The kit has two audiences with equal priority: **new subnet teams** (goals 1–5
 
 ### 1.4 Non-goals
 
-- Re-wrapping v11 features (staking, transfers, EVM, wallets). Users call v11 directly for these. For migration, `tensorwire migrate` points to the v11 replacement instead of wrapping it; the only exception is a small `compat.weights` helper (Section 10b.2.5).
+- Re-wrapping v11 features (staking, transfers, EVM, wallets). Users call v11 directly for these. For migration, `taowire migrate` points to the v11 replacement instead of wrapping it; the only exception is a small `compat.weights` helper (Section 10b.2.5).
 - Keeping v10 compatibility forever. Every legacy path has a mandatory end date.
-- Supporting v10 code that does not follow the template shape (custom Axon subclasses, monkeypatched Dendrite). `tensorwire migrate scan` flags these for manual work.
+- Supporting v10 code that does not follow the template shape (custom Axon subclasses, monkeypatched Dendrite). `taowire migrate scan` flags these for manual work.
 - Choosing a subnet's incentive mechanism. The kit gives scoring hooks, not scoring rules.
 - Hosting, dashboards or a GUI.
 - CI/CD workflows. Every check in this spec must be runnable by hand with one command (`just ...`), so CI can be added later without changing the code.
@@ -149,11 +150,11 @@ S1–S7 decide when 1.0 is **done**. They do not say whether the product **works
 
 ### 1.6 Product metrics (after release)
 
-Engineering criteria can all pass while nobody uses the kit. These metrics tell us whether TensorWire is succeeding. The PM reviews them monthly and publishes them in `docs/metrics.md`.
+Engineering criteria can all pass while nobody uses the kit. These metrics tell us whether TaoWire is succeeding. The PM reviews them monthly and publishes them in `docs/metrics.md`.
 
 | # | Metric | How it is measured | Target (3 months after 1.0) | Target (6 months) |
 |---|---|---|---|---|
-| M1 | Mainnet subnets running TensorWire | On-chain axons advertising `TW_PROTOCOL_TAG` (8.7.2; depends on the Phase 0 check that the protocol field is readable, 8.11.3), counted per subnet with a script over all metagraphs; cross-checked with public repos that depend on `tensorwire` | 5 | 15 |
+| M1 | Mainnet subnets running TaoWire | On-chain axons advertising `TW_PROTOCOL_TAG` (8.7.2; depends on the Phase 0 check that the protocol field is readable, 8.11.3), counted per subnet with a script over all metagraphs; cross-checked with public repos that depend on `taowire` | 5 | 15 |
 | M2 | Subnets migrated from v10 with the kit | Case studies, `migrate` users who report back, M1 subnets that were on v10 before | 3 | 8 |
 | M3 | Time from `pip install` to first weights on localnet | Timed sessions with new users (at least 5 per quarter), not the team | ≤ 60 min median | ≤ 45 min median |
 | M4 | Time from `migrate scan` to a running mixed fleet | Same, with teams of existing subnets | ≤ 1 working day | ≤ 4 hours |
@@ -171,13 +172,13 @@ The core team owns btauth/1, publishes FastAPI and httpx recipes in the official
 
 Plan:
 
-1. **Phase 0: first contact.** Share this spec with the core team (through the subtensor GitHub repo and the official community channels). Ask three things: are they planning an official kit or template; would they link TensorWire from the migration and signed-requests guides if it meets their bar; what would that bar be.
+1. **Phase 0: first contact.** Share this spec with the core team (through the subtensor GitHub repo and the official community channels). Ask three things: are they planning an official kit or template; would they link TaoWire from the migration and signed-requests guides if it meets their bar; what would that bar be.
 2. **Upstream, don't fork.** Anything that belongs in the protocol goes upstream first:
    - `twresp/1` (Section 9.1) is proposed as an official btauth response extension in Phase 1 (ADR-0004).
    - Bugs or gaps found in `bittensor.http_auth` are reported and fixed upstream, never patched around silently in the kit.
    - The conformance vectors (Section 11.7) are offered to the core team as shared vectors for all btauth/1 implementations.
-3. **Agree on boundaries.** Write down who owns what (for example: the SDK owns sign/verify and chain access; TensorWire owns servers, clients, policy, migration tooling) in `docs/adr/0009-core-team-boundaries.md`, and revisit it every quarter.
-4. **If they build an official kit anyway:** make TensorWire interoperate with it fully, offer our migration tooling and tests to it, and decide (1.6 decision point) whether to merge into it rather than compete.
+3. **Agree on boundaries.** Write down who owns what (for example: the SDK owns sign/verify and chain access; TaoWire owns servers, clients, policy, migration tooling) in `docs/adr/0009-core-team-boundaries.md`, and revisit it every quarter.
+4. **If they build an official kit anyway:** make TaoWire interoperate with it fully, offer our migration tooling and tests to it, and decide (1.6 decision point) whether to merge into it rather than compete.
 
 Owner: the PM. Progress is reported in the monthly metrics review.
 
@@ -298,7 +299,7 @@ Behaviour that matters for the kit (read from the source, not just the docs):
 | A8 | `verify` lower-cases header names itself and accepts a `Mapping[str, str]`. | Pass Starlette's headers directly or convert to `dict`. |
 | A9 | `now_ns` is injectable. | Tests can freeze time without monkeypatching. |
 | A10 | The SDK's verifier (via `sp_core`) also accepts signatures over the `<Bytes>…</Bytes>`-wrapped payload (Polkadot-JS `signRaw` compatibility). Other implementations are not required to accept it and must never produce it. | Kit verifiers in **every** language, Python included, **reject** it (strict mode; decision D22). The Python request verifier checks with `crypto.verify(strict=True)` after the SDK's own checks. The conformance vector expects `tw.auth_bad_signature` everywhere. |
-| A11 | `sp_core.verify` (and so `verify`) accepts the sender's address in **any** SS58 format, not only prefix 42 (checked in Phase 0). | Other implementations accept prefix 42 only (Appendix D); add a negative conformance vector. Python stays safe: the address string is signed, and policy looks callers up by their prefix-42 address, so such a caller fails closed. `tensorwire.crypto` accepts prefix 42 only. |
+| A11 | `sp_core.verify` (and so `verify`) accepts the sender's address in **any** SS58 format, not only prefix 42 (checked in Phase 0). | Other implementations accept prefix 42 only (Appendix D); add a negative conformance vector. Python stays safe: the address string is signed, and policy looks callers up by their prefix-42 address, so such a caller fails closed. `taowire.crypto` accepts prefix 42 only. |
 
 ### 3.3 Client and reads
 
@@ -375,8 +376,8 @@ wallet.hotkey.ss58_address
 ```
 
 - Accessing `wallet.hotkey` does not touch the coldkey. The kit must never access `wallet.coldkey`.
-- On Python 3.10 and 3.11, `resolve_signer` (and so `http_auth.sign`) runs `isinstance(obj, KeyedWallet)` on wallet-shaped objects that are not a `bt.Wallet` or a `Keypair`. Runtime protocols check members with `hasattr` before 3.12, so this **reads `obj.coldkey`**. `tensorwire.crypto.HotkeySigner` passes `obj.hotkey` itself to avoid it. A real `bt.Wallet` is not affected.
-- For signing arbitrary bytes (used by the kit's response signatures), the kit uses `bittensor.signing.resolve_signer(wallet, role="hotkey").sign(payload)`. For verifying, it uses `bittensor.sp_core.verify(payload, signature, ss58, crypto_type)`. Both are what `http_auth` itself uses. Wrap them in `tensorwire/crypto.py` so a rename only touches one file.
+- On Python 3.10 and 3.11, `resolve_signer` (and so `http_auth.sign`) runs `isinstance(obj, KeyedWallet)` on wallet-shaped objects that are not a `bt.Wallet` or a `Keypair`. Runtime protocols check members with `hasattr` before 3.12, so this **reads `obj.coldkey`**. `taowire.crypto.HotkeySigner` passes `obj.hotkey` itself to avoid it. A real `bt.Wallet` is not affected.
+- For signing arbitrary bytes (used by the kit's response signatures), the kit uses `bittensor.signing.resolve_signer(wallet, role="hotkey").sign(payload)`. For verifying, it uses `bittensor.sp_core.verify(payload, signature, ss58, crypto_type)`. Both are what `http_auth` itself uses. Wrap them in `taowire/crypto.py` so a rename only touches one file.
 - Local test keys: `from bittensor.keyfiles import Keypair; Keypair.create_from_uri("//Alice")` (sr25519). For ed25519 test keys: `from bittensor.wallets import CRYPTO_ED25519; Keypair.create_from_uri("//Alice", crypto_type=CRYPTO_ED25519)`. A raw `Keypair` can be passed anywhere the SDK expects a wallet, including `http_auth.sign`.
 
 ### 3.7 Timelock
@@ -407,7 +408,7 @@ This section restates the protocol so implementations in any language can be wri
 |---|---|---|
 | `X-Bittensor-Version` | `1` | yes |
 | `X-Bittensor-Hotkey` | sender hotkey, SS58 | yes |
-| `X-Bittensor-Receiver` | receiver hotkey, SS58 | yes in TensorWire (the protocol allows omitting it; servers reject by default) |
+| `X-Bittensor-Receiver` | receiver hotkey, SS58 | yes in TaoWire (the protocol allows omitting it; servers reject by default) |
 | `X-Bittensor-Nonce` | Unix time in **nanoseconds**, decimal string | yes |
 | `X-Bittensor-Crypto` | `ed25519`; omitted entirely for sr25519 | only for ed25519 |
 | `X-Bittensor-Signature` | `0x` + lowercase hex of the signature | yes |
@@ -439,10 +440,10 @@ Rules:
 ### 4.3 Verification order (normative)
 
 1. **Shape.** All required headers present and parseable; version is `1`; scheme (if present) is known. Signature is hex (an optional `0x` prefix is stripped). Else `MalformedAuth`.
-   TensorWire verifiers are **stricter than the SDK** here, in every language, and reject with `tw.auth_malformed`: a sender address that is not SS58 prefix 42 (fact A11); any duplicated `X-Bittensor-*` header; a nonce that is not `[0-9]{1,20}`; an `X-Bittensor-Crypto` value other than exactly `ed25519` or `sr25519`; a sender value that is not exactly **48 characters** (every prefix-42 SS58 address of a 32-byte key has 48), checked **before** any base58 decoding, because base58 decoding is quadratic in the input length and runs before authentication (decision D19); a signature that is not hex digits only (no whitespace or other characters, which some hex decoders skip). Each has a vector in `negative.json`.
+   TaoWire verifiers are **stricter than the SDK** here, in every language, and reject with `tw.auth_malformed`: a sender address that is not SS58 prefix 42 (fact A11); any duplicated `X-Bittensor-*` header; a nonce that is not `[0-9]{1,20}`; an `X-Bittensor-Crypto` value other than exactly `ed25519` or `sr25519`; a sender value that is not exactly **48 characters** (every prefix-42 SS58 address of a 32-byte key has 48), checked **before** any base58 decoding, because base58 decoding is quadratic in the input length and runs before authentication (decision D19); a signature that is not hex digits only (no whitespace or other characters, which some hex decoders skip). Each has a vector in `negative.json`.
 2. **Receiver.** `X-Bittensor-Receiver` must equal the server's hotkey. Missing receiver is rejected unless explicitly allowed. Else `WrongReceiver`.
 3. **Freshness.** `now - nonce <= max_age` (default 10 s) and `nonce - now <= allowed_skew` (default 2 s). Else `StaleRequest`.
-4. **Signature.** Rebuild the payload from the *received* method, target and body (always recompute the body hash). Decode the sender's SS58. Verify under the declared scheme **only**; never try both. Address or signature that cannot be decoded → `MalformedAuth`. Invalid signature → `BadSignature`. TensorWire verifiers also refuse **weak public keys** whose "universal" signature verifies for any payload (the sr25519 identity point, ed25519 small-order points) with `BadSignature`, even where the SDK accepts them (decision D20, ADR-0010).
+4. **Signature.** Rebuild the payload from the *received* method, target and body (always recompute the body hash). Decode the sender's SS58. Verify under the declared scheme **only**; never try both. Address or signature that cannot be decoded → `MalformedAuth`. Invalid signature → `BadSignature`. TaoWire verifiers also refuse **weak public keys** whose "universal" signature verifies for any payload (the sr25519 identity point, ed25519 small-order points) with `BadSignature`, even where the SDK accepts them (decision D20, ADR-0010).
 5. **Replay.** The `(hotkey, nonce)` pair must not have been accepted before within the window. Consult the store only after step 4 succeeds. Else `ReplayedRequest`.
 
 Clients sign a fresh nonce for every attempt, including retries of an identical body.
@@ -466,7 +467,7 @@ See Appendix C. The ed25519 vector has a fixed expected signature. sr25519 signa
 │ L3  Subnet code (user)                                               │
 │     task handlers (miner) · challenge generation + scoring (validator)│
 ├──────────────────────────────────────────────────────────────────────┤
-│ L2  TensorWire                                                        │
+│ L2  TaoWire                                                        │
 │  ┌──────────────┐ ┌──────────────────┐ ┌───────────────────────────┐ │
 │  │ Miner server │ │ Validator client │ │ Validator loop + scoring  │ │
 │  └──────┬───────┘ └────────┬─────────┘ └─────────────┬─────────────┘ │
@@ -510,7 +511,7 @@ See Appendix C. The ed25519 vector has a fixed expected signature. sr25519 signa
 | `observability` | structlog JSON logs, Prometheus metrics, request IDs | `structlog`, `prometheus_client` |
 | `sidecar` | Localhost HTTP API: metagraph snapshot, serve-axon, health | gateway |
 | `testing` | `FakeChain`, signed test client, fixtures, time control | — |
-| `cli` | `tensorwire init / doctor / sidecar / conformance / bench` | `typer` |
+| `cli` | `taowire init / doctor / sidecar / conformance / bench` | `typer` |
 
 ### 5.3 Request lifecycle: miner side
 
@@ -563,7 +564,7 @@ select miners from metagraph (axon != None, policy filters, sampling)
    │ Miner host                                          │
    │ reverse proxy (optional TLS)  →  N uvicorn workers  │
    │ Redis (REQUIRED when N > 1)  ·  firewall            │
-   │ non-Python miner: app + tensorwire-sidecar (local)  │
+   │ non-Python miner: app + taowire-sidecar (local)  │
    └─────────────────────────────────────────────────────┘
 ```
 
@@ -588,7 +589,7 @@ Attackers and what they can do:
 One monorepo. No `.github/` directory in this version.
 
 ```
-tensorwire/
+taowire/
 ├── README.md                          # 60-second pitch, quickstart, links
 ├── LICENSE                            # Apache-2.0
 ├── SECURITY.md                        # disclosure policy, supported versions
@@ -627,7 +628,7 @@ tensorwire/
 ├── python/
 │   ├── pyproject.toml
 │   ├── uv.lock                        # committed
-│   ├── src/tensorwire/
+│   ├── src/taowire/
 │   │   ├── __init__.py                # public API re-exports, __version__
 │   │   ├── py.typed
 │   │   ├── version.py
@@ -673,15 +674,15 @@ tensorwire/
 │   │   │   └── legacy_v10/            # two-way bridge (Section 8.11)
 │   │   │       ├── __init__.py
 │   │   │       ├── wire.py            # v10 headers, body hash, signed message
-│   │   │       ├── server.py          # v10 Dendrite → TensorWire miner
-│   │   │       └── client.py          # TensorWire validator → v10 Axon
+│   │   │       ├── server.py          # v10 Dendrite → TaoWire miner
+│   │   │       └── client.py          # TaoWire validator → v10 Axon
 │   │   ├── compat/                    # v10-shaped API (Section 10b.2)
 │   │   │   ├── __init__.py            # Synapse, StreamingSynapse, TerminalInfo, AxonInfo, Axon, Dendrite
 │   │   │   ├── synapse.py
 │   │   │   ├── axon.py
 │   │   │   ├── dendrite.py
 │   │   │   └── weights.py
-│   │   ├── migrate/                   # `tensorwire migrate` (Section 10b.4)
+│   │   ├── migrate/                   # `taowire migrate` (Section 10b.4)
 │   │   │   ├── __init__.py
 │   │   │   ├── rules.py               # removed-symbol table → replacement + doc link
 │   │   │   ├── scan.py                # static scan, report (text/JSON/Markdown)
@@ -702,7 +703,7 @@ tensorwire/
 │   │   │   └── pytest_plugin.py       # fixtures exposed via entry point
 │   │   └── cli/
 │   │       ├── __init__.py
-│   │       ├── main.py                # `tensorwire` command
+│   │       ├── main.py                # `taowire` command
 │   │       ├── init_cmd.py            # scaffold a new subnet
 │   │       ├── doctor.py
 │   │       ├── sidecar_cmd.py
@@ -721,7 +722,7 @@ tensorwire/
 │   ├── package.json                   # npm workspaces
 │   ├── tsconfig.base.json
 │   └── packages/
-│       ├── btauth/                    # @tensorwire/btauth
+│       ├── btauth/                    # @taowire/btauth
 │       │   ├── package.json
 │       │   ├── src/{index,payload,sign,verify,ss58,nonce,errors}.ts
 │       │   ├── src/stores/{memory,redis}.ts
@@ -731,7 +732,7 @@ tensorwire/
 │       └── miner-example/             # text-ops miner in TS
 │
 ├── go/
-│   ├── go.mod                         # module github.com/<org>/tensorwire/go
+│   ├── go.mod                         # module github.com/<org>/taowire/go
 │   ├── btauth/{payload,sign,verify,ss58,nonce,errors,middleware,client}.go
 │   ├── btauth/stores/{memory,redis}.go
 │   ├── btauth/*_test.go
@@ -739,7 +740,7 @@ tensorwire/
 │
 ├── rust/
 │   ├── Cargo.toml                     # workspace
-│   ├── tensorwire-btauth/
+│   ├── taowire-btauth/
 │   │   ├── Cargo.toml
 │   │   └── src/{lib,payload,sign,verify,ss58,nonce,error,axum,client}.rs
 │   │   └── tests/
@@ -763,7 +764,7 @@ tensorwire/
 │   ├── migrations/
 │   │   └── template-v10-to-v11/       # the archived template, before and after (diff kept small)
 │   │       ├── before/                # pinned copy of the v10 template (licence permitting)
-│   │       ├── after/                 # same code on tensorwire.compat
+│   │       ├── after/                 # same code on taowire.compat
 │   │       └── mixed-fleet.yml        # v10 + v11 miners and validators on localnet
 │   └── text-ops-subnet/
 │       ├── README.md
@@ -781,8 +782,8 @@ tensorwire/
 │   │   ├── localnet.yml               # subtensor-localnet + redis
 │   │   └── testnet-node.yml           # optional own testnet lite node
 │   └── systemd/
-│       ├── tensorwire-miner.service
-│       └── tensorwire-validator.service
+│       ├── taowire-miner.service
+│       └── taowire-validator.service
 │
 └── scripts/
     ├── localnet_up.sh                 # start chain, create wallets, fund, register
@@ -817,7 +818,7 @@ test:
     cd rust && cargo test
 
 conformance:
-    cd python && uv run tensorwire conformance --vectors ../conformance/vectors
+    cd python && uv run taowire conformance --vectors ../conformance/vectors
     cd typescript && npm run conformance
     cd go && go test ./btauth -run Conformance
     cd rust && cargo test --test conformance
@@ -833,7 +834,7 @@ migration-test:
 mixed-fleet:
     ./scripts/legacy_venv.sh && cd python && uv run pytest -m "localnet and mixed_fleet" tests/localnet
 bench:
-    cd python && uv run tensorwire bench --duration 60
+    cd python && uv run taowire bench --duration 60
 audit:
     cd python && uv run pip-audit
     cd typescript && npm audit --audit-level=high
@@ -861,8 +862,8 @@ Each decision gets a short ADR file in `docs/adr/`. Summary:
 
 **ADR-0004: Responses are signed with a kit extension, `twresp/1`.**
 *Why:* btauth/1 authenticates requests only. Validators that score miners need to know the response really came from that miner, unmodified, for that request.
-*Consequence:* A separate, versioned header set (`X-TW-Resp-*`). It does not reuse reserved `X-Bittensor-*` names. It is on by default in TensorWire and ignored by non-TensorWire clients.
-*Upstream:* A TensorWire-only protocol risks splitting the ecosystem. In Phase 1 the spec in Section 9.1 is proposed to the core team as an official btauth response extension (Section 1.7). If they accept it (possibly with changes), the kit switches to the official headers in the next minor release and keeps accepting `X-TW-Resp-*` for at least one more minor release. If they decline, `twresp/1` stays, documented as a TensorWire extension, and the reason is recorded here.
+*Consequence:* A separate, versioned header set (`X-TW-Resp-*`). It does not reuse reserved `X-Bittensor-*` names. It is on by default in TaoWire and ignored by non-TaoWire clients.
+*Upstream:* A TaoWire-only protocol risks splitting the ecosystem. In Phase 1 the spec in Section 9.1 is proposed to the core team as an official btauth response extension (Section 1.7). If they accept it (possibly with changes), the kit switches to the official headers in the next minor release and keeps accepting `X-TW-Resp-*` for at least one more minor release. If they decline, `twresp/1` stays, documented as a TaoWire extension, and the reason is recorded here.
 
 **ADR-0005: SQLite for validator score state.**
 *Why:* Validators must survive restarts without losing score history, and SQLite is zero-ops, transactional and in the standard library.
@@ -874,7 +875,7 @@ Each decision gets a short ADR file in `docs/adr/`. Summary:
 
 **ADR-0007: A v10-shaped compat layer is part of the kit, not a separate package.**
 *Why:* Most existing subnets are template forks. If `Synapse`, `axon.attach(...)` and `dendrite(axons, synapse)` keep their shape, migration becomes an import change instead of a rewrite. Keeping it in the main package means it gets the same security defaults and the same release cycle.
-*Consequence:* `tensorwire.compat` is a thin layer over `Miner` and `ValidatorClient`; it adds no security logic of its own. It is supported for the 1.x line. New projects are pointed at the native API; `compat` is documented as "for migrating code".
+*Consequence:* `taowire.compat` is a thin layer over `Miner` and `ValidatorClient`; it adds no security logic of its own. It is supported for the 1.x line. New projects are pointed at the native API; `compat` is documented as "for migrating code".
 
 **ADR-0008: The v10 wire format is re-implemented; the kit never depends on bittensor v10.**
 *Why:* `bittensor==10.x` and `bittensor==11.x` cannot be installed together, and the v10 SDK gets no more releases. The legacy wire format is small (headers, a sha3-256 body hash, one sr25519 signature over a dotted string), so the kit implements it in `extensions/legacy_v10/wire.py` using `crypto.py`.
@@ -888,7 +889,7 @@ Each decision gets a short ADR file in `docs/adr/`. Summary:
 
 ```toml
 [project]
-name = "tensorwire"
+name = "taowire"
 requires-python = ">=3.10,<3.15"
 dependencies = [
   "bittensor>=11.3.0,<12",    # range, not a pin: users must be able to take SDK fixes (Section 3, 18.3)
@@ -905,16 +906,16 @@ dependencies = [
 [project.optional-dependencies]
 redis = ["redis>=5.0,<6"]
 ntp = ["ntplib>=0.4"]
-migrate = ["libcst>=1.4"]               # `tensorwire migrate` codemods
-all = ["tensorwire[redis,ntp,migrate]"]
+migrate = ["libcst>=1.4"]               # `taowire migrate` codemods
+all = ["taowire[redis,ntp,migrate]"]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "hypothesis>=6.100", "respx>=0.21",
        "mypy>=1.10", "ruff>=0.5", "pip-audit>=2.7", "import-linter>=2.0"]
 
 [project.scripts]
-tensorwire = "tensorwire.cli.main:app"
+taowire = "taowire.cli.main:app"
 
 [project.entry-points.pytest11]
-tensorwire = "tensorwire.testing.pytest_plugin"
+taowire = "taowire.testing.pytest_plugin"
 ```
 
 Use `uv` for locking. Commit `uv.lock`. Version ranges above are what users get; the lock file pins exact versions for the kit's own development and tests, and those versions are recorded in the compatibility matrix (Section 18.2). Never narrow a published range to an exact `==` pin; if an SDK release breaks the kit, exclude that release (`!=11.4.0`) and ship a fix.
@@ -1039,7 +1040,7 @@ class RequestSigner:
                                  receiver_ss58=receiver_ss58, nonce_ns=self._nonce.next())
 ```
 
-Multi-process validators: nonce collisions across processes are impossible only if each process uses a different hotkey, or the nonce clock is shared. **Rule:** one validator hotkey = one signing process. `tensorwire doctor` warns if it detects two processes with the same hotkey via a lock file (`~/.tensorwire/locks/<hotkey>.lock`).
+Multi-process validators: nonce collisions across processes are impossible only if each process uses a different hotkey, or the nonce clock is shared. **Rule:** one validator hotkey = one signing process. `taowire doctor` warns if it detects two processes with the same hotkey via a lock file (`~/.taowire/locks/<hotkey>.lock`).
 
 #### 8.4.2 Verifier (`auth/verifier.py`)
 
@@ -1145,7 +1146,7 @@ Policies can be set per route (`@miner.route(..., policy=...)`). The default for
 - Refresh every `TW_METAGRAPH_REFRESH_S` (default 120 s) in a background task. Use jitter of ±10%.
 - On refresh failure: keep the old snapshot, increment `tw_metagraph_refresh_failures_total`, back off, and try every endpoint in `TW_CHAIN_FALLBACKS`.
 
-**Staleness is handled in three stages, not one hard stop.** Why: a hard 503 after 15 minutes means a single outage of a shared chain endpoint makes **every** TensorWire miner stop answering at the same moment, so they all get scored as failed and lose emissions. The data it protects changes slowly (validator permits update once per epoch, about 72 minutes), and operators who get hurt by a too-strict check switch it off entirely, which is worse.
+**Staleness is handled in three stages, not one hard stop.** Why: a hard 503 after 15 minutes means a single outage of a shared chain endpoint makes **every** TaoWire miner stop answering at the same moment, so they all get scored as failed and lose emissions. The data it protects changes slowly (validator permits update once per epoch, about 72 minutes), and operators who get hurt by a too-strict check switch it off entirely, which is worse.
 
 | Stage | Snapshot age | Behaviour | `/readyz` |
 |---|---|---|---|
@@ -1156,7 +1157,7 @@ Policies can be set per route (`@miner.route(..., policy=...)`). The default for
 - The "known callers" set is in memory (hotkey → last accepted time), filled only after full policy checks pass, and cleared as soon as a fresh snapshot arrives (the fresh snapshot then decides).
 - Trade-off, documented in `docs/security.md`: a validator that loses its permit or is deregistered during a long chain outage keeps access until the miner can read the chain again. Unknown or newly permitted callers are never let in on stale data.
 - `TW_METAGRAPH_STRICT=1` restores a full 503 for everyone past max age, for subnets that prefer it.
-- Docs and `tensorwire doctor` recommend at least one entry in `TW_CHAIN_FALLBACKS` (or an own lite node), because a shared public endpoint is the most likely cause of this situation.
+- Docs and `taowire doctor` recommend at least one entry in `TW_CHAIN_FALLBACKS` (or an own lite node), because a shared public endpoint is the most likely cause of this situation.
 - Build a `dict[hotkey, NeuronView]` index on each refresh (O(1) lookups).
 - Startup blocks until the first successful fetch or `TW_STARTUP_TIMEOUT_S` (default 120 s), then exits non-zero.
 
@@ -1202,7 +1203,7 @@ Default `TW_MAX_BODY_BYTES` = 1 MiB; per-route override. Also set uvicorn `--lim
 #### 8.7.1 Public API
 
 ```python
-from tensorwire import Miner, Caller, RouteContext
+from taowire import Miner, Caller, RouteContext
 from pydantic import BaseModel
 
 class TransformRequest(BaseModel):
@@ -1250,7 +1251,7 @@ Scheme selection: the subnet declares `TW_SCHEME_POLICY` = `http` | `https` | `h
 
 Per mode (D31): `http` — plain HTTP to every miner. `https` — HTTPS to every miner; the certificate's public key is pinned against the published `ServeAxonTls` key when one exists, otherwise normal CA verification applies; a miner reachable only over HTTP fails with `tw.connect_error`. `https-if-tls-published` — pinned HTTPS for miners with a published key, plain HTTP for miners without one. In every mode a pin mismatch is `tw.tls_pin_mismatch` and the kit **never falls back to HTTP** for a miner that published a key.
 
-**Protocol tag.** `ServeAxon.protocol` is a subnet-defined number stored on chain (default 4). TensorWire publishes `protocol=TW_PROTOCOL_TAG` (default `87`, 0x57 "W"). The on-chain field is a **u8** (0–255; larger values fail to encode), so collisions with other subnets' values are possible; it only weakens the M1 count and the 8.11.3 hint, never security (decision D1). Validators may filter to miners advertising it. Document this; it is advisory, not security.
+**Protocol tag.** `ServeAxon.protocol` is a subnet-defined number stored on chain (default 4). TaoWire publishes `protocol=TW_PROTOCOL_TAG` (default `87`, 0x57 "W"). The on-chain field is a **u8** (0–255; larger values fail to encode), so collisions with other subnets' values are possible; it only weakens the M1 count and the 8.11.3 hint, never security (decision D1). Validators may filter to miners advertising it. Document this; it is advisory, not security.
 
 #### 8.7.3 Lifecycle (`miner/lifecycle.py`)
 
@@ -1392,10 +1393,10 @@ Implementation:
 
 During a migration, miners and validators upgrade at different times. Every pairing must work until the subnet owner ends the transition:
 
-| | v10 miner (old Axon) | TensorWire miner |
+| | v10 miner (old Axon) | TaoWire miner |
 |---|---|---|
 | **v10 validator (old Dendrite)** | works today, untouched | **server side** (8.11.2) |
-| **TensorWire validator** | **client side** (8.11.3) | btauth/1 |
+| **TaoWire validator** | **client side** (8.11.3) | btauth/1 |
 
 Both sides are opt-in and time-boxed. Neither side imports bittensor v10 (ADR-0008).
 
@@ -1440,7 +1441,7 @@ Confirmed byte for byte against a real `bittensor==10.5.0` Dendrite and Axon (`c
 - It does **not** cover the HTTP method, the path, or any body field outside `required_hash_fields`. Those fields can be changed on the wire without breaking the signature (vector N8). Fields that matter for scoring must be in `required_hash_fields`; `migrate scan` warns when a Synapse has an empty or partial list.
 - Successful responses are not signed at all; error-response signatures cover neither body nor status. There is no response signature that v10 Dendrites check.
 
-#### 8.11.2 Server side: v10 validators → TensorWire miner (`server.py`)
+#### 8.11.2 Server side: v10 validators → TaoWire miner (`server.py`)
 
 - Enabled with `TW_LEGACY_V10_UNTIL=<ISO date>`. v10 requests are accepted **through the day before `<date>` (UTC)**; from `<date>` on they get 410 `tw.legacy_disabled`, in a running process and after a restart alike. The miner refuses to start if `<date>` is today or earlier, or more than 180 days away. There is no "forever" option.
 - Mounted automatically for routes declared through `compat.Synapse` (Section 10b.2): the kit has the Synapse class, so it computes `computed_body_hash` itself from `required_hash_fields`. Native routes may still supply `legacy_synapse=MySynapse` or `legacy_body_hash(raw_body) -> str`; without either, legacy calls to that route are rejected.
@@ -1450,7 +1451,7 @@ Confirmed byte for byte against a real `bittensor==10.5.0` Dendrite and Axon (`c
 - Every legacy call is counted (`tw_legacy_v10_requests_total{direction="inbound"}`) and logged at INFO with the sender prefix; at WARNING once per sender per hour.
 - `tw_legacy_v10_days_remaining{direction}` is **current at every scrape** (computed from the end date, not set once at startup), for both directions; alert at < 14 days.
 
-#### 8.11.3 Client side: TensorWire validator → v10 miners (`client.py`)
+#### 8.11.3 Client side: TaoWire validator → v10 miners (`client.py`)
 
 - Enabled with `TW_LEGACY_V10_CLIENT=auto|off` (default `off`) and `TW_LEGACY_V10_CLIENT_UNTIL=<ISO date>` (required when `auto`; same end-date rule as 8.11.2). v10 Axons verify sr25519 only: `auto` with an ed25519 validator hotkey is refused at startup with a `StartupError` naming both settings.
 - **Protocol choice per miner** (`auto`):
@@ -1481,21 +1482,21 @@ Confirmed byte for byte against a real `bittensor==10.5.0` Dendrite and Axon (`c
 
 | Command | Purpose |
 |---|---|
-| `tensorwire init <dir> [--template text-ops]` | Scaffold a subnet project: protocol, miner, validator, tests, `.env.example`, compose file |
-| `tensorwire doctor [--role miner|validator]` | Checks: Python/SDK versions, wallet hotkey readable, coldkey absence, chain reachable, registered, axon on chain matches config, port reachable from outside (optional external probe URL), clock offset, Redis reachable, multi-worker safety |
-| `tensorwire sidecar` | Run the localhost sidecar (Section 11.6) |
-| `tensorwire conformance --vectors DIR` | Run Python reference against vectors; `--generate` rewrites them |
-| `tensorwire bench --duration S` | Local load test: in-process signer + real uvicorn miner |
-| `tensorwire sign-request ...` | Debug helper: print curl with btauth headers for a route (uses a hotkey) |
-| `tensorwire migrate scan <repo> [--format text\|json\|md]` | List every v10 symbol and pattern with its replacement (Section 10b.4) |
-| `tensorwire migrate apply <repo> [--dry-run]` | Apply safe rewrites; mark the rest with `# TW-MIGRATE:` comments |
-| `tensorwire migrate status` | Live view for subnet owners: btauth/1 vs v10 share of traffic, from a running validator's metrics |
+| `taowire init <dir> [--template text-ops]` | Scaffold a subnet project: protocol, miner, validator, tests, `.env.example`, compose file |
+| `taowire doctor [--role miner|validator]` | Checks: Python/SDK versions, wallet hotkey readable, coldkey absence, chain reachable, registered, axon on chain matches config, port reachable from outside (optional external probe URL), clock offset, Redis reachable, multi-worker safety |
+| `taowire sidecar` | Run the localhost sidecar (Section 11.6) |
+| `taowire conformance --vectors DIR` | Run Python reference against vectors; `--generate` rewrites them |
+| `taowire bench --duration S` | Local load test: in-process signer + real uvicorn miner |
+| `taowire sign-request ...` | Debug helper: print curl with btauth headers for a route (uses a hotkey) |
+| `taowire migrate scan <repo> [--format text\|json\|md]` | List every v10 symbol and pattern with its replacement (Section 10b.4) |
+| `taowire migrate apply <repo> [--dry-run]` | Apply safe rewrites; mark the rest with `# TW-MIGRATE:` comments |
+| `taowire migrate status` | Live view for subnet owners: btauth/1 vs v10 share of traffic, from a running validator's metrics |
 
 ---
 
 ## 9. Kit protocol extensions (response signing, streaming)
 
-These are TensorWire extensions. They are separate from btauth/1 and versioned on their own.
+These are TaoWire extensions. They are separate from btauth/1 and versioned on their own.
 
 ### 9.1 `twresp/1`: signed responses
 
@@ -1585,22 +1586,22 @@ An existing subnet whose code follows the archived template's shape: `protocol.p
 
 Target experience for the subnet team:
 
-1. Run `tensorwire migrate scan .` and get a report of everything that needs changing.
-2. Run `tensorwire migrate apply .`, which rewrites imports and the Axon/Dendrite setup.
+1. Run `taowire migrate scan .` and get a report of everything that needs changing.
+2. Run `taowire migrate apply .`, which rewrites imports and the Axon/Dendrite setup.
 3. Fix the `# TW-MIGRATE:` items by hand. For a template-derived subnet that is mostly config, logging and chain calls, and the result should stay within S6 (≤ 50 changed lines).
 4. Release the new version. Old and new nodes keep working together (Section 8.11).
 5. Follow the rollout runbook (10b.5) to end the transition.
 
 Their `forward`, `blacklist`, `priority`, `reward` and scoring logic should not need changes beyond imports.
 
-### 10b.2 The compat layer (`tensorwire.compat`)
+### 10b.2 The compat layer (`taowire.compat`)
 
 A v10-shaped API over the native kit. It adds no security logic of its own: every request still goes through the full pipeline in Section 5.3.
 
 #### 10b.2.1 `Synapse`, `StreamingSynapse`, `TerminalInfo`
 
 ```python
-from tensorwire.compat import Synapse   # was: import bittensor as bt; bt.Synapse
+from taowire.compat import Synapse   # was: import bittensor as bt; bt.Synapse
 
 class Dummy(Synapse):
     dummy_input: int
@@ -1619,7 +1620,7 @@ class Dummy(Synapse):
 #### 10b.2.2 `Axon` (miner side)
 
 ```python
-from tensorwire.compat import Axon
+from taowire.compat import Axon
 
 axon = Axon(miner=Miner.from_env())             # was: bt.axon(wallet=..., config=...)
 axon.attach(forward_fn=self.forward,
@@ -1638,7 +1639,7 @@ axon.start()                                     # runs the miner
 #### 10b.2.3 `Dendrite` (validator side)
 
 ```python
-from tensorwire.compat import Dendrite, axons_from
+from taowire.compat import Dendrite, axons_from
 
 dendrite = Dendrite(signer=RequestSigner(wallet))          # was: bt.dendrite(wallet=wallet)
 axons = axons_from(metagraph_view, uids=miner_uids)        # was: [self.metagraph.axons[uid] for uid in miner_uids]
@@ -1654,7 +1655,7 @@ responses = await dendrite(axons=axons, synapse=Dummy(dummy_input=step),
 
 #### 10b.2.4 Validator loop
 
-The template's `BaseValidatorNeuron` loop (forward → reward → `update_scores` → `set_weights`) maps onto `SubnetValidator` (Section 8.9). `tensorwire.compat` ships `TemplateValidatorAdapter`, which wraps a team's existing `forward()` and `reward()` functions so the kit runs the schedule, score store and weight setting. Teams with heavily customised loops keep their own loop and use only `compat.Dendrite` and the gateway.
+The template's `BaseValidatorNeuron` loop (forward → reward → `update_scores` → `set_weights`) maps onto `SubnetValidator` (Section 8.9). `taowire.compat` ships `TemplateValidatorAdapter`, which wraps a team's existing `forward()` and `reward()` functions so the kit runs the schedule, score store and weight setting. Teams with heavily customised loops keep their own loop and use only `compat.Dendrite` and the gateway.
 
 #### 10b.2.5 `compat.weights`
 
@@ -1678,13 +1679,13 @@ Handled by `migrate scan` reports and the v11 migration guide, not by wrappers:
 | `subtensor.serve_axon(...)` | Kit lifecycle (automatic) |
 | `bt.Tensor` fields | Serialize with the ML library |
 | Custom `Axon` subclasses, monkeypatched `Dendrite` | Manual port |
-| `StreamingSynapse` between a v10 peer and a TensorWire peer (v10 wire) | Not supported (D33). Streaming works TensorWire ↔ TensorWire over 9.2 only. A v10 Dendrite streaming to a TensorWire miner gets the v10-shaped `tw.invalid_request` answer; `migrate scan` flags `StreamingSynapse` use with this mixed-fleet limit. Move streaming routes after stage 2 of the rollout |
+| `StreamingSynapse` between a v10 peer and a TaoWire peer (v10 wire) | Not supported (D33). Streaming works TaoWire ↔ TaoWire over 9.2 only. A v10 Dendrite streaming to a TaoWire miner gets the v10-shaped `tw.invalid_request` answer; `migrate scan` flags `StreamingSynapse` use with this mixed-fleet limit. Move streaming routes after stage 2 of the rollout |
 
-### 10b.4 `tensorwire migrate`
+### 10b.4 `taowire migrate`
 
 #### 10b.4.1 `scan`
 
-- Static analysis with `libcst` (optional extra `tensorwire[migrate]`). It does not import or run the team's code.
+- Static analysis with `libcst` (optional extra `taowire[migrate]`). It does not import or run the team's code.
 - Rules live in `migrate/rules.py`: each rule has an id (`TWM001`…), a pattern, a severity (`auto` = `apply` can rewrite it, `manual` = needs a person, `risk` = security-relevant), the replacement, and a doc link. Start from the removed-symbol list in Section 3.8 plus the table in 10b.3.
 - Detects the template shape (`template/base/neuron.py`, `BaseMinerNeuron`, `BaseValidatorNeuron`) and says so at the top of the report.
 - Security checks (`risk`): Synapses with empty or partial `required_hash_fields` (8.11.1); blacklist functions that allow unregistered callers; `allow_non_registered=True`; `force_validator_permit=False`.
@@ -1752,7 +1753,7 @@ Rules: validators always move first; the legacy end dates should fall within rou
 11. Same error codes and HTTP statuses as Appendix A.
 12. Pass every vector in `conformance/vectors/` before release.
 
-### 11.3 TypeScript (`@tensorwire/btauth`)
+### 11.3 TypeScript (`@taowire/btauth`)
 
 **Runtime:** Node.js ≥ 20 (LTS). ESM + CJS builds. No browser target in v1.
 
@@ -1806,9 +1807,9 @@ Notes:
 - **Fastify adapter:** register a content-type parser with `parseAs: "buffer"` for all types on protected routes; use `request.raw.url` (the target exactly as sent) as `target`; set `bodyLimit`. Add a pre-handler hook running verify → policy → per-hotkey rate limit.
 - `verifyRequest` is CPU-bound but fast (WASM); no worker threads in v1. Benchmark in Phase 5.
 
-### 11.4 Go (`github.com/<org>/tensorwire/go/btauth`)
+### 11.4 Go (`github.com/<org>/taowire/go/btauth`)
 
-**Go:** the module keeps the `go 1.22` directive (the minimum for users). Development, release builds and `just audit` use a **supported** Go release (currently the 1.25 or 1.26 line), so `govulncheck` judges a patched standard library (decision D23). **Module path:** working name `github.com/tensorwire/tensorwire/go` (package `.../go/btauth`) until package names are reserved (Phase 0 item); rename with one search-and-replace. **Dependencies:** `github.com/ChainSafe/go-schnorrkel` (sr25519), stdlib `crypto/ed25519`, `crypto/sha256`, `golang.org/x/crypto/blake2b` (SS58 checksum), `github.com/mr-tron/base58`, `github.com/redis/go-redis/v9` (optional).
+**Go:** the module keeps the `go 1.22` directive (the minimum for users). Development, release builds and `just audit` use a **supported** Go release (currently the 1.25 or 1.26 line), so `govulncheck` judges a patched standard library (decision D23). **Module path:** working name `github.com/taowire/taowire/go` (package `.../go/btauth`) until package names are reserved (Phase 0 item); rename with one search-and-replace. **Dependencies:** `github.com/ChainSafe/go-schnorrkel` (sr25519), stdlib `crypto/ed25519`, `crypto/sha256`, `golang.org/x/crypto/blake2b` (SS58 checksum), `github.com/mr-tron/base58`, `github.com/redis/go-redis/v9` (optional).
 
 ```go
 func BuildPayload(scheme, method, target string, body []byte, nonce uint64, sender, receiver string) []byte {
@@ -1837,7 +1838,7 @@ Notes:
 - Middleware signature: `func Middleware(cfg Config) func(http.Handler) http.Handler`; the verified caller is available with `btauth.CallerFrom(ctx)`.
 - go-schnorrkel API names differ between versions. Pin one version and wrap it in `sr25519.go` so changes stay local.
 
-### 11.5 Rust (`tensorwire-btauth`)
+### 11.5 Rust (`taowire-btauth`)
 
 **Rust:** stable ≥ 1.80, edition 2021. **Dependencies:** `schnorrkel` (sr25519), `ed25519-dalek` v2 (stay on v2 for 1.0, even though v3 is out; revisit after 1.0, D23), `sha2`, `blake2`, `bs58`, `hex`, `thiserror`; features `axum` (`axum`, `tower`), `client` (`reqwest`), `redis` (`redis` crate with tokio).
 
@@ -1870,7 +1871,7 @@ Notes:
 
 ### 11.6 Sidecar (for non-Python miners)
 
-`tensorwire sidecar` runs a small FastAPI app on `127.0.0.1:${TW_SIDECAR_PORT}` (default 9910). It uses the miner's own hotkey (for `ServeAxon`) and the Python chain gateway.
+`taowire sidecar` runs a small FastAPI app on `127.0.0.1:${TW_SIDECAR_PORT}` (default 9910). It uses the miner's own hotkey (for `ServeAxon`) and the Python chain gateway.
 
 | Method & path | Purpose | Response |
 |---|---|---|
@@ -1934,7 +1935,7 @@ All settings are environment variables with the prefix `TW_` (Pydantic Settings;
 | `TW_WALLET_HOTKEY` | `default` | |
 | `TW_WALLET_PATH` | `~/.bittensor/wallets` | |
 | `TW_REFUSE_IF_COLDKEY_PRESENT` | `1` | refuse to start if an unencrypted coldkey file is readable |
-| `TW_STATE_DIR` | `~/.tensorwire` | locks, scores DB, sidecar token |
+| `TW_STATE_DIR` | `~/.taowire` | locks, scores DB, sidecar token |
 | `TW_LOG_LEVEL` | `INFO` | |
 | `TW_METRICS_BIND` | `127.0.0.1:9100` | never the public interface by default |
 | `TW_CHAIN_TIMEOUT_S` | `30` | |
@@ -2031,7 +2032,7 @@ All settings are environment variables with the prefix `TW_` (Pydantic Settings;
 | Migration (compat, scanner, codemods, v10 vectors) | `tests/migration` | none | `just migration-test` | every change touching `compat/`, `migrate/`, `legacy_v10/` |
 | Mixed v10/v11 fleet | `tests/localnet` (`mixed_fleet` mark) | Docker localnet + v10 venv | `just mixed-fleet` | Phase 2–3 exit, each release |
 | Testnet e2e | `tests/testnet` + runbook | public testnet | manual (Section 15) | Phase 6 exit, each release |
-| Load | `tensorwire bench` | none | `just bench` | Phase 3 exit, each release |
+| Load | `taowire bench` | none | `just bench` | Phase 3 exit, each release |
 
 ### 13.2 Unit tests (minimum list)
 
@@ -2084,7 +2085,7 @@ Use `httpx.ASGITransport` against the real miner app with `FakeChain`:
 - 100 MB body → 413 without allocating it.
 - Streams (D29): a slow-drip stream (one byte per idle period) and an endless stream are cut by the validator at the limits; a client that opens many streams and never reads them does not stall the miner for other validators. Pass rule (D42): the legitimate validator gets 100% 200; the attacker's requests may be 200, 429 or 503 `tw.replay_store_unavailable` (fail-closed refusals), nothing else.
 
-### 13.7 Benchmark targets (`tensorwire bench`)
+### 13.7 Benchmark targets (`taowire bench`)
 
 On 4 vCPU / 8 GB, 4 uvicorn workers + Redis on the same host, **reached directly** (host networking, a Unix socket, or the container's own IP), not through Docker's userland port proxy (`docker-proxy`). This matches a production deployment, and it is what "met" means (decision D17). `just bench` uses the direct path by default and prints which path it used. A run through `docker-proxy` may be recorded as extra information, never as the result.
 
@@ -2100,12 +2101,12 @@ Record results in `docs/benchmarks.md` with hardware and versions.
 
 **Scanner and codemods** (`tests/migration`): run `migrate scan` and `migrate apply` on `examples/migrations/template-v10-to-v11/before/`; the output must equal `after/` exactly (golden test), and every rule in `rules.py` has at least one positive and one negative fixture.
 
-**Mixed fleet** (`just mixed-fleet`, `examples/migrations/template-v10-to-v11/mixed-fleet.yml`): on localnet, run a v10 miner and v10 validator (from the `bittensor==10.5.0` venv) next to a TensorWire miner and TensorWire validator, all on one subnet.
+**Mixed fleet** (`just mixed-fleet`, `examples/migrations/template-v10-to-v11/mixed-fleet.yml`): on localnet, run a v10 miner and v10 validator (from the `bittensor==10.5.0` venv) next to a TaoWire miner and TaoWire validator, all on one subnet.
 
-| Validator ↓ / Miner → | v10 miner | TensorWire miner |
+| Validator ↓ / Miner → | v10 miner | TaoWire miner |
 |---|---|---|
 | v10 validator | baseline | 100% success over 200 requests (8.11.2) |
-| TensorWire validator | 100% success over 200 requests (8.11.3) | 100% success, responses verified |
+| TaoWire validator | 100% success over 200 requests (8.11.3) | 100% success, responses verified |
 
 Then walk through stages 1–4 of the rollout runbook (10b.5) on the same fleet, including each rollback, and check that weights keep landing on chain at every stage.
 
@@ -2241,10 +2242,10 @@ Keep `immunity_period > commit_reveal_period × tempo`.
 
 ### 15.5 Deploy and start
 
-1. On `mine-1`: `.env` with `TW_NETWORK=test`, `TW_NETUID`, `TW_EXTERNAL_IP=<public ip>`, `TW_WORKERS=2`, `TW_REDIS_URL`. Run `tensorwire doctor --role miner` until all checks pass, then start (`deploy/systemd/tensorwire-miner.service`).
-2. On `mine-2`: for each language, start `tensorwire sidecar` (own hotkey, own port 9910/9911/9912), then the miner binary with its sidecar URL and token. Each miner calls the sidecar's `/v1/serve-axon` at startup.
+1. On `mine-1`: `.env` with `TW_NETWORK=test`, `TW_NETUID`, `TW_EXTERNAL_IP=<public ip>`, `TW_WORKERS=2`, `TW_REDIS_URL`. Run `taowire doctor --role miner` until all checks pass, then start (`deploy/systemd/taowire-miner.service`).
+2. On `mine-2`: for each language, start `taowire sidecar` (own hotkey, own port 9910/9911/9912), then the miner binary with its sidecar URL and token. Each miner calls the sidecar's `/v1/serve-axon` at startup.
 3. Wait for axons to appear: `btcli query metagraph --netuid $NETUID --network test --json | jq '.neurons[] | {uid, hotkey, axon}'`.
-4. On `val-1`: `tensorwire doctor --role validator`, then start the validator.
+4. On `val-1`: `taowire doctor --role validator`, then start the validator.
 
 ### 15.6 Test cases (all must pass)
 
@@ -2253,7 +2254,7 @@ Keep `immunity_period > commit_reveal_period × tempo`.
 | T1 | Axon publication | All 4 miners show the configured `ip:port` on chain |
 | T2 | Happy path, all languages | 3 consecutive rounds, every miner `ok=True`, correct results, response signatures valid |
 | T3 | Weights on chain | ≥ 2 successful `SetWeights` (block hashes logged); after the reveal period, `btcli query metagraph` shows weights/incentive for all 4 miner UIDs |
-| T4 | Unregistered caller rejected | Run `tensorwire sign-request` with an unregistered hotkey against each miner → 403 `tw.forbidden_not_registered` |
+| T4 | Unregistered caller rejected | Run `taowire sign-request` with an unregistered hotkey against each miner → 403 `tw.forbidden_not_registered` |
 | T5 | Non-validator rejected | Signed request from `miner_py`'s hotkey to `miner_go` → 403 `tw.forbidden_not_validator` |
 | T6 | Replay rejected | Capture one validator request (debug log at the client, `TW_DEBUG_DUMP_REQUEST=1` on a test validator only) and resend within 10 s → 401 `tw.auth_replayed` on every language |
 | T7 | Wrong receiver | Re-target a request signed for miner A to miner B → 401 `tw.auth_wrong_receiver` |
@@ -2291,7 +2292,7 @@ Stop services. Keep the subnet if more runs are planned. Otherwise note that dis
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| All requests 401 `tw.auth_stale` | clock skew | enable NTP (`chrony`); check `tensorwire doctor` |
+| All requests 401 `tw.auth_stale` | clock skew | enable NTP (`chrony`); check `taowire doctor` |
 | 401 `tw.auth_bad_signature` from one language only | target decoded or body re-serialized | log the target string both sides; compare with conformance P4 |
 | 403 `tw.forbidden_not_validator` for your validator | no permit yet (permits update per epoch) | wait one tempo; check stake and `validator_permit` |
 | Validator gets `connect_error` | firewall, wrong `TW_EXTERNAL_IP`, NAT | probe from outside; re-check axon on chain |
@@ -2388,24 +2389,24 @@ Tasks: `config`, `errors`, `crypto`, `chain/*`, `auth/*`, `policy/*`, `limits/*`
 
 Exit criteria:
 - Unit + property + integration tests 1–9 pass; coverage ≥ 90% on `auth/`, `policy/`, `limits/`.
-- A Python miner runs on localnet, publishes its axon, and serves a signed request from `tensorwire sign-request`.
+- A Python miner runs on localnet, publishes its axon, and serves a signed request from `taowire sign-request`.
 - Multi-worker safety check refuses unsafe configs.
 
 ### Phase 2 — Validator client, loop, example subnet and migration core (3 weeks)
 
-Tasks: `validator/*`, `extensions/response_sig.py`, `examples/text-ops-subnet`, `tensorwire init`, `tensorwire doctor`; **migration core:** `extensions/legacy_v10/` (both directions), `compat.Synapse`, `compat.Axon`, `compat.Dendrite`, `compat.weights`, `tensorwire migrate scan`.
+Tasks: `validator/*`, `extensions/response_sig.py`, `examples/text-ops-subnet`, `taowire init`, `taowire doctor`; **migration core:** `extensions/legacy_v10/` (both directions), `compat.Synapse`, `compat.Axon`, `compat.Dendrite`, `compat.weights`, `taowire migrate scan`.
 
 Exit criteria:
 - Integration tests 10 and 12–15 pass.
-- The archived template runs on `tensorwire.compat` with hand-made changes (`examples/migrations/template-v10-to-v11/after/`).
+- The archived template runs on `taowire.compat` with hand-made changes (`examples/migrations/template-v10-to-v11/after/`).
 - Mixed-fleet matrix (13.8) green on localnet.
 - On localnet: validator queries the miner, scores, sets weights; weights visible on chain after reveal.
-- `tensorwire init my-subnet` produces a project that passes its own tests out of the box.
+- `taowire init my-subnet` produces a project that passes its own tests out of the box.
 - Quickstart (`docs/quickstart.md`) followed by someone new in < 60 min on localnet.
 
 ### Phase 3 — Hardening, performance and migration tooling (2–3 weeks)
 
-Tasks: rate limiting with Redis, clock guard, readiness, drain, metrics, bench, abuse tests (13.6), deployment files (`deploy/`); **migration tooling:** `tensorwire migrate apply` and `migrate status`, `TemplateValidatorAdapter`, `docs/migration-from-v10.md`, `docs/migration-rollout.md`, design-partner ports.
+Tasks: rate limiting with Redis, clock guard, readiness, drain, metrics, bench, abuse tests (13.6), deployment files (`deploy/`); **migration tooling:** `taowire migrate apply` and `migrate status`, `TemplateValidatorAdapter`, `docs/migration-from-v10.md`, `docs/migration-rollout.md`, design-partner ports.
 
 Exit criteria:
 - Benchmark targets in 13.7 met and recorded.
@@ -2459,7 +2460,7 @@ Exit criteria (= product Definition of Done):
 
 ### 18.2 Compatibility matrix (keep in README)
 
-| TensorWire | bittensor allowed | bittensor tested | Chain spec tested | Python | Node | Go | Rust |
+| TaoWire | bittensor allowed | bittensor tested | Chain spec tested | Python | Node | Go | Rust |
 |---|---|---|---|---|---|---|---|
 | 1.0.x | `>=11.3.0,<12` | 11.3.0 (add each release as it is tested) | record at release (`btcli` query) | 3.10–3.14 | 20, 22 | 1.22+ | 1.80+ |
 
@@ -2474,7 +2475,7 @@ Do this for every stable 11.x release, within **2 weeks** of it shipping (Sectio
 3. Re-run conformance vectors **without** regenerating; any difference is a breaking change in `btauth` and must be investigated before going further.
 4. If everything passes: add the version to the "tested" column, update Section 3 if anything changed, ship a patch release.
 5. If it breaks the kit: ship a patch release that excludes that version (`!=11.x.y`) right away so users are protected, then fix and lift the exclusion.
-6. A new major SDK version (12.x) needs a new TensorWire minor or major release; the `<12` bound is only raised after that work.
+6. A new major SDK version (12.x) needs a new TaoWire minor or major release; the `<12` bound is only raised after that work.
 
 ### 18.4 Manual release checklist (no CI yet)
 
@@ -2490,6 +2491,24 @@ Do this for every stable 11.x release, within **2 weeks** of it shipping (Sectio
 When CI/CD is added later, move these exact steps into workflows and switch PyPI/npm to trusted publishing.
 
 ---
+
+### 18.5 Alpha pre-release (decision D47)
+
+Before Phase 6, one alpha is published so subnet builders can build on the kit and review it. It is a pre-release in every registry, so nobody gets it without asking for it.
+
+| Package | Registry | Version |
+|---|---|---|
+| `taowire` | PyPI | `0.1.0a1` (PEP 440 pre-release; `pip install taowire` skips it, `pip install --pre taowire` or `taowire==0.1.0a1` gets it) |
+| `@taowire/btauth` | npm | `0.1.0-alpha.1`, dist-tag `alpha` (never `latest`) |
+| `taowire-btauth` | crates.io | `0.1.0-alpha.1` (crates.io releases cannot be deleted, only yanked) |
+| `github.com/taowire/taowire/go` | Go module proxy | tag `go/v0.1.0-alpha.1` |
+
+Rules:
+- Every README and package description starts with the alpha notice: not security-reviewed, APIs may change, for localnet and testnet, **not for mainnet value**.
+- The 18.4 checklist applies (signed tag `v0.1.0a1`, checksums signed, smoke installs from the public registries), except item 1 needs `just check audit localnet-test interop` only (no testnet).
+- Source is public at `github.com/taowire/taowire` before any package goes up, so reviewers can read what they install. The whole git history is scanned for secrets before the first push.
+- Feedback: GitHub issues; security reports through GitHub private vulnerability reporting (`SECURITY.md`).
+- Further alphas (`0.1.0a2`, …) follow the same rules. `1.0.0-rc1` still needs Phase 6.
 
 ## 19. Risks and open questions
 
@@ -2519,13 +2538,13 @@ Open questions to settle by Phase 2:
 2. Do we offer a hosted "port reachability probe" for `doctor`, or only document how to check?
 3. Licence: Apache-2.0 (proposed) vs MIT.
 4. Which funding mix (Section 20.1), and who signs the maintenance commitments (20.2)?
-5. Does the core team want TensorWire linked from the official docs, merged upstream, or kept separate (Section 1.7)?
+5. Does the core team want TaoWire linked from the official docs, merged upstream, or kept separate (Section 1.7)?
 
 ---
 
 ## 20. Sustainability and maintenance
 
-TensorWire is security code that many subnets' rewards depend on. When a bug is found, every subnet using it is exposed until a fix ships. The SDK and the chain also change often (about 14 runtime upgrades between July and October 2026), so the kit needs steady work just to keep running. Open-source security libraries without funding tend to be abandoned, and an abandoned one is worse than none, because teams keep trusting it. This section says who pays and what we promise.
+TaoWire is security code that many subnets' rewards depend on. When a bug is found, every subnet using it is exposed until a fix ships. The SDK and the chain also change often (about 14 runtime upgrades between July and October 2026), so the kit needs steady work just to keep running. Open-source security libraries without funding tend to be abandoned, and an abandoned one is worse than none, because teams keep trusting it. This section says who pays and what we promise.
 
 ### 20.1 Funding model
 
@@ -2535,7 +2554,7 @@ Decide in Phase 0. The recommended mix:
 |---|---|---|
 | Ecosystem grants (Bittensor / subnet-ecosystem programs, where available) | Build phases, external security review | Apply in Phase 0; the Phase 6 review must not depend on money that has not arrived |
 | Sponsorship from subnets that use the kit | Ongoing maintenance (20.2) | Simple tiers, for example: listed sponsor, priority on issues; never private security fixes |
-| Paid migration help | Hands-on porting of a subnet with `tensorwire migrate` and the rollout runbook (10b) | Uses the same open-source tools; case studies feed M2 (1.6) |
+| Paid migration help | Hands-on porting of a subnet with `taowire migrate` and the rollout runbook (10b) | Uses the same open-source tools; case studies feed M2 (1.6) |
 | Optional hosted services (later) | Port-reachability probe for `doctor` (open question 2), uptime and version monitoring for miners | Must stay optional; the kit never requires them |
 
 Rules:
@@ -2726,6 +2745,6 @@ Libraries:
 | Sidecar | Local helper process giving non-Python miners chain access via v11. |
 | SS58 | Substrate address format; Bittensor uses prefix 42. |
 | Tempo | Blocks per epoch (default 360). |
-| twresp/1 | TensorWire's response-signing extension. |
+| twresp/1 | TaoWire's response-signing extension. |
 | UID | A neuron's slot number on a subnet. |
 | Weights | A validator's scores for miners, submitted on chain. |
