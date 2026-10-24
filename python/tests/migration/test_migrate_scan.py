@@ -162,6 +162,14 @@ FIXTURES: dict[str, tuple[str, str]] = {
         "class Ask(Synapse):\n    question: str\n"
         "    required_hash_fields: ClassVar[tuple[str, ...]] = ('question',)\n",
     ),
+    "TWM035": (
+        "import bittensor as bt\nasync def f():\n    s = bt.AsyncSubtensor('test')\n",
+        "import bittensor as bt\nasync def f():\n    s = await bt.Subtensor('test')\n",
+    ),
+    "TWM036": (
+        "self.subtensor.add_stake(wallet=w, hotkey_ss58=h, amount=a)\n",
+        "self.subtensor.set_commitment(wallet=w, netuid=1, data=d)\n",
+    ),
     "TWM100": (
         "class Ask(Synapse):\n    question: str\n    answer: str | None = None\n",
         "class Ask(Synapse):\n    question: str\n"
@@ -314,6 +322,11 @@ def test_negative_fixture(rule: str) -> None:
         ("import bittensor as bt\ns = bt.Subtensor(config=self.config)\n", "TWM008"),
         ("import bittensor as bt\ndef f(m: bt.Metagraph): ...\n", "TWM009"),
         ("import bittensor as bt\ndef f(s: bt.Subtensor): ...\n", "TWM008"),
+        (
+            "import bittensor as bt\ns = bt.Subtensor(network=n)\n"
+            "s.get_commitment(netuid=1, uid=0)\n",
+            "TWM008",
+        ),
         ("import bittensor as bt\nbt.Subtensor.add_args(p)\n", "TWM031"),
         ("import bittensor as bt\nbt.Subtensor.add_args(p, prefix=x)\n", "TWM006"),
         ("from bittensor_wallet.keypair import Keypair\n", "TWM017"),

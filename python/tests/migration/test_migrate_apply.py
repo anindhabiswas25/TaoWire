@@ -57,6 +57,14 @@ REWRITES: dict[str, tuple[str, str]] = {
         "import logging\nlogging.debug('a')\nlogging.info(f'{b}')\n"
         "logging.warning('c', exc_info=True)\n",
     ),
+    "TWM008": (
+        "import bittensor as bt\ns = bt.subtensor(config=c)\n"
+        "t = bt.Subtensor(config=c)\ndef f(x: bt.Subtensor): ...\n"
+        "u = bt.subtensor('finney')\n",
+        "from tensorwire.compat import Subtensor\ns = Subtensor(config=c)\n"
+        "t = Subtensor(config=c)\ndef f(x: Subtensor): ...\n"
+        "u = Subtensor('finney')\n",
+    ),
     "TWM012": (
         "from template.base.utils.weight_utils import (\n"
         "    process_weights_for_netuid,\n    convert_weights_and_uids_for_emit,\n)\n"
@@ -87,8 +95,10 @@ REWRITES: dict[str, tuple[str, str]] = {
         "    await asyncio.sleep(5)\n",
     ),
     "TWM028": (
-        'import bittensor as bt\ndef f(s: "bt.Synapse") -> None: ...\n',
-        'from tensorwire.compat import Synapse\ndef f(s: "Synapse") -> None: ...\n',
+        'import bittensor as bt\ndef f(s: "bt.Synapse") -> None: ...\n'
+        'def g(t: "bt.subtensor") -> None: ...\n',
+        "from tensorwire.compat import Subtensor, Synapse\n"
+        'def f(s: "Synapse") -> None: ...\ndef g(t: "Subtensor") -> None: ...\n',
     ),
     "TWM031": (
         "import argparse\nimport bittensor as bt\ndef config(cls):\n"
@@ -177,6 +187,30 @@ def test_left_alone(source: str) -> None:
     assert not result.changed
 
 
+def test_subtensor_with_v10_methods_is_rewritten() -> None:
+    """``bt.Subtensor(network=n)`` then v10 methods: v10's class (TWM008)."""
+    source = (
+        "import bittensor as bt\ns = bt.Subtensor(network=n)\n"
+        "uid = s.get_uid_for_hotkey_on_subnet(hotkey_ss58=h, netuid=1)\n"
+    )
+    result = apply_source(source, "x.py")
+    assert result.after == (
+        "from tensorwire.compat import Subtensor\ns = Subtensor(network=n)\n"
+        "uid = s.get_uid_for_hotkey_on_subnet(hotkey_ss58=h, netuid=1)\n"
+    )
+    assert result.rewrites == {"TWM008": 1}
+
+
+def test_v11_subtensor_calls_are_left_alone() -> None:
+    """``bt.Subtensor("test")`` is v11's own client: not rewritten (TWM008)."""
+    source = (
+        "import bittensor as bt\ns = bt.Subtensor('test')\nbt.subtensor.add_args(p)\n"
+    )
+    out = apply_source(source, "x.py").after
+    assert "bt.Subtensor('test')" in out
+    assert "Subtensor(" not in out.replace("bt.Subtensor(", "")
+
+
 def test_every_auto_rule_is_rewritten() -> None:
     auto = {rid for rid, rule in RULES.items() if rule.severity == "auto"}
     assert auto == set(REWRITES)
@@ -212,7 +246,7 @@ def test_bittensor_import_stays_while_used_and_markers_are_added() -> None:
         class Miner:
             def __init__(self):
                 bt.logging.set_config(config=self.config.logging)
-                self.subtensor = bt.subtensor(config=self.config)
+                self.metagraph = bt.metagraph(netuid=1)
                 bt.logging.info("ready")
         """
     )
@@ -224,8 +258,8 @@ def test_bittensor_import_stays_while_used_and_markers_are_added() -> None:
 
         class Miner:
             def __init__(self):
-                {MARKER} TWM008 {RULES["TWM008"].replacement}
-                self.subtensor = bt.subtensor(config=self.config)
+                {MARKER} TWM009 {RULES["TWM009"].replacement}
+                self.metagraph = bt.metagraph(netuid=1)
                 logging.info("ready")
         """
     )

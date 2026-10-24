@@ -31,6 +31,7 @@ import bittensor_core as _core  # type: ignore[import-untyped]  # the SDK's comp
 from tensorwire.chain.axon import Endpoint, parse_axon
 
 __all__ = [
+    "MAX_COMMITMENT_BYTES",
     "REPLAN_ERROR_NAMES",
     "BittensorGateway",
     "ChainGateway",
@@ -226,6 +227,22 @@ class ChainGateway(Protocol):
         """Return the subnet's serving rate limit (blocks between ``ServeAxon``)."""
         ...
 
+    async def block_hash(self, block: int) -> str | None:
+        """The ``0x`` hash of ``block``, or ``None`` if there is no such block."""
+        ...
+
+    async def commitment(self, netuid: int, hotkey: str) -> str | None:
+        """The readable data of ``hotkey``'s commitment on ``netuid``, or ``None``."""
+        ...
+
+    async def storage(self, name: str, params: Sequence[Any]) -> Any:
+        """A ``SubtensorModule`` storage value (plain Python values; untrusted)."""
+        ...
+
+    async def commit(self, netuid: int, data: str) -> TxOutcome:
+        """Publish ``data`` as the gateway's hotkey's commitment (one ``Raw`` field)."""
+        ...
+
     async def serve_axon(
         self,
         netuid: int,
@@ -286,6 +303,10 @@ _log = logging.getLogger("tensorwire.chain")
 _T = TypeVar("_T")
 
 _U8_MAX = 255
+MAX_COMMITMENT_BYTES = 128
+"""The largest ``Raw`` commitment field (``Raw0`` .. ``Raw128``)."""
+_STORAGE_NAME = re.compile(r"[A-Z][A-Za-z0-9]{0,63}")
+_BLOCK_HASH = re.compile(r"0x[0-9a-fA-F]{64}")
 #: Even-length hex digits only (``bytes.fromhex`` would also take spaces).
 _HEX_DIGITS = re.compile(r"(?:[0-9a-fA-F]{2})*")
 
@@ -357,6 +378,7 @@ REQUIRED_SDK_SYMBOLS = (
     "timelock",
     "TimelockNotReady",
     "TimelockError",
+    "calls",
 )
 """Top-level ``bittensor`` names the gateway uses (spec 3.3, 3.5, 3.7)."""
 
@@ -370,6 +392,9 @@ REQUIRED_CLIENT_READS = (
     "block_time",
     "query",
     "execute",
+    "submit_call",
+    "block_info",
+    "identity.commitment",
 )
 """Client attributes the gateway calls, checked after connecting."""
 
@@ -697,7 +722,73 @@ class BittensorGateway:
         if not await self._call("subnet_exists", op):
             raise SubnetNotFound(f"subnet {netuid} does not exist")
 
+    async def block_hash(self, block: int) -> str | None:
+        """The ``0x`` hash of ``block``, or ``None`` if there is no such block."""
+        if block < 0:
+            return None
+
+        async def op() -> Any:
+            client = await self._ensure_client()
+            return await client.block_info(block)
+
+        info = await self._call("block_hash", op)
+        value = getattr(info, "hash", None) if info is not None else None
+        return (
+            value if isinstance(value, str) and _BLOCK_HASH.fullmatch(value) else None
+        )
+
+    async def commitment(self, netuid: int, hotkey: str) -> str | None:
+        """The readable data of ``hotkey``'s commitment on ``netuid``, or ``None``.
+
+        Plaintext ``Raw`` fields as the SDK renders them (``NeuronCommitment.data``);
+        an empty or absent commitment is ``None``.
+        """
+
+        async def op() -> Any:
+            client = await self._ensure_client()
+            return await client.identity.commitment(netuid, hotkey)
+
+        found = await self._call("commitment", op)
+        data = getattr(found, "data", None) if found is not None else None
+        return data if isinstance(data, str) and data else None
+
+    async def storage(self, name: str, params: Sequence[Any]) -> Any:
+        """A ``SubtensorModule`` storage value (e.g. ``SubnetOwnerHotkey``).
+
+        ``name`` must be a storage item name (letters and digits). The value is
+        what the SDK decodes: untrusted, check its type before use.
+        """
+        if not _STORAGE_NAME.fullmatch(name):
+            raise ValueError(f"not a storage item name: {name!r}")
+
+        async def op() -> Any:
+            client = await self._ensure_client()
+            return await client.query(("SubtensorModule", name), list(params))
+
+        return await self._call("storage", op)
+
     # -- writes ----------------------------------------------------------------
+
+    async def commit(self, netuid: int, data: str) -> TxOutcome:
+        """Publish ``data`` as this gateway's hotkey's commitment on ``netuid``.
+
+        One ``Raw`` field of at most 128 UTF-8 bytes (the pallet's largest);
+        signed by the hotkey, never a coldkey. v11 has no commitment intent, so
+        the call goes to ``submit_call``; otherwise the rules of every write
+        apply: an unknown fate is ``code="unknown"`` and never resent, a
+        fork/era rejection is re-signed.
+        """
+        raw = data.encode()
+        if not raw or len(raw) > MAX_COMMITMENT_BYTES:
+            return _rejected(
+                "invalid_argument",
+                f"commitment data must be 1..{MAX_COMMITMENT_BYTES} UTF-8 bytes",
+            )
+        call = bt.calls.Commitments.set_commitment(
+            netuid, {"fields": [{f"Raw{len(raw)}": raw}]}
+        )
+        summary = {"op": "commit", "netuid": netuid, "bytes": len(raw)}
+        return await self._write(None, summary, call=call)
 
     async def serve_axon(
         self,
@@ -842,29 +933,37 @@ class BittensorGateway:
                 "does not open with its round's signature"
             ) from None
 
-    async def _write(self, intent: Any, summary: dict[str, Any]) -> TxOutcome:
+    async def _write(
+        self, intent: Any, summary: dict[str, Any], *, call: Any = None
+    ) -> TxOutcome:
+        """Submit ``intent`` (planned first), or a raw ``call`` when v11 has no
+        intent for it (not planned); re-signed on fork/era rejections only."""
         if self._hotkey is None:
             raise RuntimeError("this gateway has no hotkey; writes need one")
         outcome = _rejected("unknown", _NOT_SUBMITTED)
         for attempt in range(1, self._write_attempts + 1):
             if attempt > 1:
                 await self._wait_for_new_finalized()
-            rejected, client = await self._plan(intent, summary, attempt)
+            if call is None:
+                rejected, client = await self._plan(intent, summary, attempt)
+            else:
+                rejected, client = await self._client_for_write()
             if rejected is not None:
                 outcome = rejected
                 if rejected.code == "unknown":
                     continue  # nothing was submitted: safe to try again
                 break
+            options = {
+                "wait_for_inclusion": True,
+                "wait_for_finalization": self._finalization,
+            }
+            submit = (
+                client.execute(intent, self._hotkey, **options)
+                if call is None
+                else client.submit_call(call, self._hotkey, **options)
+            )
             try:
-                result = await asyncio.wait_for(
-                    client.execute(
-                        intent,
-                        self._hotkey,
-                        wait_for_inclusion=True,
-                        wait_for_finalization=self._finalization,
-                    ),
-                    self._write_timeout_s,
-                )
+                result = await asyncio.wait_for(submit, self._write_timeout_s)
             except _sdk_error("PolicyError") as e:
                 outcome = _policy_outcome(e)
                 break
@@ -894,6 +993,13 @@ class BittensorGateway:
             if not resign:
                 break
         return outcome
+
+    async def _client_for_write(self) -> tuple[TxOutcome | None, Any]:
+        """The connected client, or ``(unknown, None)``: nothing was submitted."""
+        try:
+            return None, await self._call("connect", self._ensure_client)
+        except ChainUnavailable as e:
+            return _rejected("unknown", f"{_NOT_SUBMITTED} ({e})"), None
 
     async def _plan(
         self, intent: Any, summary: dict[str, Any], attempt: int

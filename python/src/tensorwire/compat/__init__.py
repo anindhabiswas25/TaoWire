@@ -9,6 +9,7 @@ Import changes for a template-derived subnet::
     import bittensor as bt; bt.Synapse        ->  from tensorwire.compat import Synapse
     bt.axon(wallet=..., config=...)           ->  Axon(miner=Miner.from_env())
     bt.dendrite(wallet=wallet)                ->  Dendrite(signer=RequestSigner(wallet))
+    bt.subtensor(config=config)               ->  Subtensor(config=config)
     [metagraph.axons[uid] for uid in uids]    ->  axons_from(metagraph_view, uids)
     process_weights_for_netuid(...)           ->  weights.to_mapping(uids, weights)
     bt.metagraph(...).hotkeys / .S / .axons   ->  Metagraph(source).hotkeys / .S
@@ -26,6 +27,7 @@ from tensorwire.compat.dendrite import AxonInfo, Dendrite, axons_from
 from tensorwire.compat.metagraph import Metagraph
 from tensorwire.compat.neuron import HotkeyWallet, SubtensorView
 from tensorwire.compat.stream import StreamingSynapse
+from tensorwire.compat.subtensor import Subtensor
 from tensorwire.compat.synapse import Synapse, TerminalInfo
 from tensorwire.compat.template import TemplateValidatorAdapter
 from tensorwire.compat.template_miner import TemplateMinerAdapter
@@ -38,6 +40,7 @@ __all__ = [
     "HotkeyWallet",
     "Metagraph",
     "StreamingSynapse",
+    "Subtensor",
     "SubtensorView",
     "Synapse",
     "TemplateMinerAdapter",

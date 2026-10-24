@@ -6,6 +6,8 @@ Only ``auto`` rules are rewritten:
   -> ``tensorwire.compat`` (TWM001, TWM021);
 - ``bt.logging.<level>(...)`` -> ``logging.<level>(...)``, ``trace`` ->
   ``debug``, ``success`` -> ``info`` (TWM007);
+- ``bt.subtensor(...)``, ``bt.Subtensor(config=...)`` and ``bt.Subtensor``
+  annotations -> ``compat.Subtensor`` (TWM008);
 - ``bt.axon(...)`` -> ``Axon(miner=Miner.from_env())``,
   ``bt.dendrite(wallet=w)`` -> ``Dendrite(signer=RequestSigner(w))``
   (TWM003, TWM004);
@@ -69,6 +71,7 @@ from tensorwire.migrate.scan import (
     CONFIG_GROUPS,
     LOG_LEVELS,
     LOGGING_SETUP,
+    calls_v10_subtensor_methods,
     is_axons_list,
     is_metagraph_tensor_call,
     python_files,
@@ -306,9 +309,13 @@ class _Rewriter(cst.CSTTransformer):
         path: str,
         custom_bases: Mapping[str, list[str] | None],
         taken: set[str],
+        *,
+        v10_subtensor: bool = False,
     ) -> None:
         super().__init__()
         self.bt = bt_aliases
+        #: The file calls v10-only subtensor methods: its ``bt.Subtensor`` is v10's.
+        self.v10_subtensor = v10_subtensor
         #: Names the file binds itself (a team's own ``class Miner``, ...).
         self.taken = taken
         self.path = path
@@ -351,6 +358,24 @@ class _Rewriter(cst.CSTTransformer):
             self.get_metadata(ParentNodeProvider, parent, None), cst.ClassDef
         )
 
+    def _v10_subtensor(self, node: cst.Attribute) -> bool:
+        """``bt.Subtensor`` in v10's shape: an annotation, ``(config=...)``, or
+        any call in a file that calls v10-only subtensor methods."""
+        if self._annotation_depth:
+            return True
+        call = self.get_metadata(ParentNodeProvider, node, None)
+        return (
+            isinstance(call, cst.Call)
+            and call.func is node
+            and (
+                self.v10_subtensor
+                or any(
+                    a.keyword is not None and a.keyword.value == "config"
+                    for a in call.args
+                )
+            )
+        )
+
     def leave_Attribute(  # noqa: N802 - libcst API
         self, original_node: cst.Attribute, updated_node: cst.Attribute
     ) -> cst.BaseExpression:
@@ -360,6 +385,14 @@ class _Rewriter(cst.CSTTransformer):
         if self._annotation_depth and attr in ("Config", "config"):
             self.rewrites["TWM031"] += 1  # ``config: bt.Config`` -> compat ``Config``
             return cst.Name(self._compat("Config"))
+        if attr == "subtensor" or (
+            attr == "Subtensor" and self._v10_subtensor(original_node)
+        ):
+            parent = self.get_metadata(ParentNodeProvider, original_node, None)
+            if isinstance(parent, cst.Attribute) and parent.value is original_node:
+                return updated_node  # bt.subtensor.add_args(...): TWM006 / TWM031
+            self.rewrites["TWM008"] += 1
+            return cst.Name(self._compat("Subtensor"))
         compat = _COMPAT_NAMES.get(attr)
         if compat is None:
             return updated_node
@@ -1019,7 +1052,13 @@ def apply_source(
     module = cst.parse_module(source)
     aliases = _BtAliases()
     module.visit(aliases)
-    rewriter = _Rewriter(aliases.aliases, path, bases, aliases.bound)
+    rewriter = _Rewriter(
+        aliases.aliases,
+        path,
+        bases,
+        aliases.bound,
+        v10_subtensor=calls_v10_subtensor_methods(module),
+    )
     if swap_role is not None:
         adapter = ADAPTERS.get(swap_role)
         local = None if adapter is None else rewriter._compat(adapter)
