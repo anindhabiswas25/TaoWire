@@ -5,7 +5,7 @@ Python core · btauth/1 native · v10 → v11 migration (compat layer, two-way b
 
 | Field | Value |
 |---|---|
-| Document version | 1.8 |
+| Document version | 1.9 |
 | Changes in 1.1 | Migration of existing v10 subnets is a first-class goal: new Section 10b, two-way legacy bridge (8.11), `tensorwire migrate` CLI, migration rollout runbook, success criterion S6, phase plan updated |
 | Changes in 1.2 | SDK version range instead of an exact pin (3, 18); staged metagraph staleness instead of a 15-minute hard stop (8.5.1); product metrics (1.6); relationship with the core team (1.7); sustainability and maintenance (Section 20) |
 | Changes in 1.3 | Phase 0–1 findings: protocol tag is a u8, default 87 (D1); stake units and `total_stake_tao` (D2, 2, 8.3); v10 marker (D3, 8.11.3); write retries and `set_weights` meaning (8.3); stricter shape rules (4.3); localnet facts (14.2, 14.5); 8.11.1 rewritten from captured vectors (by Engineer B) |
@@ -14,6 +14,7 @@ Python core · btauth/1 native · v10 → v11 migration (compat layer, two-way b
 | Changes in 1.6 | Phase 3 gate: benchmarks count with Redis reached directly (D17, 13.7); S6 counts hand-written changes in customised template bases (D18, 1.5); sender must be 48 characters before base58 decoding (D19, 4.3); weak public keys refused, ADR-0010 accepted (D20, 4.3); nonce-store expiry vs wall-clock steps, fail-closed window (D21, 8.4.3-8.4.4); Python verifier strict on `<Bytes>` too (D22, A10, 11.7); Go toolchain, module path and dalek v2 (D23, 11.4-11.5) |
 | Changes in 1.7 | Phase 3 re-gate and Phase 4 set-up: one partner subnet closes S6 for Phase 3 (D24, 17); D22's cost accepted (D25); `go 1.22` + x/crypto until 1.0 (D26, 18.4); retention ≥ 2 × window in the config table and `tw_clock_step_seconds` (D27, 12.2, Appendix B); `required_hash_fields` changes break a mixed fleet (D28, 10b.5); streaming rules and settings (D29, 9.2, 12.1, 13.4, 13.6); timelock behind the gateway, settings and `tw.timelock_unavailable` (D30, 8.10, 12.3, Appendix A); TLS modes, pinning and `tw.tls_pin_mismatch` (D31, 8.7.2, 12.2, 16.3); expired timelocked commits are re-planned (D32, 8.9); `StreamingSynapse` over the v10 wire not supported (D33, 10b.3); `compat.Subtensor` facade (D34, 10b.2.6); Phase 4 tasks and exit criteria (17) |
 | Changes in 1.8 | Phase 4 gate: stream chunks are JSON objects or arrays (D35, 9.2); `TW_STREAM_MAX_PER_CALLER` (D36, 9.2, 12.1); TLS with the v10 inbound bridge warns, never refused (D37, 16.3); `WeightsVersionKey` preflight before a timelocked commit (D38, 8.9); pinned cargo/npm tools before 1.0 (D39, 18.4); ADR-0001 exception for `bittensor_core` in the gateway (D40, 8.10); Phase 4 process (D41); the shared limiter fails closed and an attacker's 503 is a valid refusal (D42, 8.6.2, 13.6); Phase 5 carry-overs G6-1..G6-5 (17) |
+| Changes in 1.9 | Phase 5 gate: stream chunks nest at most 128 levels, the `tw-end` count is a plain non-negative integer and trailer strings hold no lone surrogates, in every language (D43, 9.2); `tw.sidecar_unauthorized` and the `/v1/serve-axon` refusal shapes (D44, 11.6, Appendix A); the 13.6 flood CPU bound is measured on a quiet host (D45, 13.6); Phase 6 carry-overs G7-1..G7-3 (17) |
 | Date | 24 October 2026 |
 | Target SDK | `bittensor>=11.3.0,<12` (baseline verified against 11.3.0, stable, released 7 Oct 2026; see Section 18.3) |
 | Target protocol | `btauth/1` (hotkey-signed HTTP, defined by the Bittensor v11 docs) |
@@ -1532,6 +1533,7 @@ For token-by-token responses:
 - Response `Content-Type: text/event-stream`. Events: `event: chunk` with `data: <json>`; final `event: tw-end` with `data: {"digest": "<sha256 hex>", "count": N, "signature": "0x..."}`.
 - `digest` = sha256 over the concatenation of each chunk's exact `data` bytes (UTF-8, without the `data: ` prefix or trailing newlines), in order.
 - **Chunks are JSON objects or arrays (decision D35).** The digest is over plainly concatenated chunks, so it does not fix the chunk boundaries by itself; objects and arrays are self-delimiting, so a stream re-split at other boundaries no longer parses. The miner refuses to emit any other chunk (the stream ends without `tw-end`); the validator rejects one as `tw.invalid_response`. Every language follows this rule (11.1). The digest format and the 11.7 streaming vector do not change.
+- **Chunk depth and trailer form (decision D43).** A chunk nests at most 128 levels (arrays and objects counted together); the miner never emits a deeper one and the validator rejects one as `tw.invalid_response`. In `tw-end`, `count` is a plain non-negative JSON integer (`-0`, a fraction or an exponent is refused) and no string holds a lone UTF-16 surrogate escape. Every language, Python included, applies the same rules.
 - The `tw-end` signature uses the `twresp/1` payload with the status line set to `200` and the body-hash line set to `digest`. Headers `X-TW-Resp-Hotkey` / `X-TW-Resp-Crypto` are sent at stream start.
 - The validator accumulates the digest while consuming. A missing or invalid `tw-end` → the whole stream is `tw.bad_response_signature`.
 - Limits: `max_stream_s` (default 60), `max_stream_bytes` (default 4 MiB), idle timeout between events (default 10 s). Settings `TW_STREAM_MAX_S` (1–600), `TW_STREAM_MAX_BYTES` (1 KiB–64 MiB), `TW_STREAM_IDLE_S` (1–120), per-route overrides allowed; both the miner and the validator enforce them (D29).
@@ -1875,11 +1877,11 @@ Notes:
 | `GET /v1/health` | liveness + chain status | `{"ok":true,"block":123,"metagraph_age_s":42}` |
 | `GET /v1/metagraph?netuid=N` | snapshot used for caller policy | `{"netuid":N,"block":B,"neurons":[{"uid","hotkey","validator_permit","total_stake_tao","axon"}...]}` |
 | `GET /v1/caller/{hotkey}?netuid=N` | single policy decision | `{"allowed":true}` or `{"allowed":false,"code":"tw.forbidden_not_validator"}` |
-| `POST /v1/serve-axon` | publish `{ip, port, tls_cert_hex?}` | `{"ok":true,"block_hash":"0x..."}` or error code |
+| `POST /v1/serve-axon` | publish `{netuid, ip, port, tls_cert_hex?}` | `{"ok":true,"block_hash":"0x..."}`; chain refused → 409 `{"ok":false,"code","error_name","remediation"}` (`bt.ErrorCode` values); chain unreachable → 503 `{"ok":false,"code":"chain_unavailable",...}`; a bad body → 422 `tw.invalid_request` (decision D44) |
 
 Security:
 - Binds **only** to loopback (`127.0.0.1` / `::1`). Refuses other addresses unless `TW_SIDECAR_UNSAFE_BIND=1`.
-- Every request needs `Authorization: Bearer <token>`, where the token is read from `TW_SIDECAR_TOKEN_FILE` (file mode 0600, generated on first run).
+- Every request needs `Authorization: Bearer <token>`, where the token is read from `TW_SIDECAR_TOKEN_FILE` (file mode 0600, generated on first run). A missing, repeated or wrong token → 401 `tw.sidecar_unauthorized` before routing (decision D44).
 - `POST /v1/serve-axon` only accepts the netuid configured at startup.
 - No weight setting through the sidecar in v1 (non-Python validators are out of scope).
 
@@ -2077,7 +2079,7 @@ Use `httpx.ASGITransport` against the real miner app with `FakeChain`:
 
 ### 13.6 Negative/abuse tests (run against a local miner)
 
-- 10,000 requests/s with invalid signatures from one IP → IP limiter kicks in, CPU < 2 cores, valid validator traffic still served (p99 < 200 ms).
+- 10,000 requests/s with invalid signatures from one IP → IP limiter kicks in, CPU < 2 cores, valid validator traffic still served (p99 < 200 ms). The CPU bound is a hard assert, measured on a quiet host like the benchmark (decision D45: nothing else heavy running, load recorded with the result); a run under deliberately added load is kept as extra information, never as the result.
 - Slowloris (slow headers/body) → connections closed by timeouts.
 - 100 MB body → 413 without allocating it.
 - Streams (D29): a slow-drip stream (one byte per idle period) and an endless stream are cut by the validator at the limits; a client that opens many streams and never reads them does not stall the miner for other validators. Pass rule (D42): the legitimate validator gets 100% 200; the attacker's requests may be 200, 429 or 503 `tw.replay_store_unavailable` (fail-closed refusals), nothing else.
@@ -2437,7 +2439,7 @@ Exit criteria:
 
 ### Phase 6 — Testnet e2e, security review, release candidate (2 weeks + review time)
 
-Tasks: Section 15 runbook; security review (16.5); fix findings; docs pass; `v1.0.0-rc1`.
+Tasks: Section 15 runbook; security review (16.5); fix findings; docs pass; `v1.0.0-rc1`. Carried over from the Phase 5 gate: G7-1 (Python `decode_chunk` / `encode_chunk` and the trailer parser apply D43), G7-2 (Rust axum example and docs: a header read timeout, or a hard rule to run behind a proxy; covered by the security review), G7-3 (re-read `WeightsVersionKey` right before each commit instead of once per tempo, or document the one-commit gap).
 
 Exit criteria (= product Definition of Done):
 - T1–T16 pass; language matrix 15.7 green; evidence stored in `reports/`.
@@ -2585,6 +2587,7 @@ Announce it at least 3 months ahead; mark the packages as "maintenance ended" on
 | `tw.handler_error` | 500 | Unhandled handler exception | yes |
 | `tw.metagraph_stale` | 503 | Snapshot older than max age and caller not in the known-callers set, or `TW_METAGRAPH_STRICT=1` (8.5.1) | no |
 | `tw.replay_store_unavailable` | 503 | Redis unreachable | no |
+| `tw.sidecar_unauthorized` | 401 | Sidecar request without exactly `Authorization: Bearer <token>` (11.6, D44); sidecar only | no |
 | `tw.handler_timeout` | 504 | Handler exceeded timeout | yes |
 | `tw.forbidden_blacklisted` | 403 | `compat` `blacklist_fn` returned `True` | yes (v10 shape on the legacy path) |
 | `tw.legacy_auth_failed` | 401 | v10 signature, hash, freshness or replay check failed, or the body does not parse into the route's Synapse | no |
