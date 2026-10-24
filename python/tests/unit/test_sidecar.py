@@ -18,6 +18,7 @@ import structlog.testing
 import uvicorn
 from typer.testing import CliRunner
 
+from tensorwire.cli import sidecar_cmd
 from tensorwire.cli.main import app as cli_app
 from tensorwire.config import SidecarSettings
 from tensorwire.errors import StartupError
@@ -532,7 +533,12 @@ def test_parse_serve_axon_accepts_the_contract() -> None:
     assert parse_serve_axon(body, 1) == ("::1", 2, "0x01ab")
 
 
-def test_cli_refuses_bad_settings_and_bind(tw_env: TWEnv, tmp_path: Path) -> None:
+def test_cli_refuses_bad_settings_and_bind(
+    tw_env: TWEnv, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # CliRunner closes its stdout afterwards; a root handler bound to it would
+    # break every later test's logging.
+    monkeypatch.setattr(sidecar_cmd, "configure_logging", lambda level: None)
     runner = CliRunner()
     r = runner.invoke(cli_app, ["sidecar"])
     assert r.exit_code == 2

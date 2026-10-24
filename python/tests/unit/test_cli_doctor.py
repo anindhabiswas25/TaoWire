@@ -11,6 +11,7 @@ import pytest
 from bittensor import sp_core
 from typer.testing import CliRunner
 
+from tensorwire.cli import doctor as doctor_cmd
 from tensorwire.cli.doctor import Doctor
 from tensorwire.cli.main import app
 from tensorwire.testing.fake_chain import FakeChain
@@ -336,6 +337,9 @@ async def test_miner_behind_a_tls_proxy(
 
 
 def test_cli_output(env: TWEnv, monkeypatch: pytest.MonkeyPatch) -> None:
+    # CliRunner closes its stderr afterwards; a root handler bound to it would
+    # break every later test's logging.
+    monkeypatch.setattr(doctor_cmd, "configure_logging", lambda level, stream: None)
     runner = CliRunner()
     bad = runner.invoke(app, ["doctor", "--role", "sidecar"])
     assert bad.exit_code == 2
