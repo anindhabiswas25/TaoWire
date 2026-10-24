@@ -859,10 +859,16 @@ func (c *Client) Check(hotkey, scope string) (*Neuron, error) {
 	return n, nil
 }
 
-// Policy returns the MiddlewareConfig.Policy hook (scope: the request path).
+// PolicyScope is the known-callers scope of the Policy hook: one policy
+// guards every route, so one scope. Never the raw request path: a caller
+// could invent paths to fill the bounded known-callers set and evict the
+// other validators during a chain outage.
+const PolicyScope = "middleware"
+
+// Policy returns the MiddlewareConfig.Policy hook.
 func (c *Client) Policy() func(*http.Request, *btauth.Caller) error {
-	return func(r *http.Request, caller *btauth.Caller) error {
-		_, err := c.Check(caller.Hotkey, r.URL.Path)
+	return func(_ *http.Request, caller *btauth.Caller) error {
+		_, err := c.Check(caller.Hotkey, PolicyScope)
 		return err
 	}
 }

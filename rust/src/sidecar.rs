@@ -46,6 +46,10 @@ pub const MAX_NEURONS: usize = 65_536;
 pub const MAX_KNOWN_CALLERS: usize = 65_536;
 /// Largest sidecar answer read.
 pub const MAX_ANSWER_BYTES: usize = 32 << 20;
+/// The known-callers scope of [`SidecarClient::policy`]. Never the raw request
+/// path: a caller could invent paths to fill the bounded set and evict the
+/// other validators during a chain outage.
+pub const POLICY_SCOPE: &str = "middleware";
 /// Token length bounds.
 pub const TOKEN_LENGTH: std::ops::RangeInclusive<usize> = 16..=1024;
 
@@ -843,10 +847,16 @@ impl SidecarClient {
         Ok(n)
     }
 
-    /// The hook for `axum::MinerAuth::with_policy` (scope: the route path).
+    /// The hook for `axum::MinerAuth::with_policy`, with the scope
+    /// [`POLICY_SCOPE`] for every route (one policy guards them all).
     pub fn policy(self: &Arc<Self>) -> PolicyFn {
         let me = Arc::clone(self);
-        Arc::new(move |caller, path| me.check(&caller.hotkey, path).map(|_| ()))
+        Arc::new(move |caller, _path| me.check(&caller.hotkey, POLICY_SCOPE).map(|_| ()))
+    }
+
+    /// Entries in the known-callers set.
+    pub fn known_callers(&self) -> usize {
+        self.state().known.len()
     }
 }
 

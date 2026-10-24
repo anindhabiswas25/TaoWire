@@ -106,7 +106,9 @@ Python `CallerPolicy` + `CallerGate` locally:
 - stages from the reported age and tempo: max age = `TW_METAGRAPH_MAX_AGE_S` or 2 tempos × 12 s, soft age =
   `TW_METAGRAPH_SOFT_AGE_S` or min(900 s, max / 2); no snapshot is known-callers-only (fail closed); a failed
   refresh keeps the snapshot, which keeps aging;
-- known callers (per route) are kept past the max age and cleared only when a **newer** snapshot arrives (a
+- known callers (per route pattern in TS, as in Python; one scope for the Go and Rust policy hooks, which guard
+  every route with one policy — never the raw request path, which a caller could vary to fill the bounded set)
+  are kept past the max age and cleared only when a **newer** snapshot arrives (a
   sidecar repeating its own stale snapshot does not clear them); strict mode refuses everyone past the max age;
 - every answer is parsed strictly: a wrong type, a missing field, a duplicate key at any depth, a duplicate uid
   or hotkey, an invalid SS58 address, a non-finite or negative number, a body over 32 MiB rejects the whole

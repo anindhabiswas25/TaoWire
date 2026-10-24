@@ -361,6 +361,13 @@ async fn background_refresh() {
     c.stop();
     let n = seen.0.lock().unwrap().len();
     assert!(n >= 4, "{n}");
+    // Invented paths do not grow the known-callers set (one scope).
+    let hook = c.policy();
+    let caller = Caller { hotkey: ALICE.into(), nonce: 1, scheme: Scheme::Sr25519 };
+    for i in 0..100 {
+        hook(&caller, &format!("/x/{i}")).unwrap();
+    }
+    assert_eq!(c.known_callers(), 1);
     tokio::time::sleep(Duration::from_millis(150)).await;
     assert_eq!(seen.0.lock().unwrap().len(), n, "no refresh after stop");
 }

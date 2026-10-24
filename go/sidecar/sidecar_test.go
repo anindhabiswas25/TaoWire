@@ -488,6 +488,18 @@ func TestBackgroundRefreshAndMiddlewarePolicy(t *testing.T) {
 	if err := hook(r, &btauth.Caller{Hotkey: bob}); codeOf(err) != "tw.forbidden_not_validator" {
 		t.Fatal(err)
 	}
+	// Invented paths do not grow the known-callers set (one scope).
+	for i := 0; i < 100; i++ {
+		if err := hook(httptest.NewRequest("POST", fmt.Sprintf("/x/%d", i), nil), &btauth.Caller{Hotkey: alice}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c.mu.Lock()
+	n = len(c.known)
+	c.mu.Unlock()
+	if n != 1 {
+		t.Fatalf("%d known-caller entries for one caller", n)
+	}
 }
 
 func TestHostileSnapshots(t *testing.T) {
