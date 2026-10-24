@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unicode/utf16"
 	"unicode/utf8"
 )
 
@@ -242,15 +243,54 @@ var (
 	countLiteral = regexp.MustCompile(`^(?:0|[1-9][0-9]*)$`)
 )
 
+// hasLoneSurrogateEscape reports whether valid JSON text holds a \uXXXX escape
+// of a UTF-16 surrogate that is not half of a high+low pair. encoding/json
+// turns such an escape into U+FFFD instead of refusing it, so the bytes are
+// checked first. In valid JSON every backslash starts an escape in a string.
+func hasLoneSurrogateEscape(data []byte) bool {
+	unit := func(i int) (rune, bool) {
+		if i+6 > len(data) || data[i] != '\\' || data[i+1] != 'u' {
+			return 0, false
+		}
+		v, err := strconv.ParseUint(string(data[i+2:i+6]), 16, 16)
+		return rune(v), err == nil
+	}
+	for i := 0; i < len(data); i++ {
+		if data[i] != '\\' {
+			continue
+		}
+		r, ok := unit(i)
+		switch {
+		case !ok:
+			i++ // a one-character escape: skip the escaped character
+		case utf16.IsSurrogate(r) && r < 0xDC00:
+			low, ok := unit(i + 6)
+			if !ok || low < 0xDC00 || low > 0xDFFF {
+				return true
+			}
+			i += 11
+		case utf16.IsSurrogate(r):
+			return true // a low surrogate with no high one before it
+		default:
+			i += 5
+		}
+	}
+	return false
+}
+
 // ParseTrailer parses tw-end data strictly: a JSON object with exactly digest
 // (64 lowercase hex), count (an integer literal >= 0 that fits a uint64) and
-// optionally signature (a string), no other key, no key twice. Errors are
+// optionally signature (a string), no other key, no key twice, and no lone
+// UTF-16 surrogate escape in any string (spec 9.2, D43). Errors are
 // *TrailerError.
 func ParseTrailer(data []byte) (Trailer, error) {
 	var t Trailer
 	bad := func(reason string) (Trailer, error) { return Trailer{}, &TrailerError{reason} }
 	if !utf8.Valid(data) || !json.Valid(data) {
 		return bad("tw-end data is not valid JSON")
+	}
+	if hasLoneSurrogateEscape(data) {
+		return bad("tw-end holds a lone surrogate escape")
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()

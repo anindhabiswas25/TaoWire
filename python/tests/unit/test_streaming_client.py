@@ -206,6 +206,7 @@ class Model(BaseModel):
         (b"event: chunk\ndata: not json\n\n", {}),
         (b"event: chunk\ndata: 5\n\n", {}),
         (b'event: chunk\ndata: {"t": "a"}\n\n', {"chunk_model": Model}),
+        (b"event: chunk\ndata: " + b"[" * 129 + b"]" * 129 + b"\n\n", {}),  # D43
     ],
 )
 async def test_bad_chunks_are_invalid_responses(frame: bytes, kw: Any) -> None:

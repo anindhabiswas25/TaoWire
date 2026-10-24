@@ -255,12 +255,17 @@ function topLevelMembers(text: string): [string, string][] {
     }
 }
 
+// With the u flag a valid high + low pair is one code point, so this matches
+// only a lone surrogate. The decoder is fatal on invalid UTF-8: in parsed
+// text a lone surrogate can only come from a \u escape.
+const LONE_SURROGATE = /[\uD800-\uDFFF]/u;
+
 /**
  * Parse `tw-end` data strictly (the Python reference's `parse_trailer`): a
  * JSON object with exactly `digest` (64 lowercase hex), `count` (an integer
  * literal ≥ 0 that fits a u64; no sign, fraction or exponent) and optionally
- * `signature` (a string), no other key, no key twice. Throws
- * {@link TrailerError}.
+ * `signature` (a string), no other key, no key twice, and no lone UTF-16
+ * surrogate escape in any string (spec 9.2, D43). Throws {@link TrailerError}.
  */
 export function parseTrailer(data: Uint8Array): Trailer {
     let text: string;
@@ -276,6 +281,10 @@ export function parseTrailer(data: Uint8Array): Trailer {
     }
     const members = topLevelMembers(text);
     const keys = members.map(([k]) => k);
+    const values: unknown[] = Object.values(value as Record<string, unknown>);
+    if ([...keys, ...values].some((v) => typeof v === "string" && LONE_SURROGATE.test(v))) {
+        throw new TrailerError("tw-end holds a lone surrogate escape");
+    }
     if (new Set(keys).size !== keys.length) {
         throw new TrailerError("duplicate key in tw-end");
     }

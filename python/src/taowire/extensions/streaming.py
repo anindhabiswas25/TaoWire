@@ -24,6 +24,12 @@ one is a complete one), so with them only one split of the signed bytes is
 possible and a relay cannot move chunk boundaries under a valid signature.
 The miner refuses to emit anything else; the validator rejects anything else.
 
+**Depth and trailer form (D43).** A chunk nests at most :data:`MAX_CHUNK_DEPTH`
+(128) levels, arrays and objects counted together. In ``tw-end``, ``count`` is
+a plain non-negative integer literal that fits a u64 (no ``-0``, fraction or
+exponent) and no string holds a lone UTF-16 surrogate escape. Go, Rust and
+TypeScript apply the same rules.
+
 This module holds what both sides share: the SSE parser (it reads untrusted
 bytes), framing, the digest, chunk and trailer encoding, and the limits. The
 miner side is ``taowire.miner.streaming``; the validator side is
@@ -55,6 +61,7 @@ __all__ = [
     "EVENT_END",
     "IDLE_S_RANGE",
     "MAX_BYTES_RANGE",
+    "MAX_CHUNK_DEPTH",
     "MAX_S_RANGE",
     "TRAILER_RESERVE",
     "ChunkError",
@@ -85,6 +92,10 @@ _LINE_END = re.compile(rb"\r\n|\r|\n")
 _BOM: Final = b"\xef\xbb\xbf"
 _HEX_DIGEST = re.compile(r"[0-9a-f]{64}")
 _TRAILER_KEYS = frozenset({"digest", "count", "signature"})
+_U64_MAX: Final = 2**64 - 1
+
+#: Deepest nesting a chunk may have (D43): ``[]`` is 1, ``[[]]`` is 2.
+MAX_CHUNK_DEPTH: Final = 128
 
 
 class ChunkError(ValueError):
@@ -164,15 +175,40 @@ def _reject_constant(name: str) -> Any:
     raise ChunkError(f"{name} is not valid JSON")
 
 
+def _too_deep(value: Any) -> bool:
+    """True if ``value`` nests deeper than :data:`MAX_CHUNK_DEPTH`.
+
+    Iterative, and stops at the first level past the limit, so neither a deep
+    nor a self-referencing value can exhaust the stack or loop.
+    """
+    stack: list[tuple[Any, int]] = [(value, 1)]
+    while stack:
+        item, depth = stack.pop()
+        if not isinstance(item, (dict, list)):
+            continue
+        if depth > MAX_CHUNK_DEPTH:
+            return True
+        stack.extend((child, depth + 1) for child in _children(item))
+    return False
+
+
+def _children(item: dict[Any, Any] | list[Any]) -> Any:
+    return item.values() if isinstance(item, dict) else item
+
+
 def encode_chunk(item: Any) -> bytes:
     """The ``data`` bytes of one chunk (miner side). Raises :class:`ChunkError`.
 
     Models and plain values are written as compact JSON (no NaN / infinity);
-    ``bytes`` are checked and sent as they are.
+    ``bytes`` are checked and sent as they are. Nothing deeper than
+    :data:`MAX_CHUNK_DEPTH` is emitted (D43).
     """
     if isinstance(item, BaseModel):
         data = item.model_dump_json().encode()
+        decode_chunk(data)
     elif isinstance(item, (dict, list)):
+        if _too_deep(item):
+            raise ChunkError("chunk is nested too deeply")
         try:
             text = json.dumps(
                 item, ensure_ascii=False, separators=(",", ":"), allow_nan=False
@@ -187,9 +223,6 @@ def encode_chunk(item: Any) -> bytes:
         raise ChunkError(f"chunk of type {type(item).__name__} is not supported")
     if b"\n" in data or b"\r" in data:
         raise ChunkError("chunk contains a line break")
-    stripped = data.lstrip(b" \t")
-    if not stripped.startswith((b"{", b"[")):
-        raise ChunkError("chunk must be a JSON object or array")
     return data
 
 
@@ -197,7 +230,8 @@ def decode_chunk(data: bytes) -> Any:
     """Parse one chunk's ``data`` (validator side): a JSON object or array.
 
     Raises :class:`ChunkError` for invalid UTF-8, invalid JSON, NaN /
-    infinity, or any other top-level value.
+    infinity, nesting deeper than :data:`MAX_CHUNK_DEPTH`, or any other
+    top-level value.
     """
     try:
         value = json.loads(data.decode("utf-8"), parse_constant=_reject_constant)
@@ -205,6 +239,8 @@ def decode_chunk(data: bytes) -> Any:
         raise ChunkError("chunk is not valid JSON") from None
     if not isinstance(value, (dict, list)):
         raise ChunkError("chunk must be a JSON object or array")
+    if _too_deep(value):
+        raise ChunkError("chunk is nested too deeply")
     return value
 
 
@@ -249,24 +285,55 @@ def encode_trailer(trailer: Trailer) -> bytes:
 def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key, value in pairs:
+        for text in (key, value):
+            if isinstance(text, str) and _lone_surrogate(text):
+                raise TrailerError("tw-end holds a lone surrogate escape")
         if key in out:
             raise TrailerError(f"duplicate key {key!r} in tw-end")
         out[key] = value
     return out
 
 
+def _lone_surrogate(text: str) -> bool:
+    # json.loads joins a valid escaped pair into one code point, so any
+    # surrogate code point left over came from a lone escape.
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        return True
+    return False
+
+
+def _plain_count(literal: str) -> int:
+    # The trailer's only number is ``count``: no sign, so no ``-0``.
+    if literal.startswith("-"):
+        raise TrailerError("tw-end count must be an integer >= 0")
+    # 20 digits hold any u64; the bound also keeps int() away from very
+    # long literals (CPython refuses more than 4,300 digits with ValueError).
+    if len(literal) > len(str(_U64_MAX)) or int(literal) > _U64_MAX:
+        raise TrailerError("tw-end count is out of range")
+    return int(literal)
+
+
+def _no_float(_literal: str) -> Any:
+    raise TrailerError("tw-end count must be an integer >= 0")
+
+
 def parse_trailer(data: bytes) -> Trailer:
     """Parse ``tw-end`` data strictly. Raises :class:`TrailerError`.
 
     It must be a JSON object with ``digest`` (64 lowercase hex), ``count``
-    (an integer >= 0) and optionally ``signature`` (a string), nothing else,
-    with no key twice.
+    (an integer literal >= 0 that fits a u64: no sign, fraction or exponent)
+    and optionally ``signature`` (a string), nothing else, with no key twice
+    and no lone surrogate escape in any string (D43).
     """
     try:
         value = json.loads(
             data.decode("utf-8"),
             object_pairs_hook=_unique,
             parse_constant=_reject_constant,
+            parse_int=_plain_count,
+            parse_float=_no_float,
         )
     except (UnicodeDecodeError, json.JSONDecodeError, ChunkError, RecursionError):
         raise TrailerError("tw-end data is not valid JSON") from None

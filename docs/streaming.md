@@ -38,6 +38,11 @@ async def generate(req: Prompt, ctx: RouteContext) -> AsyncIterator[Token]:
   would have the same digest and count, so a relay on plain HTTP could move
   chunk boundaries under a valid signature. Objects and arrays are
   self-delimiting, so only one split is possible.
+- **A chunk nests at most 128 levels** (arrays and objects counted
+  together, D43); a deeper one is refused like a scalar. The trailer is
+  strict too: `count` is a plain non-negative integer that fits a u64 (no
+  `-0`, fraction or exponent) and no string in it holds a lone UTF-16
+  surrogate escape. Every language applies the same rules.
 - The full request path runs before the first byte: body cap, IP and hotkey
   limits, btauth/1 verification, replay store, caller policy, request
   parsing. Failures there are the usual JSON errors (signed when they come
@@ -119,7 +124,7 @@ What the client checks (rejections are for the whole stream):
 | the connection breaks before `tw-end` | `tw.bad_response_signature` |
 | the stream runs past `max_s` or the query's time budget, or no complete event for `idle_s` (a one-byte-at-a-time drip is cut too), or the body does not end after `tw-end` | `tw.timeout` |
 | more than `max_bytes` on the wire | `tw.response_too_large` |
-| a chunk that is not a JSON object or array, or does not fit `chunk_model`; a `200` that is not `text/event-stream`; a compressed stream | `tw.invalid_response` |
+| a chunk that is not a JSON object or array, nests deeper than 128, or does not fit `chunk_model`; a `200` that is not `text/event-stream`; a compressed stream | `tw.invalid_response` |
 
 Unknown event names and SSE comments are ignored; they are not part of the
 digest. With `TW_VERIFY_RESPONSES=0` digest and count are still checked, the

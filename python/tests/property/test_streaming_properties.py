@@ -15,6 +15,10 @@ The SSE parser reads untrusted bytes from miners. These tests check:
    everything else.
 6. Chunk boundaries are unambiguous: no other split of the signed bytes into
    the same number of valid chunks exists (why chunks are objects/arrays).
+7. D43: a chunk is accepted (both ways) exactly when it nests at most 128
+   levels; ``tw-end`` ``count`` is accepted exactly when it is a plain
+   non-negative integer literal that fits a u64; a lone surrogate escape in
+   any trailer string is refused, an escaped pair is not.
 """
 
 from __future__ import annotations
@@ -258,3 +262,90 @@ def test_no_other_split_of_the_signed_bytes_is_valid(values: list[Any]) -> None:
         except sse.ChunkError:
             continue
         assert split == chunks
+
+
+# ---------------------------------------------------------------- D43
+
+
+@st.composite
+def nested_chunk(draw: st.DrawFn) -> tuple[int, bytes]:
+    """A chunk of a random depth, each level an array or an object."""
+    depth = draw(st.integers(min_value=1, max_value=300))
+    kinds = draw(st.lists(st.booleans(), min_size=depth, max_size=depth))
+    opens = b"".join(b'{"k":' if obj else b"[" for obj in kinds)
+    closes = b"".join(b"}" if obj else b"]" for obj in reversed(kinds))
+    # An object's value cannot be empty: the innermost object gets a 0.
+    middle = b"0" if kinds[-1] else b""
+    return depth, opens + middle + closes
+
+
+@settings(max_examples=300)
+@given(chunk=nested_chunk())
+def test_chunk_depth_is_accepted_up_to_128_exactly(chunk: tuple[int, bytes]) -> None:
+    depth, raw = chunk
+    for call in (sse.decode_chunk, sse.encode_chunk):
+        try:
+            call(raw)
+        except sse.ChunkError:
+            assert depth > sse.MAX_CHUNK_DEPTH, (call.__name__, depth)
+        else:
+            assert depth <= sse.MAX_CHUNK_DEPTH, (call.__name__, depth)
+    if depth <= sse.MAX_CHUNK_DEPTH:
+        assert sse.encode_chunk(json.loads(raw)) == raw.replace(b" ", b"")
+
+
+_DIGEST = "ab" * 32
+
+
+def _trailer(count: str, signature: str = '"0x00"') -> bytes:
+    return f'{{"digest":"{_DIGEST}","count":{count},"signature":{signature}}}'.encode()
+
+
+@given(n=st.integers(min_value=-(2**70), max_value=2**70))
+def test_count_accepts_exactly_the_u64_range(n: int) -> None:
+    try:
+        trailer = sse.parse_trailer(_trailer(str(n)))
+    except sse.TrailerError:
+        assert not 0 <= n <= 2**64 - 1
+    else:
+        assert 0 <= n <= 2**64 - 1
+        assert trailer.count == n
+
+
+@given(
+    literal=st.one_of(
+        st.just("-0"),
+        st.integers(min_value=0, max_value=10**6).map(lambda n: f"{n}.0"),
+        st.integers(min_value=0, max_value=10**6).map(lambda n: f"{n}e0"),
+        st.integers(min_value=0, max_value=10**6).map(lambda n: f"{n}E+1"),
+        st.floats(allow_nan=False, allow_infinity=False).map(repr),
+    )
+)
+def test_count_refuses_sign_fraction_and_exponent(literal: str) -> None:
+    try:
+        sse.parse_trailer(_trailer(literal))
+    except sse.TrailerError:
+        return
+    raise AssertionError(f"accepted count {literal}")
+
+
+surrogate = st.integers(min_value=0xD800, max_value=0xDFFF)
+
+
+@given(unit=surrogate, before=st.text(max_size=4), after=st.text(max_size=4))
+def test_a_lone_surrogate_escape_is_refused(unit: int, before: str, after: str) -> None:
+    text = json.dumps(before)[1:-1] + f"\\u{unit:04x}" + json.dumps(after)[1:-1]
+    # st.text draws no surrogates and json.dumps escapes an astral character
+    # as a high + low pair, so the inserted unit can never complete a pair.
+    try:
+        sse.parse_trailer(_trailer("1", f'"{text}"'))
+    except sse.TrailerError:
+        return
+    raise AssertionError(f"accepted a lone surrogate {text!r}")
+
+
+@given(char=st.characters(min_codepoint=0x10000, max_codepoint=0x10FFFF))
+def test_an_escaped_surrogate_pair_is_accepted(char: str) -> None:
+    escaped = json.dumps(char)  # ensure_ascii: an escaped UTF-16 pair
+    assert escaped.count("\\u") == 2
+    assert sse.parse_trailer(_trailer("1", escaped)).signature == char

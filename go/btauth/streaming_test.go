@@ -167,6 +167,12 @@ func TestParseTrailer(t *testing.T) {
 		`{"digest":"` + d + `","count":1,"signature":1}`, `{"digest":"` + d + `","count":1,"x":1}`,
 		`{"digest":"` + d + `","count":1,"count":1}`, `{"digest":"` + d + `","digest":"` + d + `","count":1}`,
 		`{"digest":"` + d + `","count":1}x`, `{"digest":{},"count":1}`, "\xff",
+		// D43: no lone UTF-16 surrogate escape in any string.
+		`{"digest":"` + d + `","count":1,"signature":"0x\ud800"}`,
+		`{"digest":"` + d + `","count":1,"signature":"\uDFFF0x"}`,
+		`{"digest":"` + d + `","count":1,"signature":"\ud800\u0041"}`,
+		`{"digest":"` + d + `","count":1,"signature":"\ude00\ud83d"}`,
+		`{"digest":"` + d + `","count":1,"\ud800":"x"}`,
 	} {
 		var te *TrailerError
 		if _, err := ParseTrailer([]byte(bad)); !errors.As(err, &te) {
@@ -175,6 +181,11 @@ func TestParseTrailer(t *testing.T) {
 	}
 	if tr, err := ParseTrailer([]byte(`{"digest":"` + d + `","count":18446744073709551615}`)); err != nil || tr.Count != ^uint64(0) {
 		t.Fatal(err)
+	}
+	// An escaped pair is one code point; other escapes are not surrogates.
+	pair := `{"digest":"` + d + `","count":1,"signature":"\ud83d\ude00 \\u \" \u00e9"}`
+	if tr, err := ParseTrailer([]byte(pair)); err != nil || tr.Signature != "\U0001F600 \\u \" é" {
+		t.Fatal(tr, err)
 	}
 }
 

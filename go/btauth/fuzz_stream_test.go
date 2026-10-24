@@ -33,6 +33,7 @@ func FuzzParseTrailer(f *testing.F) {
 	f.Add([]byte(`{"digest":"` + string(bytes.Repeat([]byte("a"), 64)) + `","count":1,"signature":"0x"}`))
 	f.Add([]byte(`{"digest":"x","count":1.0,"count":2}`))
 	f.Add([]byte(`[{"digest":1}]`))
+	f.Add([]byte(`{"signature":"\ud83d\ude00\ud800","count":1}`))
 	f.Fuzz(func(t *testing.T, data []byte) {
 		tr, err := ParseTrailer(data)
 		if err != nil {

@@ -157,6 +157,14 @@ def tw_miner(tw_miner_kwargs: dict[str, Any]) -> Miner:
         yield {"i": 0}
         yield 7
 
+    @miner.route("/v1/too-deep", request=Gen, stream=True)
+    async def too_deep(req: Gen, ctx: RouteContext) -> AsyncIterator[Any]:
+        yield {"i": 0}
+        deep: list[Any] = []
+        for _ in range(128):  # 129 levels with the outer list (D43)
+            deep = [deep]
+        yield deep
+
     @miner.route("/v1/wrong-model", request=Gen, response=Token, stream=True)
     async def wrong_model(req: Gen, ctx: RouteContext) -> AsyncIterator[Any]:
         yield {"token": "a dict, not a Token"}
@@ -417,6 +425,7 @@ async def test_failures_before_the_first_chunk_are_signed_json_errors(
         ("/v1/endless", "max_duration"),
         ("/v1/big", "max_bytes"),
         ("/v1/scalar", "bad_chunk"),
+        ("/v1/too-deep", "bad_chunk"),
         ("/v1/wrong-model", "bad_chunk"),
     ],
 )

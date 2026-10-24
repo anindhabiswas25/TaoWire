@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import BaseModel
@@ -85,6 +86,50 @@ def test_decode_chunk_refuses(data: bytes) -> None:
         sse.decode_chunk(data)
 
 
+def _nested(depth: int) -> bytes:
+    return b"[" * depth + b"]" * depth
+
+
+def test_chunk_depth_limit_is_128_both_ways() -> None:
+    # D43: [] is depth 1; arrays and objects count together.
+    assert sse.MAX_CHUNK_DEPTH == 128
+    assert sse.decode_chunk(_nested(128)) is not None
+    mixed = b'{"a":' * 64 + b"[" * 64 + b"]" * 64 + b"}" * 64
+    assert sse.decode_chunk(mixed) is not None
+    assert sse.encode_chunk(_nested(128)) == _nested(128)
+    for deep in (_nested(129), b'{"a":' * 65 + b"[" * 64 + b"]" * 64 + b"}" * 65):
+        with pytest.raises(sse.ChunkError, match="too deeply"):
+            sse.decode_chunk(deep)
+        with pytest.raises(sse.ChunkError, match="too deeply"):
+            sse.encode_chunk(deep)
+        with pytest.raises(sse.ChunkError, match="too deeply"):
+            sse.encode_chunk(json.loads(deep))
+
+
+class Deep(BaseModel):
+    child: Deep | None = None
+
+
+def test_encode_chunk_refuses_deep_values_without_recursing() -> None:
+    value: list[Any] = []
+    inner = value
+    for _ in range(100_000):  # far past the interpreter's recursion limit
+        inner.append([])
+        inner = inner[0]
+    with pytest.raises(sse.ChunkError, match="too deeply"):
+        sse.encode_chunk(value)
+    loop: list[Any] = []
+    loop.append(loop)
+    with pytest.raises(sse.ChunkError):
+        sse.encode_chunk(loop)
+    model = Deep()
+    for _ in range(128):  # 129 objects: one level too deep
+        model = Deep(child=model)
+    with pytest.raises(sse.ChunkError, match="too deeply"):
+        sse.encode_chunk(model)
+    assert sse.encode_chunk(Deep(child=Deep())) == b'{"child":{"child":null}}'
+
+
 def test_trailer_round_trip() -> None:
     trailer = sse.Trailer(digest=DIGEST, count=3, signature="0x" + "1" * 128)
     assert sse.parse_trailer(sse.encode_trailer(trailer)) == trailer
@@ -110,11 +155,33 @@ def test_trailer_round_trip() -> None:
         b'{"digest": "abc", "count": 1}',
         b'{"digest": "%s", "count": 1, "signature": 5}' % DIGEST.encode(),
         b'{"digest": "%s", "count": NaN}' % DIGEST.encode(),
+        # D43: a plain non-negative integer literal that fits a u64 ...
+        b'{"digest": "%s", "count": -0}' % DIGEST.encode(),
+        b'{"digest": "%s", "count": 1e2}' % DIGEST.encode(),
+        b'{"digest": "%s", "count": 1E0}' % DIGEST.encode(),
+        b'{"digest": "%s", "count": 0.5}' % DIGEST.encode(),
+        b'{"digest": "%s", "count": 18446744073709551616}' % DIGEST.encode(),
+        b'{"digest": "%s", "count": %s}' % (DIGEST.encode(), b"9" * 5000),
+        b'{"digest": "%s", "count": 01}' % DIGEST.encode(),
+        # ... and no lone surrogate escape in any string
+        b'{"digest": "%s", "count": 1, "signature": "0x\\ud800"}' % DIGEST.encode(),
+        b'{"digest": "%s", "count": 1, "signature": "\\udfff0x"}' % DIGEST.encode(),
+        b'{"digest": "%s", "count": 1, "\\ud800": "x"}' % DIGEST.encode(),
     ],
 )
 def test_parse_trailer_refuses(data: bytes) -> None:
     with pytest.raises(sse.TrailerError):
         sse.parse_trailer(data)
+
+
+def test_parse_trailer_count_edges_and_surrogate_pairs() -> None:
+    top = b'{"digest": "%s", "count": 18446744073709551615}' % DIGEST.encode()
+    assert sse.parse_trailer(top).count == 2**64 - 1
+    zero = b'{"digest": "%s", "count": 0}' % DIGEST.encode()
+    assert sse.parse_trailer(zero).count == 0
+    # A valid escaped pair is one code point, not a lone surrogate.
+    pair = b'{"digest": "%s", "count": 1, "signature": "\\ud83d\\ude00"}'
+    assert sse.parse_trailer(pair % DIGEST.encode()).signature == "\U0001f600"
 
 
 def test_limits_defaults_and_ranges() -> None:

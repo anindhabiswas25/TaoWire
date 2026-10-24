@@ -73,10 +73,11 @@ until the trailer verifies.
 | Slots | `StreamSlots`, `DefaultStreamSlots` | `sse::StreamSlots` (a dropped `StreamSlot` releases) | `StreamSlots`, `DEFAULT_STREAM_SLOTS` |
 | A client that stops reading | `max_s` is a write deadline (`http.ResponseController`) | the producer stops at `max_s`; hyper has no write deadline, so the socket stays until TCP gives up (bounded by the slots) | the socket is destroyed at `max_s` |
 
-Differences from the Python reference, all stricter: chunks nested deeper than 128 are refused (Python: about
-1000, its recursion limit; spec question in COORDINATION.md); a `tw-end` count written `-0` is refused (Python
-reads it as 0). Rust's `serde_json` refuses lone UTF-16 surrogate escapes in a trailer's strings (Python
-accepts them; a trailer never contains any).
+Chunk and trailer rules are the same in all four languages, Python included (spec 9.2, D43): a chunk nests at
+most 128 levels (arrays and objects counted together; the miner never emits a deeper one, the client rejects one as
+`tw.invalid_response`); in `tw-end`, `count` is a plain non-negative integer literal that fits a u64 (`-0`, a
+fraction or an exponent is refused) and no string holds a lone UTF-16 surrogate escape (an escaped high + low pair
+is one character and is fine). There are no differences from the Python reference here.
 
 Interop without a chain: `conformance/interop/stream_check.py` (every language's stream client against the Python
 miner and the Python client against every language's miner, through a relay that tampers with, reorders, drops

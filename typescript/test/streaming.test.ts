@@ -229,11 +229,19 @@ describe("chunks, trailers, framing", () => {
             `{"digest":"${d}","count":1}x`,
             '{"digest":{},"count":1}',
             ` { "digest" : "${d}" , "count" : [1] } `,
+            // D43: no lone UTF-16 surrogate escape in any string.
+            `{"digest":"${d}","count":1,"signature":"0x\\ud800"}`,
+            `{"digest":"${d}","count":1,"signature":"\\uDFFF0x"}`,
+            `{"digest":"${d}","count":1,"signature":"\\ude00\\ud83d"}`,
+            `{"digest":"${d}","count":1,"\\ud800":"x"}`,
         ]) {
             expect(() => parseTrailer(enc(bad)), bad).toThrow(TrailerError);
         }
         expect(() => parseTrailer(Uint8Array.of(0xff))).toThrow(TrailerError);
         expect(parseTrailer(enc(` { "digest" : "${d}" , "count" : 2 } `)).count).toBe(2n);
+        // An escaped pair is one code point, not a lone surrogate.
+        const pair = `{"digest":"${d}","count":1,"signature":"\\ud83d\\ude00"}`;
+        expect(parseTrailer(enc(pair)).signature).toBe("\u{1F600}");
     });
 
     it("frames events, reserves the trailer and checks the limits", () => {

@@ -213,10 +213,18 @@ fn trailers() {
         format!(r#"{{"digest":"{d}","d\u0069gest":"{d}","count":1}}"#),
         format!(r#"{{"digest":"{d}","count":1}}x"#),
         r#"{"digest":{},"count":1}"#.into(),
+        // D43: no lone UTF-16 surrogate escape in any string (serde_json refuses one).
+        format!(r#"{{"digest":"{d}","count":1,"signature":"0x\ud800"}}"#),
+        format!(r#"{{"digest":"{d}","count":1,"signature":"\uDFFF0x"}}"#),
+        format!(r#"{{"digest":"{d}","count":1,"signature":"\ude00\ud83d"}}"#),
+        format!(r#"{{"digest":"{d}","count":1,"\ud800":"x"}}"#),
     ] {
         assert!(parse_trailer(bad.as_bytes()).is_err(), "{bad}");
     }
     assert!(parse_trailer(b"\xff").is_err());
+    // An escaped pair is one code point, not a lone surrogate.
+    let pair = format!(r#"{{"digest":"{d}","count":1,"signature":"\ud83d\ude00"}}"#);
+    assert_eq!(parse_trailer(pair.as_bytes()).unwrap().signature.as_deref(), Some("\u{1F600}"));
 }
 
 #[test]

@@ -190,3 +190,12 @@ All notable changes to this project are documented here. The format follows
   bounded set and evict other validators during an outage).
 - Sidecar clients judge a snapshot newer by its block (a slow answer of the same stale snapshot no longer clears
   the known callers).
+
+### Changed (Phase 5 gate carry-overs)
+
+- Python streaming applies D43 like Go, Rust and TypeScript (G7-1, spec 9.2): `encode_chunk` / `decode_chunk`
+  refuse chunks nested deeper than 128 (`MAX_CHUNK_DEPTH`), and `parse_trailer` refuses a `count` that is not a
+  plain non-negative integer literal fitting a u64 (`-0`, fractions, exponents) and lone UTF-16 surrogate escapes.
+  Go and TypeScript now refuse lone surrogate escapes in the trailer too (Rust's `serde_json` already did).
+  `encode_chunk` on a value deeper than the interpreter's recursion limit raises `ChunkError` (it raised
+  `RecursionError`).
