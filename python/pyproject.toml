@@ -82,14 +82,18 @@ taowire = "taowire.testing.pytest_plugin"
 [tool.hatch.version]
 path = "src/taowire/version.py"
 
+# Core metadata 2.4 (PEP 639 licence expression): hatchling >= 1.30 writes 2.5 by
+# default, which twine 6.2 rejects; 2.4 is what the registries and tools all read.
 [tool.hatch.build.targets.wheel]
 packages = ["src/taowire"]
+core-metadata-version = "2.4"
 
 # G6-1: the sdist holds exactly these (hatchling would otherwise sweep in any
 # git-ignored virtualenv not named .venv, e.g. the .venv-py310 of the Python 3.10
 # check). tests/unit/test_packaging.py checks the archive against this list.
 [tool.hatch.build.targets.sdist]
 only-include = ["src/taowire", "pyproject.toml", "README.md", "LICENSE"]
+core-metadata-version = "2.4"
 exclude = ["__pycache__", "*.py[cod]"]
 
 # ---------------------------------------------------------------- ruff
