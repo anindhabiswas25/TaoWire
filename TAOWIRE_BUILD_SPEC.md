@@ -1809,7 +1809,7 @@ Notes:
 
 ### 11.4 Go (`github.com/<org>/taowire/go/btauth`)
 
-**Go:** the module keeps the `go 1.22` directive (the minimum for users). Development, release builds and `just audit` use a **supported** Go release (currently the 1.25 or 1.26 line), so `govulncheck` judges a patched standard library (decision D23). **Module path:** working name `github.com/taowire/taowire/go` (package `.../go/btauth`) until package names are reserved (Phase 0 item); rename with one search-and-replace. **Dependencies:** `github.com/ChainSafe/go-schnorrkel` (sr25519), stdlib `crypto/ed25519`, `crypto/sha256`, `golang.org/x/crypto/blake2b` (SS58 checksum), `github.com/mr-tron/base58`, `github.com/redis/go-redis/v9` (optional).
+**Go:** the module keeps the `go 1.22` directive (the minimum for users). Development, release builds and `just audit` use a **supported** Go release (currently the 1.25 or 1.26 line), so `govulncheck` judges a patched standard library (decision D23). **Module path:** working name `github.com/anindhabiswas25/TaoWire/go` (package `.../go/btauth`) until package names are reserved (Phase 0 item); rename with one search-and-replace. **Dependencies:** `github.com/ChainSafe/go-schnorrkel` (sr25519), stdlib `crypto/ed25519`, `crypto/sha256`, `golang.org/x/crypto/blake2b` (SS58 checksum), `github.com/mr-tron/base58`, `github.com/redis/go-redis/v9` (optional).
 
 ```go
 func BuildPayload(scheme, method, target string, body []byte, nonce uint64, sender, receiver string) []byte {
@@ -2501,12 +2501,14 @@ Before Phase 6, one alpha is published so subnet builders can build on the kit a
 | `taowire` | PyPI | `0.1.0a1` (PEP 440 pre-release; `pip install taowire` skips it, `pip install --pre taowire` or `taowire==0.1.0a1` gets it) |
 | `@taowire/btauth` | npm | `0.1.0-alpha.1`, dist-tag `alpha` (never `latest`) |
 | `taowire-btauth` | crates.io | `0.1.0-alpha.1` (crates.io releases cannot be deleted, only yanked) |
-| `github.com/taowire/taowire/go` | Go module proxy | tag `go/v0.1.0-alpha.1` |
+| `github.com/anindhabiswas25/TaoWire/go` | Go module proxy | tag `go/v0.1.0-alpha.1` |
 
 Rules:
 - Every README and package description starts with the alpha notice: not security-reviewed, APIs may change, for localnet and testnet, **not for mainnet value**.
 - The 18.4 checklist applies (signed tag `v0.1.0a1`, checksums signed, smoke installs from the public registries), except item 1 needs `just check audit localnet-test interop` only (no testnet).
-- Source is public at `github.com/taowire/taowire` before any package goes up, so reviewers can read what they install. The whole git history is scanned for secrets before the first push.
+- Source is public at `github.com/anindhabiswas25/TaoWire` before any package goes up, so reviewers can read what they install. The whole git history is scanned for secrets before the first push.
+- **What goes public (user decision, 2026-10-24).** The public repo gets a fresh history (one initial commit per release, built from the product tree), never the private development history. Excluded: `reports/`, `docs/team/`, `CLAUDE.md`, `.claude/`, every build output and anything `.gitignore` covers. No public file may link into an excluded path. The GitHub `README.md` is the PM's (written before the first push).
+- The Go module path follows the repo, case included: `github.com/anindhabiswas25/TaoWire/go` (the Go proxy case-encodes it; `go get` works as written).
 - Feedback: GitHub issues; security reports through GitHub private vulnerability reporting (`SECURITY.md`).
 - Further alphas (`0.1.0a2`, …) follow the same rules. `1.0.0-rc1` still needs Phase 6.
 
