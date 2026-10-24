@@ -202,7 +202,8 @@ pub struct StreamConfig {
     /// Wait for the first chunk at most this long (default 10 s,
     /// `TW_HANDLER_TIMEOUT_S`).
     pub first_chunk_timeout: Duration,
-    /// Open streams per caller (D36); share one per process.
+    /// Open streams per caller (D36); the default is [`default_stream_slots`],
+    /// shared by the whole process.
     pub slots: Arc<StreamSlots>,
     /// Names the route for [`StreamConfig::on_abort`].
     pub route: String,
@@ -210,12 +211,20 @@ pub struct StreamConfig {
     pub on_abort: Option<AbortHook>,
 }
 
+/// The process-wide [`StreamSlots`] (16 open streams per caller, D36) that
+/// [`StreamConfig::default`] shares: every default config counts against the
+/// same slots, however often it is built.
+pub fn default_stream_slots() -> Arc<StreamSlots> {
+    static SLOTS: std::sync::OnceLock<Arc<StreamSlots>> = std::sync::OnceLock::new();
+    Arc::clone(SLOTS.get_or_init(|| Arc::new(StreamSlots::default())))
+}
+
 impl Default for StreamConfig {
     fn default() -> Self {
         Self {
             limits: StreamLimits::default(),
             first_chunk_timeout: Duration::from_secs(10),
-            slots: Arc::new(StreamSlots::default()),
+            slots: default_stream_slots(),
             route: String::new(),
             on_abort: None,
         }

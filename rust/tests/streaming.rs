@@ -472,6 +472,12 @@ async fn miner_aborts_end_without_trailer() {
     }
 }
 
+#[test]
+fn default_configs_share_the_process_slots() {
+    let (a, b) = (StreamConfig::default(), StreamConfig::default());
+    assert!(Arc::ptr_eq(&a.slots, &b.slots), "a per-request default config must not reset D36");
+}
+
 #[tokio::test]
 async fn open_streams_per_caller() {
     let slots = Arc::new(StreamSlots::new(1).unwrap());
