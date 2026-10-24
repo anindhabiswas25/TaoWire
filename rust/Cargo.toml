@@ -41,6 +41,9 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time",
 tower = { version = "0.5", features = ["util"] }
 futures-util = { version = "0.3", default-features = false }
 axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "original-uri", "json"] }
+# The example miner's own accept loop (header read timeout, G7-2).
+hyper = { version = "1.4", features = ["server", "http1"] }
+hyper-util = { version = "0.1.10", features = ["tokio", "server-graceful"] }
 
 [[test]]
 name = "conformance"

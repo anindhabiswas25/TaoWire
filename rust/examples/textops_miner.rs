@@ -9,6 +9,11 @@
 //! GET  /healthz, /readyz
 //! ```
 //!
+//! Each connection must deliver a request's line and headers within
+//! `TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S` (the Python miner's
+//! request-read deadline; a slower request would be stale anyway), and a body
+//! within the body timeout, so slow clients cannot hold connections open.
+//!
 //! Every request runs, in order: the per-IP limit (429, unsigned), btauth/1
 //! verification, the caller policy from the sidecar's metagraph (403 / 503),
 //! the per-hotkey limit (429, signed), then the handler; answers after
@@ -31,6 +36,9 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
+use hyper::server::conn::http1;
+use hyper_util::rt::{TokioIo, TokioTimer};
+use hyper_util::server::graceful::GracefulShutdown;
 use serde_json::{json, Value};
 use sha2::{Digest as _, Sha256};
 use taowire_btauth::axum::{
@@ -45,6 +53,8 @@ use taowire_btauth::{
     codes, Caller, Config, Error, Keypair, MemoryStore, NonceStore, RateLimit, Scheme,
     TokenBuckets, Verifier,
 };
+use tokio::net::TcpListener;
+use tower::ServiceExt as _;
 
 const ROUTE: &str = "/v1/transform";
 const STREAM_ROUTE: &str = "/v1/transform/stream";
@@ -409,14 +419,52 @@ async fn run() -> Result<(), String> {
         .with_state(app)
         .merge(protected)
         .layer(axum::middleware::from_fn_with_state(ips, ip_limit));
-    let listener = tokio::net::TcpListener::bind(s.bind).await.map_err(|e| e.to_string())?;
+    let listener = TcpListener::bind(s.bind).await.map_err(|e| e.to_string())?;
     log("miner_started", json!({"bind": s.bind.to_string(), "hotkey": hotkey, "netuid": s.netuid}));
-    axum::serve(listener, router.into_make_service_with_connect_info::<SocketAddr>())
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
-        .await
-        .map_err(|e| e.to_string())
+    serve(listener, router, s.max_age + s.skew).await;
+    Ok(())
+}
+
+/// Serves `router` until ctrl-c, then waits for open requests to finish.
+///
+/// `axum::serve` sets no header read timeout, so a client sending one header
+/// byte at a time could hold a connection for as long as it likes. Here
+/// hyper closes a connection whose request line and headers (or, between
+/// keep-alive requests, the next request's) have not all arrived within
+/// `header_timeout` (G7-2).
+async fn serve(listener: TcpListener, router: Router, header_timeout: Duration) {
+    let graceful = GracefulShutdown::new();
+    let mut stop = std::pin::pin!(tokio::signal::ctrl_c());
+    loop {
+        let (tcp, peer) = tokio::select! {
+            accepted = listener.accept() => match accepted {
+                Ok(conn) => conn,
+                Err(e) => {
+                    // e.g. out of file descriptors: back off instead of spinning
+                    log("accept_failed", json!({"error": e.to_string()}));
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    continue;
+                }
+            },
+            _ = &mut stop => break,
+        };
+        let router = router.clone();
+        let service = hyper::service::service_fn(move |mut req: Request<hyper::body::Incoming>| {
+            // what into_make_service_with_connect_info provided (the per-IP limit reads it)
+            req.extensions_mut().insert(ConnectInfo(peer));
+            router.clone().oneshot(req.map(axum::body::Body::new))
+        });
+        let conn = http1::Builder::new()
+            .timer(TokioTimer::new())
+            .header_read_timeout(header_timeout)
+            .serve_connection(TokioIo::new(tcp), service);
+        let conn = graceful.watch(conn);
+        tokio::spawn(async move {
+            // a closed or timed-out connection is routine; nothing to report
+            let _ = conn.await;
+        });
+    }
+    graceful.shutdown().await;
 }
 
 #[tokio::main]

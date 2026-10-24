@@ -58,7 +58,7 @@ Validator side (feature `client`): `Client::new(Signer::new(validator_key), reqw
 | `client::Client::stream`, `client::Stream`, `client::UnverifiedChunk` | Streaming query: `next().await` gives unverified chunks, `Ok(None)` only after the trailer verified |
 | `TokenBuckets`, `RateLimit`, `DEFAULT_IP_LIMIT`, `DEFAULT_HOTKEY_LIMIT` | Per-IP / per-hotkey token buckets (spec 8.6.2) |
 | `Keypair::from_hotkey_file(path, scheme)` | A Bittensor hotkey file (owner-only, `secretSeed`, `ss58Address` checked) |
-| `axum::MinerAuth::with_body_timeout`, `MinerAuth::verifier` | Body read deadline (default 10 s; axum::serve has no read timeouts); the verifier for readiness probes |
+| `axum::MinerAuth::with_body_timeout`, `MinerAuth::verifier` | Body read deadline (default 10 s); the verifier for readiness probes. `axum::serve` has no header read timeout: serve with hyper's `http1::Builder::header_read_timeout`, as `examples/textops_miner.rs` does |
 | `axum::MinerAuth::with_policy`, `PolicyFn` | Caller policy after verification (spec 8.5); refusals signed except `axum::UNSIGNED_CODES` |
 | `sidecar::{SidecarClient, Config, CallerPolicy, read_token_file, parse_snapshot, parse_decision, parse_health}` | Feature `sidecar`: the sidecar client (spec 11.6, `docs/multi-language.md` "Sidecar API") — cached metagraph with the 8.5.1 stages, the Python caller policy, `serve_axon` |
 | `sse::{Parser, decode_chunk, encode_chunk, parse_trailer, encode_trailer, encode_event, StreamDigest, StreamLimits, StreamSlots}` | The shared stream pieces (WHATWG SSE parser, D35 chunk rule, strict trailer) |

@@ -278,12 +278,13 @@ uncommitted changes, so `git diff` shows exactly what it changed.
 
 The TypeScript, Go and Rust packages apply the same verification rules as the Python kit (every vector in
 `conformance/vectors/` in each language; the stricter rules of spec 4.3 everywhere; weak keys refused, ADR-0010),
-the same streaming rules (spec 9.2: D35 chunks, D36 slots, the signed trailer) and, through the sidecar client,
+the same streaming rules (spec 9.2: D35 chunks, D36 slots, D43 depth and trailer form, the signed trailer) and,
+through the sidecar client,
 the same caller policy and staleness stages. Their miners have no chain access and no wallet beyond their own
 hotkey file; the sidecar holds the miner's hotkey for `ServeAxon`. Differences to know about
-([multi-language.md](multi-language.md)): stream chunks deeper than 128 levels are refused outside Python (spec
-question 9); Rust's axum server has no header read timeout of its own (put a reverse proxy in front, or use
-hyper-util's builder); Go and Rust read hotkey files with `secretSeed` only.
+([multi-language.md](multi-language.md)): `axum::serve` has no header read timeout of its own, so the Rust example miner serves through hyper's
+builder with one (G7-2), and your own axum server needs the same or a reverse proxy in front; Go and Rust read
+hotkey files with `secretSeed` only.
 
 ## What you still have to do (spec 16.4)
 

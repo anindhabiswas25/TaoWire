@@ -185,6 +185,10 @@ async function main(): Promise<void> {
         requestTimeout: 10_000, // receiving the request only; never a running stream
         keepAliveTimeout: 5_000,
         maxParamLength: 200,
+        // Node enforces headersTimeout / requestTimeout only when it checks its
+        // connections, every 30 s by default: a slow or silent client could hold
+        // a connection for 40 s. Check every second.
+        http: { headersTimeout: 10_000, connectionsCheckingInterval: 1_000 },
     });
     // The pre-auth per-IP limit (spec 8.6.2 layer 1): 429, unsigned.
     app.addHook("onRequest", async (request, reply) => {

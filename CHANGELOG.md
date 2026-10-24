@@ -199,3 +199,8 @@ All notable changes to this project are documented here. The format follows
   Go and TypeScript now refuse lone surrogate escapes in the trailer too (Rust's `serde_json` already did).
   `encode_chunk` on a value deeper than the interpreter's recursion limit raises `ChunkError` (it raised
   `RecursionError`).
+- The Rust example miner serves through hyper's `http1::Builder` with a header read timeout of
+  `TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S` (G7-2; `axum::serve` has none): a client sending its headers
+  slowly, or nothing at all, is cut after 12 s by default. The TypeScript example miner lowers Node's
+  `connectionsCheckingInterval` to 1 s, so its 10 s header and request timeouts fire on time (they waited for
+  Node's 30 s check before). `conformance/interop/miners_check.py` checks both cases for every example miner.

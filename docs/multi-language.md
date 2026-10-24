@@ -135,8 +135,11 @@ option) answer a refusal signed with twresp/1, except the codes Appendix A marks
 | | Headers | Body | Note |
 |---|---|---|---|
 | Go | set `http.Server.ReadHeaderTimeout` | read the body under a deadline (`http.ResponseController.SetReadDeadline`), then clear it | do **not** set `http.Server.ReadTimeout` on a server with streaming routes: when it fires, net/http cancels the request context, which ends a stream running past it |
-| Rust | `axum::serve` has none: use a reverse proxy, or hyper-util's builder with `header_read_timeout` | `MinerAuth::with_body_timeout` (default 10 s; 401 `tw.auth_malformed`) | |
-| TypeScript | Node's `headersTimeout` | Fastify `requestTimeout` | not `connectionTimeout` (socket inactivity), which can cut a stream between chunks |
+| Rust | `axum::serve` has none: serve with hyper's `http1::Builder`, `.timer(TokioTimer::new())` and `.header_read_timeout(...)`, as `rust/examples/textops_miner.rs` does (`TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S`; it also closes a silent connection), or put a reverse proxy in front | `MinerAuth::with_body_timeout` (default 10 s; 401 `tw.auth_malformed`) | |
+| TypeScript | Node's `headersTimeout`, with `connectionsCheckingInterval` lowered (Fastify `http` option) | Fastify `requestTimeout` | Node checks both timeouts only every `connectionsCheckingInterval` (30 s by default), so a slow client keeps its connection up to 30 s longer unless it is lowered; not `connectionTimeout` (socket inactivity), which can cut a stream between chunks |
+
+`conformance/interop/miners_check.py` checks each example miner: a client sending its headers one byte per second, and
+a silent one, are both cut within 15 s (Go 5 s, TypeScript 10 s, Rust 12 s with the default settings).
 
 ## TypeScript notes
 

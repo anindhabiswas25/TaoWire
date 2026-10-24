@@ -17,7 +17,11 @@ hotkey file of //Bob and the sidecar's token, then the Python side checks:
   chunks are exactly ``text_ops.protocol.pieces``;
 - //Charlie gets the signed 403 ``tw.forbidden_not_validator`` (the sidecar
   policy), a bad body the signed 422, an unsigned request 401;
-- the miner published its axon through the sidecar at startup.
+- the miner published its axon through the sidecar at startup;
+- slow clients are cut: a connection that sends its headers one byte per
+  second, and one that sends nothing, are both closed within
+  ``SLOW_CLIENT_LIMIT_S`` (each miner's header read timeout: Go 5 s,
+  TypeScript 10 s, Rust ``TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S``).
 
 Public dev keys only.
 """
@@ -29,6 +33,7 @@ import asyncio
 import json
 import os
 import random
+import socket
 import subprocess
 import sys
 import tempfile
@@ -199,6 +204,33 @@ async def tasks(port: int, n: int) -> dict[str, Any]:
     }
 
 
+#: Every example miner closes a slow or silent connection within this.
+SLOW_CLIENT_LIMIT_S = 15.0
+
+
+def closed_after(port: int, *, drip: bool) -> float | None:
+    """Seconds until the miner closes a slow (``drip``) or silent connection.
+
+    ``None`` if it is still open well after :data:`SLOW_CLIENT_LIMIT_S`.
+    """
+    start = time.monotonic()
+    with socket.create_connection(("127.0.0.3", port), timeout=5) as conn:
+        conn.settimeout(1.0)
+        if drip:
+            conn.sendall(b"POST /v1/transform HTTP/1.1\r\nHost: miner\r\n")
+        while time.monotonic() - start < SLOW_CLIENT_LIMIT_S + 10:
+            try:
+                if drip:
+                    conn.sendall(b"x")
+                conn.recv(4096)  # b"" at EOF, or a 408 just before the close
+            except TimeoutError:
+                continue
+            except OSError:
+                pass  # reset by the miner: closed too
+            return round(time.monotonic() - start, 1)
+    return None
+
+
 def check(lang: str, url: str, port: int) -> dict[str, Any]:
     out: dict[str, Any] = {"miner": lang, **asyncio.run(tasks(port, 30))}
     req = TransformRequest(text="Hello World 42", op="reverse")
@@ -222,6 +254,8 @@ def check(lang: str, url: str, port: int) -> dict[str, Any]:
     )
     r = httpx.post(url + ROUTE, content=body, timeout=10)
     out["unsigned"] = (r.status_code, r.json().get("error", {}).get("code"))
+    out["slow_headers_closed_s"] = closed_after(port, drip=True)
+    out["silent_closed_s"] = closed_after(port, drip=False)
     return out
 
 
@@ -234,6 +268,10 @@ def passed(c: dict[str, Any]) -> bool:
         and c["bad_body"] == (422, "tw.invalid_request", True)
         and c["unsigned"] == (401, "tw.auth_malformed")
         and c["axon_published"]
+        and all(
+            c[k] is not None and c[k] <= SLOW_CLIENT_LIMIT_S
+            for k in ("slow_headers_closed_s", "silent_closed_s")
+        )
     )
 
 
@@ -336,12 +374,13 @@ def main() -> int:
         json.dumps(cells, indent=1) + "\n", encoding="utf-8"
     )
     head = ["miner", "pass", "transform", "stream", "byte-identical"]
-    head += ["charlie", "bad body", "unsigned", "axon"]
+    head += ["charlie", "bad body", "unsigned", "axon", "slow headers s", "silent s"]
     lines = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for c in cells:
         row = [c["miner"], c["pass"], f"{c['transform_ok']}/{c['tasks']}"]
         row += [f"{c['stream_ok']}/{c['tasks']}", c["byte_identical"], c["charlie"]]
         row += [c["bad_body"], c["unsigned"], c["axon_published"]]
+        row += [c["slow_headers_closed_s"], c["silent_closed_s"]]
         lines.append("| " + " | ".join(str(x) for x in row) + " |")
     (out / "results.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     print("\n".join(lines))
