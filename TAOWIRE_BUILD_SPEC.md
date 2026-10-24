@@ -732,7 +732,7 @@ taowire/
 │       └── miner-example/             # text-ops miner in TS
 │
 ├── go/
-│   ├── go.mod                         # module github.com/<org>/taowire/go
+│   ├── go.mod                         # module github.com/anindhabiswas25/TaoWire/go
 │   ├── btauth/{payload,sign,verify,ss58,nonce,errors,middleware,client}.go
 │   ├── btauth/stores/{memory,redis}.go
 │   ├── btauth/*_test.go
@@ -1807,7 +1807,7 @@ Notes:
 - **Fastify adapter:** register a content-type parser with `parseAs: "buffer"` for all types on protected routes; use `request.raw.url` (the target exactly as sent) as `target`; set `bodyLimit`. Add a pre-handler hook running verify → policy → per-hotkey rate limit.
 - `verifyRequest` is CPU-bound but fast (WASM); no worker threads in v1. Benchmark in Phase 5.
 
-### 11.4 Go (`github.com/<org>/taowire/go/btauth`)
+### 11.4 Go (`github.com/anindhabiswas25/TaoWire/go/btauth`)
 
 **Go:** the module keeps the `go 1.22` directive (the minimum for users). Development, release builds and `just audit` use a **supported** Go release (currently the 1.25 or 1.26 line), so `govulncheck` judges a patched standard library (decision D23). **Module path:** working name `github.com/anindhabiswas25/TaoWire/go` (package `.../go/btauth`) until package names are reserved (Phase 0 item); rename with one search-and-replace. **Dependencies:** `github.com/ChainSafe/go-schnorrkel` (sr25519), stdlib `crypto/ed25519`, `crypto/sha256`, `golang.org/x/crypto/blake2b` (SS58 checksum), `github.com/mr-tron/base58`, `github.com/redis/go-redis/v9` (optional).
 
