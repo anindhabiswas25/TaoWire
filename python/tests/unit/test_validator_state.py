@@ -424,30 +424,35 @@ async def test_a_stale_version_key_is_never_committed(tmp_path: Path) -> None:
     assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "waiting"
     chain.advance(1)
     assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "version_key_stale"
-    assert chain.calls["weights_version_key"] == 2  # read again for the new window
+    assert chain.calls["weights_version_key"] == 2  # one read per commit attempt
     # An upgraded validator commits.
     upgraded = scheduler(chain, metrics=metrics, version_key=7)
     assert (await upgraded.maybe_submit({1: 1.0}, mg)).submitted
     assert chain.weight_submissions()[-1].version_key == 7
 
 
-async def test_the_version_key_is_read_once_per_tempo() -> None:
-    chain = fleet(2)
+async def test_the_version_key_is_read_right_before_each_commit() -> None:
+    """G7-3: one read per commit attempt, none for an attempt that is not due."""
+    chain = fleet(2)  # tempo 10, weights rate limit 5
     chain.set_hyperparameters(NETUID, weights_version_key=2)
     chain.advance(10)
     sched = scheduler(chain, version_key=2, min_interval_blocks=0)
     mg = await metagraph(chain)
     assert (await sched.maybe_submit({1: 1.0}, mg)).submitted
-    chain.advance(5)
-    assert (await sched.maybe_submit({1: 1.0}, mg)).submitted
-    assert chain.calls["weights_version_key"] == 1  # cached inside the tempo
-    chain.advance(5)
+    assert chain.calls["weights_version_key"] == 1
+    chain.advance(1)
+    assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "not_due"
+    assert chain.calls["weights_version_key"] == 1  # nothing to commit, no read
+    chain.advance(4)
     assert (await sched.maybe_submit({1: 1.0}, mg)).submitted
     assert chain.calls["weights_version_key"] == 2
-    # The chain raises its key: the next read (next tempo) stops the commits.
+    # The owner raises the key mid-tempo: the very next commit is stopped, not
+    # one tempo later (the gap G7-3 closes).
     chain.set_hyperparameters(NETUID, weights_version_key=3)
-    chain.advance(10)
+    chain.advance(5)
     assert (await sched.maybe_submit({1: 1.0}, mg)).reason == "version_key_stale"
+    assert chain.calls["weights_version_key"] == 3
+    assert chain.calls["set_weights"] == 2
 
 
 async def test_an_unreadable_version_key_is_a_failed_check() -> None:

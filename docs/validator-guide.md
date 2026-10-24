@@ -139,8 +139,10 @@ passed since its last submission, with `version_key=TW_WEIGHTS_VERSION_KEY`
 and `mechid=TW_MECHID`. v11 `SetWeights` normalises, clips and quantises; the
 gateway runs the SDK preflight first.
 
-- **Version key preflight (D38).** Before committing, the scheduler reads the
-  subnet's `WeightsVersionKey` (once per tempo). If `TW_WEIGHTS_VERSION_KEY` is
+- **Version key preflight (D38).** Right before each commit, the scheduler
+  reads the subnet's `WeightsVersionKey` (one chain read per commit attempt,
+  never cached, so a key the owner raises takes effect at the very next
+  commit). If `TW_WEIGHTS_VERSION_KEY` is
   lower it commits nothing (the chain would accept the commit and drop it at
   reveal), logs `weights_version_key_stale` at ERROR with both keys, counts
   `tw_validator_weight_submissions_total{ok="false",code="version_key_stale"}`

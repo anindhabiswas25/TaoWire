@@ -204,3 +204,6 @@ All notable changes to this project are documented here. The format follows
   slowly, or nothing at all, is cut after 12 s by default. The TypeScript example miner lowers Node's
   `connectionsCheckingInterval` to 1 s, so its 10 s header and request timeouts fire on time (they waited for
   Node's 30 s check before). `conformance/interop/miners_check.py` checks both cases for every example miner.
+- The validator reads `WeightsVersionKey` right before each commit instead of once per tempo (G7-3, D38): one
+  chain read per commit attempt, so a key raised mid-tempo stops the very next commit (it could lose one commit
+  before).

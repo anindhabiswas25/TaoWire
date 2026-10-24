@@ -30,8 +30,10 @@ Outcomes (``TxOutcome.code``, ``bt.ErrorCode`` values):
   the gateway already re-signs) are not re-planned.
 - All scores zero: nothing is submitted (``tw.no_scores``), so weights are
   never burned on an all-zero vector.
-- **Version key preflight (D38).** Before committing, the subnet's
-  ``WeightsVersionKey`` is read through the gateway (once per tempo). A
+- **Version key preflight (D38, G7-3).** Right before each commit the
+  subnet's ``WeightsVersionKey`` is read through the gateway: one read per
+  attempt that would commit, never cached, so a key the owner raises
+  mid-tempo stops the very next commit. A
   timelocked commit with a lower ``version_key`` would be accepted and then
   dropped at reveal, so with a stale ``TW_WEIGHTS_VERSION_KEY`` nothing is
   committed: ERROR ``weights_version_key_stale`` (both keys),
@@ -142,8 +144,6 @@ class WeightScheduler:
         self._metrics = metrics
         self._rate_limit: int | None = None
         self._rate_limit_read_at: int | None = None
-        self._chain_version_key: int | None = None
-        self._version_key_read_at: int | None = None
         self._last_submit_block: int | None = None
         self._wait_until = 0
         self._replan_window_end: int | None = None
@@ -176,25 +176,13 @@ class WeightScheduler:
             _log.warning("tw.no_scores", hint="every score is zero; nothing submitted")
             return WeightDecision("no_scores", block)
         try:
-            chain_key = await self._chain_key(block, mg.tempo)
+            chain_key = await self._gateway.weights_version_key(self.netuid)
         except GatewayError as exc:
             _log.warning("weights_check_failed", error=str(exc))
             return WeightDecision("failed", block)
         if self.version_key < chain_key:
             return await self._stale_key(block, chain_key, len(weights), mg.tempo)
         return await self._submit(block, weights, mg.tempo)
-
-    async def _chain_key(self, block: int, tempo: int) -> int:
-        """``WeightsVersionKey`` from the gateway, read again once per tempo (D38)."""
-        read_at = self._version_key_read_at
-        cached = self._chain_version_key
-        if cached is None or read_at is None or block - read_at >= tempo:
-            self._chain_version_key = await self._gateway.weights_version_key(
-                self.netuid
-            )
-            self._version_key_read_at = block
-            return self._chain_version_key
-        return cached
 
     async def _stale_key(
         self, block: int, chain_key: int, n_uids: int, tempo: int
@@ -209,7 +197,6 @@ class WeightScheduler:
         await self._record(block, outcome, "version_key_stale", n_uids)
         window = max(self._rate_limit or 0, tempo, 1)
         self._wait_until = block + window
-        self._version_key_read_at = None  # read the key again for the next window
         _log.error(
             "weights_version_key_stale",
             version_key=self.version_key,
