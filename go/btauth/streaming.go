@@ -91,13 +91,19 @@ func (l StreamLimits) Resolved() (StreamLimits, error) {
 }
 
 // ChunkError says a chunk is not a JSON object or array (or not JSON at all).
-type ChunkError struct{ Reason string }
+type ChunkError struct {
+	Reason string // what is wrong with the chunk
+}
 
+// Error describes the chunk problem.
 func (e *ChunkError) Error() string { return "btauth: chunk: " + e.Reason }
 
 // TrailerError says the tw-end data is not a well-formed trailer.
-type TrailerError struct{ Reason string }
+type TrailerError struct {
+	Reason string // what is wrong with the trailer
+}
 
+// Error describes the trailer problem.
 func (e *TrailerError) Error() string { return "btauth: tw-end: " + e.Reason }
 
 func firstNonSpace(data []byte, set string) byte {
@@ -187,7 +193,7 @@ func EncodeChunk(item any) ([]byte, error) {
 // count.
 type StreamDigest struct {
 	h     hash.Hash
-	Count uint64
+	Count uint64 // chunks added so far
 }
 
 // NewStreamDigest returns an empty digest.
@@ -205,9 +211,9 @@ func (d *StreamDigest) Hex() string { return hex.EncodeToString(d.h.Sum(nil)) }
 // Trailer is the tw-end event's data. Signature is "0x" + hex, or "" when the
 // miner does not sign responses.
 type Trailer struct {
-	Digest    string
-	Count     uint64
-	Signature string
+	Digest    string // sha256 of the chunks, lowercase hex
+	Count     uint64 // number of chunks
+	Signature string // "0x" + hex, or "" when not signed
 }
 
 // EncodeTrailer returns the tw-end data bytes (compact JSON, the Python
@@ -322,8 +328,8 @@ var TrailerReserve = func() int64 {
 // SSEEvent is one dispatched event: its type and its data bytes (lines
 // joined by LF).
 type SSEEvent struct {
-	Event string
-	Data  []byte
+	Event string // the event type ("message" when none was given)
+	Data  []byte // the data bytes
 }
 
 var utf8BOM = []byte{0xef, 0xbb, 0xbf}

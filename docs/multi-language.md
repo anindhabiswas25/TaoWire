@@ -1,7 +1,7 @@
 # Multi-language support
 
 TensorWire's Python package is the reference implementation. Miners written in other languages use a
-btauth/1 package for their language (spec 11). Status on `eng/lang` (Phase 5 Part 1):
+btauth/1 package for their language (spec 11). Every row of spec 11.1 is built (Phase 5):
 
 | Capability (spec 11.1) | Python | Go (`go/btauth`) | Rust (`tensorwire-btauth`) | TypeScript (`@tensorwire/btauth`) |
 |---|---|---|---|---|
@@ -12,7 +12,15 @@ btauth/1 package for their language (spec 11). Status on `eng/lang` (Phase 5 Par
 | Client | httpx | `Client` (`net/http`) | `client::Client` (reqwest, feature) | `Client` (fetch / undici) |
 | twresp/1 sign + verify | ✅ | ✅ | ✅ | ✅ |
 | SSE streaming with signed trailer | ✅ | ✅ `ServeStream`, `(*Client).Stream` | ✅ `axum::stream_response`, `Client::stream` | ✅ `streamReply` (`/fastify`), `Client.stream` |
-| Caller policy / chain writes | native | via sidecar: `go/sidecar` + `MiddlewareConfig.Policy` | via sidecar: `sidecar` (feature) + `MinerAuth::with_policy` | via sidecar: `@tensorwire/btauth/sidecar` + the `policy` hook |
+| Caller policy | ✅ native | ✅ via sidecar: `go/sidecar` + `MiddlewareConfig.Policy` | ✅ via sidecar: `sidecar` (feature) + `MinerAuth::with_policy` | ✅ via sidecar: `@tensorwire/btauth/sidecar` + the `policy` hook |
+| Chain writes (serve axon, set weights) | ✅ (v11) | ✅ serve axon via sidecar (`ServeAxon`); set weights ❌ by design | ✅ serve axon via sidecar (`serve_axon`); set weights ❌ by design | ✅ serve axon via sidecar (`serveAxon`); set weights ❌ by design |
+| Full validator loop | ✅ | ❌ not in scope (11.1) | ❌ not in scope | ❌ not in scope |
+| Per-IP / per-hotkey rate limits | ✅ | ✅ `TokenBuckets` | ✅ `TokenBuckets` | ✅ `TokenBuckets` |
+| Hotkey file | ✅ | ✅ `LoadHotkeyFile` (`secretSeed`) | ✅ `Keypair::from_hotkey_file` (`secretSeed`) | ✅ `Keypair.fromHotkeyFile` (`secretSeed` or `secretPhrase`) |
+| Example miner (text-ops, spec 10) | ✅ `examples/text-ops-subnet` | ✅ `go/examples/textops-miner` | ✅ `rust/examples/textops_miner.rs` | ✅ `typescript/examples/textops-miner.ts` |
+
+The two ❌ are spec 11.1's scope: non-Python validators are out of scope in v1, so the sidecar has no weight
+setting (11.6). The example miners: [examples/text-ops-miners](../examples/text-ops-miners/README.md).
 
 Package docs and quickstarts: [`go/README.md`](../go/README.md), [`rust/README.md`](../rust/README.md),
 [`typescript/README.md`](../typescript/README.md).
@@ -178,4 +186,9 @@ cd typescript && npm run conformance
 Live checks without a chain: `conformance/interop/live_check.py` runs Go, Rust and TypeScript signers against
 the Python miner, and the Python signer against the Go and Rust middleware and the TypeScript Fastify adapter
 (evidence in `reports/phase-5/interop-ts/`).
-The localnet matrix of spec 13.5 is `conformance/interop/run_matrix.py` (`just interop`).
+The localnet matrix of spec 13.5 is `conformance/interop/run_matrix.py` (`just interop`, after `just
+localnet-up`): the four text-ops miners with their own registered hotkeys (the TS / Go / Rust ones publish
+their axons through their own sidecars), the Python validator querying all four (transform and streaming
+routes), the TS / Go / Rust client signers calling the Python miner, and weights set and revealed in the same
+run. Without a chain: `live_check.py` (signers), `stream_check.py` (streams and tampering),
+`sidecar_check.py` (the clients against the real sidecar), `miners_check.py` (the example miners).

@@ -488,6 +488,7 @@ export class MinerStream implements AsyncIterable<UnverifiedChunk> {
         }
     }
 
+    /** Iterate the unverified chunks; ends at the verified end, throws a {@link ClientError} otherwise. */
     async *[Symbol.asyncIterator](): AsyncIterator<UnverifiedChunk> {
         for (;;) {
             const chunk = await this.next();

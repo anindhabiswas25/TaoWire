@@ -29,6 +29,11 @@ async fn main() {
 }
 ```
 
+A full miner (caller policy and `ServeAxon` through the [sidecar](../docs/sidecar.md), per-IP and per-hotkey
+limits, a streaming route): [`examples/textops_miner.rs`](examples/textops_miner.rs)
+(`cargo run --example textops_miner --features axum,client,sidecar,redis`; settings in
+[examples/text-ops-miners](../examples/text-ops-miners/README.md)).
+
 A runnable miner and signer with dev keys: `examples/interop.rs`
 (`cargo run --example interop --features axum,client,sidecar -- serve 127.0.0.3:8096 <seed-hex>`).
 
@@ -51,6 +56,9 @@ Validator side (feature `client`): `Client::new(Signer::new(validator_key), reqw
 | `client::Client::send` | Signed request + verified answer; client codes `tw.timeout`, `tw.connect_error`, `tw.response_too_large`, `tw.bad_response_signature` |
 | `axum::stream_response`, `axum::StreamConfig`, `axum::StreamContext` | SSE stream with a signed `tw-end` from a protected handler (spec 9.2): per-caller slots (D36), first chunk before any byte, limits, abort hook |
 | `client::Client::stream`, `client::Stream`, `client::UnverifiedChunk` | Streaming query: `next().await` gives unverified chunks, `Ok(None)` only after the trailer verified |
+| `TokenBuckets`, `RateLimit`, `DEFAULT_IP_LIMIT`, `DEFAULT_HOTKEY_LIMIT` | Per-IP / per-hotkey token buckets (spec 8.6.2) |
+| `Keypair::from_hotkey_file(path, scheme)` | A Bittensor hotkey file (owner-only, `secretSeed`, `ss58Address` checked) |
+| `axum::MinerAuth::with_body_timeout`, `MinerAuth::verifier` | Body read deadline (default 10 s; axum::serve has no read timeouts); the verifier for readiness probes |
 | `axum::MinerAuth::with_policy`, `PolicyFn` | Caller policy after verification (spec 8.5); refusals signed except `axum::UNSIGNED_CODES` |
 | `sidecar::{SidecarClient, Config, CallerPolicy, read_token_file, parse_snapshot, parse_decision, parse_health}` | Feature `sidecar`: the sidecar client (spec 11.6, `docs/multi-language.md` "Sidecar API") — cached metagraph with the 8.5.1 stages, the Python caller policy, `serve_axon` |
 | `sse::{Parser, decode_chunk, encode_chunk, parse_trailer, encode_trailer, encode_event, StreamDigest, StreamLimits, StreamSlots}` | The shared stream pieces (WHATWG SSE parser, D35 chunk rule, strict trailer) |

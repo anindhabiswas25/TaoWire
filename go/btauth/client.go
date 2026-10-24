@@ -12,8 +12,8 @@ import (
 
 // Signer signs outgoing requests with a hotkey (the validator side).
 type Signer struct {
-	Key   *Keypair
-	Nonce NonceSource
+	Key   *Keypair    // the signing hotkey
+	Nonce NonceSource // strictly increasing nonces (the zero value is ready)
 }
 
 // NewSigner returns a Signer for key with its own strictly increasing nonces.
@@ -45,7 +45,7 @@ func (s *Signer) Sign(method, target string, body []byte, receiver string) (http
 
 // Client sends signed requests to miners and verifies their twresp/1 answers.
 type Client struct {
-	Signer *Signer
+	Signer *Signer // signs every request
 	// HTTP is the client used; nil = http.DefaultClient. Set a Timeout.
 	HTTP *http.Client
 	// MaxResponseBytes caps the answer body (default 8 MiB).
@@ -55,11 +55,11 @@ type Client struct {
 // Response is a miner's answer. Verified says the twresp/1 signature checked
 // out (it is always true when Do returns no error).
 type Response struct {
-	Status   int
-	Header   http.Header
-	Body     []byte
-	Verified bool
-	Scheme   Scheme
+	Status   int         // HTTP status
+	Header   http.Header // response headers
+	Body     []byte      // raw body bytes (what the signature covers)
+	Verified bool        // the twresp/1 signature checked out
+	Scheme   Scheme      // scheme of the miner's signature
 }
 
 const defaultMaxResponse = 8 << 20

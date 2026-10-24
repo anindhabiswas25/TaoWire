@@ -14,11 +14,17 @@ import { type NonceStore, secondsToNs } from "./store.js";
 
 /** Request header names (spec 4.1). */
 export const HEADER = {
+    /** Protocol version, `1`. */
     version: "X-Bittensor-Version",
+    /** Sender hotkey (SS58). */
     hotkey: "X-Bittensor-Hotkey",
+    /** Receiver hotkey (SS58). */
     receiver: "X-Bittensor-Receiver",
+    /** Nonce: Unix time in nanoseconds. */
     nonce: "X-Bittensor-Nonce",
+    /** `ed25519`; absent for sr25519. */
     crypto: "X-Bittensor-Crypto",
+    /** `0x` + hex signature. */
     signature: "X-Bittensor-Signature",
 } as const;
 

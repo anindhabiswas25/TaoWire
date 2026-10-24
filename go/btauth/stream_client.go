@@ -31,7 +31,7 @@ type StreamOptions struct {
 // UnverifiedChunk is one chunk as it arrived. It is NOT verified: only a
 // Stream whose Err is nil after the last Next can be trusted.
 type UnverifiedChunk struct {
-	Index int
+	Index int // position in the stream
 	// Data is the chunk's exact data bytes (a JSON object or array; what the
 	// digest covers).
 	Data json.RawMessage

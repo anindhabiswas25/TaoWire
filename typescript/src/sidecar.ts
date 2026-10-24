@@ -98,7 +98,17 @@ export interface Health {
 }
 
 /** `/v1/caller` decision. */
-export type CallerDecision = { allowed: true } | { allowed: false; code: ForbiddenCode };
+export type CallerDecision =
+    | {
+          /** The caller may call. */
+          allowed: true;
+      }
+    | {
+          /** The caller may not call. */
+          allowed: false;
+          /** Why (an Appendix A code). */
+          code: ForbiddenCode;
+      };
 
 /** A refusal code `/v1/caller` may answer. */
 export type ForbiddenCode = (typeof FORBIDDEN_CODES)[number];

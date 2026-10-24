@@ -63,12 +63,13 @@ var catalogue = map[string]errorSpec{
 // (0 for client-side codes). Message is the fixed public message, safe to
 // send to an unauthenticated caller; Detail says more for logs only.
 type Error struct {
-	Code    string
-	Status  int
-	Message string
-	Detail  string
+	Code    string // the tw.* code
+	Status  int    // HTTP status; 0 for client-side codes
+	Message string // fixed public message
+	Detail  string // more context, for logs only
 }
 
+// Error returns the code and the detail (or the public message).
 func (e *Error) Error() string {
 	if e.Detail != "" {
 		return fmt.Sprintf("%s: %s", e.Code, e.Detail)

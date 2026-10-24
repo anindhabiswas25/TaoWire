@@ -41,6 +41,14 @@ the `clock_step_detected` log event), any increase of
 `tw_nonce_store_errors_total`, `tw_unsafe_settings_active` present in
 production.
 
+**The sidecar** (`tensorwire sidecar`, [sidecar.md](sidecar.md)) serves its own metrics on its
+`TW_METRICS_BIND` (give it a port of its own next to a miner): `tw_unsafe_settings_active` (e.g.
+`TW_SIDECAR_UNSAFE_BIND`) and `tw_metagraph_refresh_failures_total`. Its log events: `sidecar_started`,
+`sidecar_token_created` (the path, never the token), `sidecar_request` (method, path, status),
+`sidecar_axon_published`, `sidecar_serve_axon_rejected`, `sidecar_serve_axon_failed`,
+`sidecar_invalid_request`. The TS / Go / Rust example miners log JSON events (`miner_started`,
+`axon_published`, `stream_aborted`, ...) and have no Prometheus endpoint.
+
 ## Logs
 
 One JSON object per line on stdout, for the kit and for the libraries it uses

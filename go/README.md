@@ -29,6 +29,10 @@ func main() {
 }
 ```
 
+A full miner (caller policy and `ServeAxon` through the [sidecar](../docs/sidecar.md), per-IP and per-hotkey
+limits, a streaming route): [`examples/textops-miner`](examples/textops-miner/main.go)
+(`go run ./examples/textops-miner`; settings in [examples/text-ops-miners](../examples/text-ops-miners/README.md)).
+
 A runnable version with dev keys is `ExampleMiddleware` in `btauth/example_test.go` (`go test ./btauth -run Example`).
 
 Validator side: `c := &btauth.Client{Signer: btauth.NewSigner(validatorKey), HTTP: &http.Client{Timeout: 12 * time.Second}}`,
@@ -52,6 +56,8 @@ answer's twresp/1 signature verified.
 | `Client.Do` | Signed request + verified answer; client codes `tw.timeout`, `tw.connect_error`, `tw.response_too_large`, `tw.bad_response_signature` |
 | `ServeStream`, `StreamConfig`, `ChunkFunc`, `StreamSlots` | SSE stream with a signed `tw-end` inside a `Middleware` handler (spec 9.2): per-caller slots (D36), first chunk before any byte, limits, abort hook |
 | `(*Client).Stream`, `Stream`, `StreamOptions`, `UnverifiedChunk` | Streaming query: unverified chunks, `Err() == nil` only after the trailer verified; `tw.invalid_response` for a chunk that is not a JSON object or array |
+| `NewTokenBuckets`, `RateLimit`, `DefaultIPLimit`, `DefaultHotkeyLimit` | Per-IP / per-hotkey token buckets (spec 8.6.2) |
+| `LoadHotkeyFile(path, scheme)` | A Bittensor hotkey file (owner-only, `secretSeed`, `ss58Address` checked) |
 | `MiddlewareConfig.Policy` | Caller policy after verification (spec 8.5); refusals signed except `UnsignedCodes` |
 | `sidecar.New`, `(*sidecar.Client).Start`, `Check`, `Policy`, `Health`, `Metagraph`, `Caller`, `ServeAxon`, `sidecar.ReadTokenFile`, `sidecar.NewPolicy` | Package `go/sidecar`: the sidecar client (spec 11.6, `docs/multi-language.md` "Sidecar API") — cached metagraph with the 8.5.1 stages, the Python caller policy, serve-axon |
 | `SSEParser`, `DecodeChunk`, `EncodeChunk`, `ParseTrailer`, `EncodeTrailer`, `EncodeEvent`, `StreamDigest`, `StreamLimits` | The shared stream pieces (WHATWG SSE parser, D35 chunk rule, strict trailer) |

@@ -71,20 +71,20 @@ var forbiddenCodes = map[string]bool{
 
 // Neuron is one neuron of a sidecar snapshot.
 type Neuron struct {
-	UID             int
-	Hotkey          string
-	ValidatorPermit bool
+	UID             int     // UID on the subnet
+	Hotkey          string  // SS58 hotkey
+	ValidatorPermit bool    // holds a validator permit
 	TotalStakeTAO   float64 // TAO value at spot price (approximate, D2)
 	Axon            string  // "host:port", "[v6]:port", or "" when nothing is served
 }
 
 // Snapshot is a metagraph snapshot as the sidecar reported it.
 type Snapshot struct {
-	NetUID   int
-	Block    int64
-	Tempo    int
-	AgeS     float64 // age when the sidecar answered
-	Neurons  []Neuron
+	NetUID   int      // the subnet
+	Block    int64    // block the snapshot was read at
+	Tempo    int      // subnet tempo in blocks
+	AgeS     float64  // age when the sidecar answered
+	Neurons  []Neuron // neurons in UID order
 	byHotkey map[string]*Neuron
 }
 
@@ -96,28 +96,29 @@ func (s *Snapshot) ByHotkey(hotkey string) (*Neuron, bool) {
 
 // Health is what /v1/health reports.
 type Health struct {
-	OK            bool
-	Hotkey        string
-	NetUID        int
+	OK            bool     // false without a snapshot or past the max age
+	Hotkey        string   // the sidecar's hotkey
+	NetUID        int      // its subnet
 	Block         *int64   // nil before the first snapshot
 	MetagraphAgeS *float64 // nil before the first snapshot
-	Stage         Stage
+	Stage         Stage    // the sidecar's own stage
 }
 
 // Decision is the /v1/caller answer; Code is set when not Allowed.
 type Decision struct {
-	Allowed bool
-	Code    string
+	Allowed bool   // the caller may call
+	Code    string // why not (an Appendix A code)
 }
 
 // ChainError says the chain refused a write (/v1/serve-axon 409 or 503).
 // Code is the bt.ErrorCode value, or "chain_unavailable".
 type ChainError struct {
-	Code        string
-	ErrorName   string
-	Remediation string
+	Code        string // bt.ErrorCode value or "chain_unavailable"
+	ErrorName   string // the chain's error name, if any
+	Remediation string // the SDK's hint, if any
 }
 
+// Error names the chain code.
 func (e *ChainError) Error() string { return "sidecar: serve-axon refused by the chain: " + e.Code }
 
 // ---------------------------------------------------------------- token
@@ -175,10 +176,10 @@ func IsLoopback(u *url.URL) bool {
 // registered, validator permit, minimum stake. The zero value is NOT the
 // strict policy: use NewPolicy.
 type Policy struct {
-	RequirePermit bool
-	MinStakeTAO   float64
-	Allow         map[string]bool
-	Deny          map[string]bool
+	RequirePermit bool            // validator permit required
+	MinStakeTAO   float64         // minimum TotalStakeTAO; 0 disables the check
+	Allow         map[string]bool // always allowed, even unregistered
+	Deny          map[string]bool // always denied, checked first
 }
 
 // NewPolicy returns a policy; it refuses a negative or NaN stake and a
@@ -451,13 +452,13 @@ func ParseHealth(body []byte) (Health, error) {
 
 // Config configures a Client.
 type Config struct {
-	NetUID int
+	NetUID int // the subnet (TW_NETUID)
 	// URL of the sidecar (default http://127.0.0.1:9910); it must be loopback
 	// unless UnsafeAllowRemote.
 	URL string
 	// TokenFile (TW_SIDECAR_TOKEN_FILE when empty) or Token (tests).
 	TokenFile string
-	Token     string
+	Token     string // the token itself, instead of TokenFile (tests)
 	// ExpectedHotkey: refuse a sidecar whose hotkey is not this one.
 	ExpectedHotkey string
 	// Policy (default StrictPolicy).

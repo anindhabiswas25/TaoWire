@@ -12,9 +12,13 @@ import { decodeSS58 } from "./ss58.js";
 
 /** Response header names of twresp/1. */
 export const RESP_HEADER = {
+    /** twresp version, `1`. */
     version: "X-TW-Resp-Version",
+    /** Responder (miner) hotkey. */
     hotkey: "X-TW-Resp-Hotkey",
+    /** `ed25519`; absent for sr25519. */
     crypto: "X-TW-Resp-Crypto",
+    /** `0x` + hex signature. */
     signature: "X-TW-Resp-Signature",
 } as const;
 

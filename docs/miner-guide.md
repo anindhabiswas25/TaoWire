@@ -125,8 +125,9 @@ Every response carries `X-TW-Request-Id`; error bodies are
 arrays). The whole request path runs first, the first chunk is fetched within
 `timeout_s`, and `TW_STREAM_MAX_S` / `_MAX_BYTES` / `_IDLE_S` (or
 `stream_max_s` / `stream_max_bytes` / `stream_idle_s` per route) bound the
-stream; anything that cannot finish ends without a trailer. See
-[streaming.md](streaming.md).
+stream; anything that cannot finish ends without a trailer. A caller may hold
+at most `TW_STREAM_MAX_PER_CALLER` (default 16) open streams per miner process
+(D36); more get the signed 429. See [streaming.md](streaming.md).
 
 ## Sealed challenges and answers (timelock)
 

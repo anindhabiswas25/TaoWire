@@ -132,3 +132,51 @@ All notable changes to this project are documented here. The format follows
   without a drand fetch.
 - Chain data for TLS keys is decoded strictly and fails closed; the pin is checked inside the
   TLS handshake (no renegotiation).
+
+### Added (Phase 5: multi-language)
+
+- TypeScript package `@tensorwire/btauth` (spec 11.3): btauth/1 sign and verify (WASM sr25519 / ed25519),
+  memory and Redis replay stores, the Fastify adapter, the fetch client, twresp/1; every conformance vector.
+- SSE streaming with a signed `tw-end` trailer in TypeScript, Go and Rust (spec 9.2, D29, D35, D36): miner side
+  (`streamReply`, `ServeStream`, `axum::stream_response`) with per-caller stream slots and the three limits,
+  client side (`Client.stream`) with the strict trailer, unverified chunks until it verifies, no read timeout
+  beyond the limits; linear SSE parsers with property and fuzz tests; `stream_check.py` cross-language checks
+  with a tampering relay.
+- `tensorwire sidecar` (spec 11.6): loopback-only service for non-Python miners — `/v1/health`,
+  `/v1/metagraph`, `/v1/caller/{hotkey}`, `/v1/serve-axon`; bearer token from an owner-only file; every chain
+  call through the gateway. Clients in TypeScript (`@tensorwire/btauth/sidecar`), Go (`go/sidecar`) and Rust
+  (feature `sidecar`) with the metagraph cache, the 8.5.1 staleness stages and the Python caller policy.
+- Example text-ops miners in TypeScript, Go and Rust (spec 10), byte-identical to the Python miner, with a
+  streaming route; the Python example and `tensorwire init` gain `POST /v1/transform/stream`.
+- `conformance/interop/run_matrix.py` and `just interop` (spec 13.5): the localnet matrix of the four miners,
+  the Python validator and the TS / Go / Rust client signers, with weights revealed in the same run.
+- Go and Rust: token buckets, hotkey-file loaders; Go `MiddlewareConfig.Policy`, Rust `MinerAuth::with_policy`
+  and `with_body_timeout`.
+- `TW_STREAM_MAX_PER_CALLER` (default 16, 1–256; D36, G6-3).
+- `WeightsVersionKey` preflight before a commit (D38, G6-4): `ChainGateway.weights_version_key`; a stale
+  `TW_WEIGHTS_VERSION_KEY` commits nothing, logs `weights_version_key_stale` and counts
+  `tw_validator_weight_submissions_total{ok="false",code="version_key_stale"}`.
+- New error code `tw.sidecar_unauthorized` (401; spec question 10).
+
+### Changed (Phase 5)
+
+- The sdist is built from an explicit include list (G6-1): a git-ignored virtualenv such as `.venv-py310` no
+  longer breaks `uv build`.
+- The unread-streams abuse test uses the 13.6 pass rule of D42 (the attacker's 503
+  `tw.replay_store_unavailable` is a valid refusal) (G6-5).
+- Caller-policy settings are shared by the miner and the sidecar (`CallerPolicySettings`).
+- The TypeScript Fastify adapter answers `tw.metagraph_stale`, `tw.replay_store_unavailable` and `tw.internal`
+  unsigned after authentication, as the Python pipeline does (it signed them before).
+- `just lint` builds the TypeScript (TypeDoc, every export documented) and Rust (rustdoc, warnings as errors) API
+  docs; a Go test checks every exported identifier has a doc comment.
+
+### Security (Phase 5)
+
+- Stream clients and miners in every language refuse chunks that are not JSON objects or arrays, and chunks
+  nested deeper than 128 (spec question 9); counts written `-0` or above u64 are refused in the trailer.
+- Go and Rust stream clients never follow redirects; the Go stream server recovers a panicking chunk source.
+- Rust `StreamConfig::default()` shares one process-wide `StreamSlots` (a per-request default reset D36).
+- The Go and Rust sidecar policy hooks use one known-callers scope (a caller inventing paths could fill the
+  bounded set and evict other validators during an outage).
+- Sidecar clients judge a snapshot newer by its block (a slow answer of the same stale snapshot no longer clears
+  the known callers).

@@ -2,7 +2,7 @@
 
 **A production-grade networking starter kit for Bittensor v11 subnets, and the migration path for existing v10 subnets.**
 
-> Status: pre-release (Phase 3: hardening, performance and migration tooling). Nothing is
+> Status: pre-release (Phase 5: multi-language). Nothing is
 > published yet. "TensorWire" is a working name.
 
 Bittensor v11 removed `Axon`, `Dendrite` and `Synapse`. What is left is `btauth/1` (hotkey-signed
@@ -15,8 +15,10 @@ HTTP), `ServeAxon` and the metagraph. TensorWire fills the gap in between, secur
   a scoring loop with SQLite state and weight setting.
 - **Migration from v10**: a v10-shaped `tensorwire.compat` layer, a time-boxed two-way bridge for
   mixed fleets, and `tensorwire migrate`.
-- **Other languages**: btauth/1 for TypeScript, Go and Rust, checked against shared conformance
-  vectors.
+- **Other languages**: btauth/1, twresp/1 and signed SSE streams for TypeScript, Go and Rust, checked
+  against shared conformance vectors, with caller policy and `ServeAxon` through a loopback sidecar
+  ([multi-language](docs/multi-language.md), [sidecar](docs/sidecar.md), example miners in
+  [examples/text-ops-miners](examples/text-ops-miners/README.md)).
 
 ## Quickstart
 
@@ -32,6 +34,8 @@ from `tensorwire init` to weights on chain. For development of the kit itself, s
   scan` / `apply`), [rollout runbook](docs/migration-rollout.md) (`tensorwire migrate status`),
   [case studies](docs/migrations/).
 - Protocols: [btauth/1 and twresp/1](docs/protocol/), the [legacy v10 bridge](docs/protocol/legacy-v10.md).
+- Other languages: [multi-language](docs/multi-language.md) (TypeScript, Go, Rust), [the sidecar](docs/sidecar.md),
+  package READMEs in [go/](go/README.md), [rust/](rust/README.md), [typescript/](typescript/README.md).
 
 ## Compatibility
 

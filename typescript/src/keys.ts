@@ -146,7 +146,12 @@ export class Keypair {
     }
 
     /** The address and scheme only. */
-    toJSON(): { ss58: string; scheme: Scheme } {
+    toJSON(): {
+        /** The public SS58 address. */
+        ss58: string;
+        /** The scheme. */
+        scheme: Scheme;
+    } {
         return { ss58: this.ss58, scheme: this.scheme };
     }
 }

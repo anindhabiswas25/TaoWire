@@ -16,7 +16,7 @@ const DefaultMaxBodyBytes = 1 << 20
 
 // MiddlewareConfig configures Middleware.
 type MiddlewareConfig struct {
-	Verifier *Verifier
+	Verifier *Verifier // verifies every request (required)
 	// MaxBodyBytes caps the request body (default 1 MiB); larger is 413.
 	MaxBodyBytes int64
 	// ResponseKey, when set, signs every answer of an authenticated request

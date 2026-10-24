@@ -36,7 +36,7 @@ var (
 type Caller struct {
 	Hotkey string // canonical prefix-42 SS58 address
 	Nonce  uint64 // Unix time in nanoseconds, from X-Bittensor-Nonce
-	Scheme Scheme
+	Scheme Scheme // the scheme the request was signed with
 }
 
 // Config configures a Verifier.

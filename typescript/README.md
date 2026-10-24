@@ -32,6 +32,11 @@ await app.register(btauth, {
 await app.listen({ host: "0.0.0.0", port: 8091 });
 ```
 
+A full miner (caller policy and `ServeAxon` through the [sidecar](../docs/sidecar.md), per-IP and per-hotkey
+limits, a streaming route): [`examples/textops-miner.ts`](examples/textops-miner.ts)
+(`npm run build:examples && node build/examples/textops-miner.js`; settings in
+[examples/text-ops-miners](../examples/text-ops-miners/README.md)).
+
 Validator side: `new Client({ signer: new Signer(validatorKey) }).request("POST", url, body, minerHotkey)`
 resolves only when the answer's twresp/1 signature verified for this request.
 
