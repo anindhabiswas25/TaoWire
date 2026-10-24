@@ -41,6 +41,9 @@ uv pip install "taowire[all]==0.1.0a1"
 taowire --version                        # taowire 0.1.0a1
 ```
 
+Until the alpha is on PyPI, install it from the repository instead (clone it
+first, as below): `uv pip install "$TAOWIRE_REPO/python[all]"`.
+
 The local-chain scripts live in the repository:
 
 ```bash
