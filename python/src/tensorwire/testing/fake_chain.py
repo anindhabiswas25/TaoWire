@@ -31,11 +31,13 @@ from __future__ import annotations
 import struct
 import time
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from typing import Any
 
 from tensorwire.chain.axon import Endpoint, parse_axon
 from tensorwire.chain.gateway import (
+    MAX_COMMITMENT_BYTES,
     ChainUnavailable,
     MetagraphView,
     NeuronView,
@@ -159,6 +161,8 @@ class _State:
     publications: list[AxonPublication] = field(default_factory=list)
     faults: dict[str, list[_Fault]] = field(default_factory=dict)
     calls: Counter[str] = field(default_factory=Counter)
+    commitments: dict[tuple[int, str], str] = field(default_factory=dict)
+    storage: dict[tuple[str, tuple[Any, ...]], Any] = field(default_factory=dict)
 
 
 class FakeChain:
@@ -353,6 +357,10 @@ class FakeChain:
         neuron.axon = axon
         neuron.axon_protocol = protocol if axon else None
 
+    def set_storage(self, name: str, params: Sequence[Any], value: Any) -> None:
+        """Set what :meth:`storage` returns for ``(name, params)``."""
+        self._state.storage[name, tuple(params)] = value
+
     def set_tls_key(self, netuid: int, hotkey: str, tls_key: bytes | None) -> None:
         """Set ``hotkey``'s stored ``ServeAxonTls`` certificate directly (any bytes)."""
         self._neuron_or_raise(netuid, hotkey).tls_key = tls_key
@@ -490,6 +498,48 @@ class FakeChain:
         """Return the subnet's serving rate limit in blocks."""
         self._enter("serving_rate_limit")
         return self._subnet_or_raise(netuid).serving_rate_limit
+
+    async def block_hash(self, block: int) -> str | None:
+        """``0x`` + the block number as 64 hex digits; ``None`` past the head."""
+        self._enter("block_hash")
+        if not 0 <= block <= self._state.block:
+            return None
+        return f"0x{block:064x}"
+
+    async def commitment(self, netuid: int, hotkey: str) -> str | None:
+        """What ``hotkey`` last committed on ``netuid``, or ``None``."""
+        self._enter("commitment")
+        self._subnet_or_raise(netuid)
+        return self._state.commitments.get((netuid, hotkey))
+
+    async def storage(self, name: str, params: Sequence[Any]) -> Any:
+        """The value set with :meth:`set_storage`; ``Keys[netuid, uid]`` (the
+        UID's hotkey) from the registered neurons; else ``None``."""
+        self._enter("storage")
+        key = (name, tuple(params))
+        if key in self._state.storage:
+            return self._state.storage[key]
+        if name == "Keys" and len(key[1]) == 2:  # (netuid, uid)
+            subnet = self._state.subnets.get(key[1][0])
+            neuron = None if subnet is None else subnet.neurons.get(key[1][1])
+            return None if neuron is None else neuron.hotkey
+        return None
+
+    async def commit(self, netuid: int, data: str) -> TxOutcome:
+        """Store ``data`` as the signer's commitment (1..128 UTF-8 bytes)."""
+        injected = self._enter("commit")
+        if injected is not None:
+            return injected
+        if not 0 < len(data.encode()) <= MAX_COMMITMENT_BYTES:
+            return _failed("invalid_argument")
+        subnet = self._state.subnets.get(netuid)
+        if subnet is None:
+            return _failed("subnet_not_exists")
+        hotkey = self._signer_or_raise()
+        if self._find(subnet, hotkey) is None:
+            return _failed("not_registered")
+        self._state.commitments[netuid, hotkey] = data
+        return self._succeeded()
 
     async def serve_axon(
         self,

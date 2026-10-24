@@ -38,6 +38,13 @@ count"):
 - **TWM031 (auto): v10 config calls** (`bt.wallet.add_args(parser)`,
   `bt.config(parser)`, `bt.logging.check_config(...)`, `bt.Config` annotations).
 
+**Phase 4 recount (WP7):** with `apply` after `compat.Subtensor` (TWM008 now
+`auto`) the count is unchanged, **8** (`reports/phase-4/wp7/llm-detection/`,
+counted by `reports/phase-4/wp7/recount.py`). `apply` rewrites no `subtensor`
+here (the TWM026 base swap already removes it). The port's one kept TWM100
+marker takes `apply`'s current text, which now carries the D28 warning (branch
+`tensorwire-port-5`, a comment-only commit on top of the Phase 3 port).
+
 ## What `migrate scan` and `migrate apply` did
 
 With `apply` at eng/build `b7ee321` (`scan-before.txt`, `apply.txt`):

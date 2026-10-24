@@ -172,6 +172,8 @@ The kit cannot enforce these. Check them per host.
 - [ ] Never run untrusted subnet code on a machine that holds a coldkey.
 - [ ] Firewall (spec 15.3): miners open only their miner ports to the internet. Metrics and sidecar ports stay on loopback. SSH by key only.
 - [ ] A miner with `TW_WORKERS > 1` (or several instances) has `TW_REDIS_URL` set, so replays are detected across workers.
+- [ ] Subnets that use sealed challenges or answers (timelock, spec 8.10): validators and miners need outbound HTTPS to the drand API (the SDK fetches each round's signature). Blocked or rate-limited drand is `tw.timelock_unavailable`, never a hang; watch `tw_timelock_open_total{result="unavailable"}`.
+- [ ] TLS (spec 16.3): keep the private key file mode 600 and out of images; renew with the same key (certbot `--reuse-key`), or restart the miner right after renewing: validators pin the published key and refuse a new one until the miner has published it (proxy mode re-reads `TW_TLS_PUBLISHED_CERT_FILE` only every 30 minutes; [security.md](../docs/security.md#tls-spec-163-d31-adr-0011)).
 
 ## TLS at a reverse proxy
 

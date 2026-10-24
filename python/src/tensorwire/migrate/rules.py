@@ -105,9 +105,10 @@ RULES: Mapping[str, Rule] = _table(
     ),
     Rule(
         "TWM008",
-        "bt.subtensor / bt.AsyncSubtensor",
-        "manual",
-        "the kit's chain gateway and MetagraphCache, or bt.Subtensor directly",
+        "bt.subtensor(...) / bt.Subtensor(config=...)",
+        "auto",
+        "tensorwire.compat.Subtensor: the v10 reads and commitments on the "
+        "kit's gateway (spec 10b.2.6); or the kit's MetagraphCache",
     ),
     Rule(
         "TWM009",
@@ -239,7 +240,7 @@ RULES: Mapping[str, Rule] = _table(
         "bittensor type in a string annotation",
         "auto",
         'the compat type: "bt.Synapse" -> "Synapse", "bt.metagraph.Metagraph" -> '
-        '"Metagraph" (AxonInfo, TerminalInfo likewise)',
+        '"Metagraph" (AxonInfo, TerminalInfo, "bt.subtensor" -> "Subtensor" likewise)',
     ),
     Rule(
         "TWM029",
@@ -285,13 +286,16 @@ RULES: Mapping[str, Rule] = _table(
         "Synapse without required_hash_fields",
         "risk",
         "list every request field that matters in required_hash_fields: on the "
-        "v10 wire other fields can be changed without breaking the signature",
+        "v10 wire other fields can be changed without breaking the signature. "
+        "This changes the v10 body hash: ship it to every peer at once, or after "
+        "rollout stage 4 (D28)",
     ),
     Rule(
         "TWM101",
         "Synapse with partial required_hash_fields",
         "risk",
-        "add the missing request fields to required_hash_fields",
+        "add the missing request fields to required_hash_fields (every peer at "
+        "once, or after rollout stage 4: it changes the v10 body hash, D28)",
     ),
     Rule(
         "TWM102",
@@ -309,6 +313,20 @@ RULES: Mapping[str, Rule] = _table(
         "stage 2 or give v10 peers a non-streaming route",
     ),
     Rule(
+        "TWM035",
+        "bt.AsyncSubtensor",
+        "manual",
+        "the kit's chain gateway (async) and MetagraphCache, or v11's bt.Subtensor "
+        "(await bt.Subtensor(...)); compat.Subtensor is synchronous",
+    ),
+    Rule(
+        "TWM036",
+        "subtensor write compat.Subtensor does not perform",
+        "manual",
+        "the v11 replacement named in the finding (stake, transfer and "
+        "registration are coldkey operations: run them from btcli, not a server)",
+    ),
+    Rule(
         "TWM103",
         "force_validator_permit=False",
         "risk",
@@ -321,6 +339,45 @@ RULES: Mapping[str, Rule] = _table(
         "rely on the kit's caller policy (registered + permit) and keep "
         "blacklist_fn for extra, narrower rules",
     ),
+)
+
+#: v10 ``subtensor`` writes that ``compat.Subtensor`` does not perform, with
+#: their v11 replacement (spec 10b.2.6; TWM036).
+V10_SUBTENSOR_WRITES: Mapping[str, str] = MappingProxyType(
+    {
+        "add_stake": "bt.AddStake (coldkey-signed: run it from btcli, not a server)",
+        "add_stake_multiple": "bt.AddStake per hotkey (coldkey-signed)",
+        "unstake": "bt.RemoveStake (coldkey-signed)",
+        "unstake_multiple": "bt.RemoveStake per hotkey (coldkey-signed)",
+        "transfer": "bt.Transfer (coldkey-signed)",
+        "register": "btcli subnets register / bt.BurnedRegister",
+        "burned_register": "bt.BurnedRegister (coldkey-signed)",
+        "root_register": "bt.RootRegister (coldkey-signed)",
+        "root_set_weights": "bt.SetWeights on netuid 0",
+        "commit_weights": "the kit's weight scheduler (timelocked commit-reveal, 8.9)",
+        "reveal_weights": "the kit's weight scheduler (reveals are automatic in v11)",
+        "set_children": "bt.SetChildren",
+        "set_delegate_take": "bt.SetTake",
+        "move_stake": "bt.MoveStake (coldkey-signed)",
+        "swap_stake": "bt.SwapStake (coldkey-signed)",
+        "serve_prometheus": "nothing: v11 has no prometheus endpoint on chain",
+        "set_identity": "bt.SetIdentity (coldkey-signed)",
+        "update_identity": "bt.SetIdentity (coldkey-signed)",
+    }
+)
+
+#: v10 ``subtensor`` methods that v11's ``bt.Subtensor`` does not have: a file
+#: that calls one builds v10's ``bt.Subtensor``, whatever its arguments (TWM008).
+V10_SUBTENSOR_METHODS = frozenset(
+    {
+        "get_current_block",
+        "get_block_hash",
+        "get_uid_for_hotkey_on_subnet",
+        "is_hotkey_registered",
+        "get_commitment",
+        "set_commitment",
+        "query_subtensor",
+    }
 )
 
 #: ``bt.<name>`` attributes that v11 removed or the kit replaces -> rule id.
@@ -338,7 +395,7 @@ ATTRIBUTE_RULES: Mapping[str, str] = MappingProxyType(
         "Config": "TWM006",
         "logging": "TWM007",
         "subtensor": "TWM008",
-        "AsyncSubtensor": "TWM008",
+        "AsyncSubtensor": "TWM035",
         "metagraph": "TWM009",
         "wallet": "TWM014",
         "MockSubtensor": "TWM015",

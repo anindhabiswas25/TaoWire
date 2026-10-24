@@ -165,6 +165,7 @@ from tensorwire.compat import Synapse, StreamingSynapse, Axon, Dendrite, AxonInf
 | `await dendrite(axons, synapse, timeout, deserialize)` | the same call and result shapes |
 | `[metagraph.axons[uid] for uid in uids]` | `axons_from(metagraph, uids)` (a `compat.Metagraph` or a `MetagraphView`), or `Metagraph(...).axons[uid]` |
 | `metagraph.hotkeys`, `.S`, `.validator_permit`, `.n` | `Metagraph(source)` / `Metagraph.of_miner(miner)`: same names, plain lists |
+| `bt.subtensor(config=config)` and its reads / commitments | `Subtensor(config=config)`: same method names and keywords ([below](#compatsubtensor)) |
 | `process_weights_for_netuid` + `convert_weights_and_uids_for_emit` | `weights.to_mapping(uids, weights)`; v11 `SetWeights` normalises itself |
 
 What changes in behaviour:
@@ -199,6 +200,44 @@ What changes in behaviour:
   the final item. Streaming works TensorWire to TensorWire only (D33): a v10
   Dendrite gets the v10-shaped `tw.invalid_request` from a streaming route
   (TWM034).
+
+<a id="compatsubtensor"></a>
+### `compat.Subtensor`
+
+Subnets that call `bt.subtensor` directly (data-universe, for one) keep those
+calls on `tensorwire.compat.Subtensor` (spec 10b.2.6, D34). It is
+synchronous, like v10's, and every call goes through the kit's chain gateway:
+
+```python
+from tensorwire.compat import Subtensor
+
+subtensor = Subtensor(config=config)   # or Subtensor("ws://127.0.0.1:9944")
+mg = subtensor.metagraph(netuid)        # a compat Metagraph
+uid = subtensor.get_uid_for_hotkey_on_subnet(hotkey_ss58=hk, netuid=netuid)
+sha = subtensor.get_commitment(netuid=netuid, uid=uid)   # "" if none
+subtensor.set_commitment(wallet=wallet, netuid=netuid, data=sha)
+```
+
+| Call | Notes |
+|---|---|
+| `metagraph(netuid, lite=True, block=None)` | the compat `Metagraph`; `lite` is ignored |
+| `block`, `get_current_block()` | the current block |
+| `get_block_hash(block=None)` | `0x` hash, `None` for a block that does not exist |
+| `get_uid_for_hotkey_on_subnet(hotkey_ss58, netuid)` | `None` if not registered |
+| `is_hotkey_registered(hotkey_ss58, netuid)` | `netuid` is required (v10's any-subnet scan is not offered) |
+| `get_commitment(netuid, uid)` | the plaintext commitment, `""` if none (as v10) |
+| `query_subtensor(name, params=[...])` | a `SubtensorModule` storage value as plain Python data (v10 returned an SDK object); untrusted |
+| `commit(wallet, netuid, data)` / `set_commitment(...)` | one `Raw` field of 1..128 UTF-8 bytes, signed by the wallet's **hotkey**; `True` once included |
+| `set_weights(wallet, netuid, uids, weights, version_key=0)` | v10's `(ok, message)`; submitted once, never resent. Prefer the kit's weight scheduler, which also re-plans expired timelocked commits |
+| `serve_axon(...)` | a no-op: the kit publishes the axon at startup |
+| any other v10 write (`add_stake`, `transfer`, `register`, `commit_weights`, ...) | `NotImplementedError` naming the v11 replacement (TWM036) |
+
+The coldkey is never read. `block=` other than `None` (historical reads)
+raises `NotImplementedError`; use v11's `bt.Subtensor` for those. Any other
+attribute is an `AttributeError`, never a silent `None`. `close()` (or a
+`with` block) closes the chain connections. Tests pass
+`gateway_factory=lambda hk: chain if hk is None else chain.with_signer(hk.ss58_address)` to run on a
+`FakeChain`.
 
 ## Old and new nodes together (the legacy bridge)
 
@@ -265,9 +304,19 @@ port replaces `bt.config(parser)` with a ten-line helper that turns
 Standard logging: bt.logging.info(...) -> logging.info(...); trace -> debug, success -> info (the kit configures JSON logs).
 
 <a id="twm008"></a>
-### TWM008: bt.subtensor / bt.AsyncSubtensor (`manual`)
+### TWM008: bt.subtensor(...) / bt.Subtensor(config=...) (`auto`)
 
-The kit's chain gateway and MetagraphCache, or bt.Subtensor directly.
+Tensorwire.compat.Subtensor: the v10 reads and commitments on the kit's gateway (spec 10b.2.6); or the kit's MetagraphCache.
+
+`apply` rewrites `bt.subtensor(...)`, `bt.Subtensor(config=...)` and
+`bt.Subtensor` annotations to `compat.Subtensor` ([below](#compatsubtensor)).
+`bt.Subtensor(network=...)` is a valid v11 call, so it is rewritten only in a
+file that also calls a method v11's client does not have
+(`get_current_block`, `get_block_hash`, `get_uid_for_hotkey_on_subnet`,
+`is_hotkey_registered`, `get_commitment`, `set_commitment`,
+`query_subtensor`): there it is v10's class. Elsewhere `bt.Subtensor("test")`
+is v11's own client and is left alone; `bt.subtensor.add_args(...)` stays
+TWM006 / TWM031.
 
 <a id="twm009"></a>
 ### TWM009: bt.metagraph / metagraph.sync() (`manual`)
@@ -369,7 +418,7 @@ Await asyncio.sleep(...): a blocking sleep also stops the kit's health and metri
 <a id="twm028"></a>
 ### TWM028: bittensor type in a string annotation (`auto`)
 
-The compat type: "bt.Synapse" -> "Synapse", "bt.metagraph.Metagraph" -> "Metagraph" (AxonInfo, TerminalInfo likewise).
+The compat type: "bt.Synapse" -> "Synapse", "bt.metagraph.Metagraph" -> "Metagraph" (AxonInfo, TerminalInfo, "bt.subtensor" -> "Subtensor" likewise).
 
 <a id="twm029"></a>
 ### TWM029: bittensor name inside a string (`manual`)
@@ -402,15 +451,31 @@ V11's constructor: bt.Wallet(name=c.wallet.name, hotkey=c.wallet.hotkey, path=c.
 
 v11's `Wallet` reads the coldkey only when your code asks for it (`wallet.coldkey`); `wallet.get_coldkeypub()` is the `wallet.coldkeypub` property in v11.
 
+<a id="twm035"></a>
+### TWM035: bt.AsyncSubtensor (`manual`)
+
+The kit's chain gateway (async) and MetagraphCache, or v11's bt.Subtensor (await bt.Subtensor(...)); compat.Subtensor is synchronous.
+
+<a id="twm036"></a>
+### TWM036: subtensor write compat.Subtensor does not perform (`manual`)
+
+The v11 replacement named in the finding (stake, transfer and registration are coldkey operations: run them from btcli, not a server).
+
+`scan` names the replacement in each finding (`add_stake` -> `bt.AddStake`,
+`commit_weights` / `reveal_weights` -> the kit's weight scheduler, ...); the
+same table (`tensorwire.compat.subtensor.V10_WRITES`) is what
+`compat.Subtensor` raises `NotImplementedError` with, so code that slips
+past the scan fails loudly instead of doing nothing.
+
 <a id="twm100"></a>
 ### TWM100: Synapse without required_hash_fields (`risk`)
 
-List every request field that matters in required_hash_fields: on the v10 wire other fields can be changed without breaking the signature.
+List every request field that matters in required_hash_fields: on the v10 wire other fields can be changed without breaking the signature. This changes the v10 body hash: ship it to every peer at once, or after rollout stage 4 (D28).
 
 <a id="twm101"></a>
 ### TWM101: Synapse with partial required_hash_fields (`risk`)
 
-Add the missing request fields to required_hash_fields.
+Add the missing request fields to required_hash_fields (every peer at once, or after rollout stage 4: it changes the v10 body hash, D28).
 
 Why TWM100 and TWM101 matter: a v10 request signature covers
 `computed_body_hash`, and that hash covers only the fields listed in
@@ -420,6 +485,12 @@ request). On the btauth/1 wire the whole body is signed, so this matters only
 while v10 validators still call your miners, but it matters then. List every
 request field your miner's answer depends on. The template's `Dummy` listed
 none.
+
+**Changing `required_hash_fields` breaks a mixed fleet** (D28): the v10 body
+hash is part of the wire format both sides compute, so a v10 validator that
+still hashes the old field list fails every request to a miner with the new
+one, and the other way round. Ship the change to every peer at once, or after
+rollout stage 4 ([migration-rollout.md](migration-rollout.md#required_hash_fields)).
 
 <a id="twm102"></a>
 ### TWM102: allow_non_registered=True (`risk`)

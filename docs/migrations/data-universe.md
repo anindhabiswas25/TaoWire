@@ -3,73 +3,83 @@
 Source: <https://github.com/macrocosm-os/data-universe> at `bb261aa`, MIT licence,
 `bittensor==10.3.0`. A public open-source subnet standing in for a design partner
 (S7); nobody from the team was involved. The port lives outside this repository
-(`~/Project/tensorwire/.ports/data-universe`, git-ignored): none of the subnet's
-code is committed here, only these counts and the evidence in
-`reports/phase-3/gate-fix/port-data-universe/`.
+(`~/Project/tensorwire/.ports/data-universe`, branch `tensorwire-port-2`,
+git-ignored): none of the subnet's code is committed here, only these counts and
+the evidence in `reports/phase-4/wp7/` (Phase 3: `reports/phase-3/gate-fix/port-data-universe/`).
 
-**Result: S6 = 91 changed lines** (target ≤ 50, spec 1.5), counted as for the
-template: `git diff` between the `tensorwire migrate apply` output and the
-finished port, subnet code only (tests, scripts and docs left out), without
-import lines and removed `# TW-MIGRATE:` markers.
+**Result: S6 = 24 changed lines** (target ≤ 50, spec 1.5 with D18), counted as
+for the template: `git diff` between the `tensorwire migrate apply` output and
+the finished port, subnet code only (tests, scripts and docs left out), without
+import lines and removed `# TW-MIGRATE:` markers. Phase 3 measured **91**; the
+difference is `compat.Subtensor` (spec 10b.2.6, D34) and the TWM008 rewrite onto
+it.
 
 **data-universe is not template-derived.** Its miner and validator are its own
 classes on top of v10's `bt.subtensor`, `bt.wallet` and `bt.metagraph`, and
-S6 targets template-derived subnets. Most of the 91 lines are its v10 chain
-calls (commitments, UID lookups, block hashes, metagraph syncing), not
-networking. The number is reported as measured; see "What would lower it".
+S6 targets template-derived subnets, so this number is reported, not gated
+(D24).
 
 ## What `migrate scan` and `migrate apply` did
 
-With `apply` at eng/build `b7ee321`:
+With `apply` at eng/build WP7 (`reports/phase-4/wp7/data-universe-*.txt`):
 
-- `scan` (before): 142 files (`scan-before.txt`).
-- `apply`: 46 files changed, 739 rewrites, 52 `# TW-MIGRATE:` comments
-  (`apply.txt`). TWM007 ×680 (`bt.logging`), TWM001 ×12, TWM004 ×8, TWM003 ×6
-  (`bt.axon` → `Axon(miner=TWMiner.from_env())`, imported under an alias because
-  the subnet has its own `class Miner`), TWM031 ×10 (config calls and `bt.Config`
-  annotations), TWM032 ×10 (`bt.logging` set-up statements), TWM033 ×6
-  (`bt.Wallet(config=...)` → v11's constructor), TWM012, TWM021, TWM023, TWM027,
-  TWM028.
-- TWM031, TWM032 and TWM033 are new: they came from this port (each removed a
-  class of hand edits; see "Misses").
+- `scan` (before): 142 files, 788 findings (748 auto, 34 manual, 6 risk).
+- `apply`: 46 files changed, 754 rewrites, 40 `# TW-MIGRATE:` comments.
+  TWM007 ×680 (`bt.logging`), **TWM008 ×15** (new: `bt.Subtensor(config=...)`
+  and `bt.Subtensor(network=...)` → `compat.Subtensor`, plus `bt.Subtensor`
+  annotations), TWM001 ×12, TWM031 ×10, TWM032 ×10, TWM004 ×8, TWM003 ×6,
+  TWM033 ×6, TWM021 ×2, TWM023 ×2, TWM012, TWM027, TWM028.
+- `scan` after `apply`: 40 findings (0 auto, 34 manual, 6 risk); 20 of the
+  manual ones are TWM009 notes on code that works on compat as it is.
 
 ## The hand fixes, counted (S6)
 
+`reports/phase-4/wp7/data-universe/hand-fixes.patch`, counted with the
+template's counter (`s6.txt`).
+
 | File | +/- | Counted | Why |
 |---|---|---|---|
-| `common/chain.py` (new) | +54 | 49 | `class Chain`: the calls the subnet made through `bt.subtensor`, on v11 and the kit. `metagraph()` returns `compat.Metagraph` over the kit gateway's snapshot (`S`, `validator_permit`, `axons`, `uids` as v10 shaped them), `get_uid_for_hotkey_on_subnet` / `get_current_block` / `set_weights` go through `BittensorGateway`, `get_block_hash` / `get_commitment` / `set_commitment` / `query_subtensor` through v11's `bt.SyncClient` (commitments are signed by the hotkey) |
-| `neurons/validator.py` | +5 / −22 | 19 | the v10 `bt.logging.trace` monkeypatch removed (v11 has no `bt.logging`; 13 lines); `Chain(...)` instead of `bt.Subtensor(config=...)` twice, with the wallet built first; the validator's own axon served in the background (`serve_in_background()`, v10's `start()` did not block) |
-| `neurons/miner.py` | +4 / −5 | 7 | `Chain(...)`; `self.axon.miner.serve_in_background()` instead of `self.axon.start()` (the miner's loop and scraper coordinator run after it); the status log's `Emission` field (v11's metagraph data, not in compat) dropped |
-| `dynamic_desirability/*.py` | +8 / −11 | 10 | `Chain(network)` instead of `bt.Subtensor(...)` in the commitment reader, uploader and preference store |
-| `common/utils.py` | +2 / −13 | 4 | `uid.item()` → `uid` (compat UIDs are ints) |
-| `upload_utils/s3_utils.py` | +1 / −3 | 2 | `wallet.get_coldkeypub()` is v11's `wallet.coldkeypub` |
+| `neurons/validator.py` | +1 / −16 | 13 | the v10 `bt.logging.trace` monkeypatch removed (v11 has no `bt.logging`; 11 lines); the validator's own axon served in the background (`serve_in_background()`; v10's `start()` did not block) |
+| `neurons/miner.py` | +2 / −3 | 5 | `self.axon.miner.serve_in_background()` instead of `self.axon.start()` (the miner's loop and scraper run after it); the status log's `Emission` field (v11 metagraph data, not in compat) dropped |
+| `common/utils.py` | +2 / −11 | 4 | `uid.item()` → `uid` (compat UIDs are ints); the rest are markers |
+| `upload_utils/s3_utils.py` | +1 / −2 | 2 | `wallet.get_coldkeypub()` is v11's `wallet.coldkeypub` |
 | `common/api_client.py` | import only | 0 | `bittensor_wallet.keypair.Keypair` → `bittensor.keyfiles.Keypair` |
-| **Total** | | **91** | |
+| 6 more files | markers only | 0 | |
+| **Total** | | **24** | |
+
+Gone compared with Phase 3: `common/chain.py` (49 lines, a hand-written v10
+`subtensor` facade) and the 18 lines around the `Chain(...)` call sites (in the neurons
+and `dynamic_desirability/*`). `apply` now writes `Subtensor(config=...)` /
+`Subtensor(network=...)` and the subnet's own calls (`metagraph`,
+`get_uid_for_hotkey_on_subnet`, `get_commitment`, `set_commitment`,
+`get_block_hash`, `get_current_block`, `is_hotkey_registered`,
+`query_subtensor("SubnetOwnerHotkey", ...)`, `set_weights`) run unchanged.
 
 Left as they are, with their markers: three TWM100 notes on Synapses without
-`required_hash_fields` and three TWM104 notes on blacklists. Both are risks of
-the v10 wire during the bridge period, not code that has to change. Changing
-the hash fields would break the mixed fleet: they are part of the v10 wire
-format, which old and new nodes must share (found in the llm-detection fleet).
-After the rollout, btauth/1 signs the whole body and they no longer matter.
-The tests (`tests/`) were not ported; they mock v10 objects
-(`bt.MockSubtensor`, `bt.Metagraph(netuid=1, sync=False)`).
+`required_hash_fields` and three TWM104 notes on blacklists. Changing the hash
+fields would break the mixed fleet (D28, `docs/migration-rollout.md`); after
+the rollout btauth/1 signs the whole body. The tests (`tests/`) were not ported;
+they mock v10 objects (`bt.MockSubtensor`, `bt.Metagraph(netuid=1, sync=False)`).
 
 ## What was run
 
 - Static: everything compiles, no undefined names (`ruff --select F821`), and
-  `scan` reports nothing outside the risk notes in subnet code.
-- Imports: `neurons.miner`, `neurons.validator`,
-  `dynamic_desirability.desirability_retrieval`, `vali_utils.miner_evaluator`
-  and `upload_utils.s3_uploader` import on bittensor 11.3.0 + TensorWire, with
-  the subnet's own requirements (except `bittensor==10.3.0`).
-- `common/chain.py` against the localnet chain: metagraph (6 UIDs, v10 shape),
-  UID lookup, block hash, subnet owner hotkey, and a commitment written with the
-  dev `miner_ts` hotkey and read back.
+  `scan` reports nothing outside the risk notes and TWM009 notes in subnet code.
+- Imports: `neurons.miner`, `neurons.validator`, `common.utils`,
+  `common.metagraph_syncer`, `dynamic_desirability.{chain_utils,desirability_retrieval,desirability_uploader}`,
+  `vali_utils.miner_evaluator` and `upload_utils.s3_uploader` import on
+  bittensor 11.3.0 + TensorWire with the subnet's own requirements.
+- Their chain code on localnet (`data-universe-chain-check.txt`): the subnet
+  owner hotkey (`get_subnet_owner_hotkey` → `query_subtensor`), their
+  `ChainPreferenceStore.store_preferences` (a commitment written with the dev
+  `miner_ts` hotkey, from their `fork` worker) and their
+  `_sync_retrieve_metadata` reading it back: equal. The first run of this
+  check found that `compat.Subtensor` hung in a forked child (fixed, see
+  `reports/phase-4/reviews.md`, WP7 finding 2).
 - Their ported miner on localnet (dev `miner_ts`, 127.0.0.4:8097, settings
-  from `TW_*`): the kit published the axon, and their `GetMinerIndex` handler
-  answered a TensorWire `compat.Dendrite` signed by the dev `validator` hotkey
-  over btauth/1 (200, twice).
+  from `TW_*`; `data-universe-query.txt`): the kit published the axon, and
+  their `GetMinerIndex` handler answered a TensorWire `compat.Dendrite` signed
+  by the dev `validator` hotkey over btauth/1.
 
 **Not run:** the validator end to end, and no mixed fleet for this subnet. The
 validator needs the Data Universe API and S3 services
@@ -83,26 +93,27 @@ same reason. The mixed-fleet requirement of S6 is met by llm-detection
 
 | Miss | Now |
 |---|---|
-| `bt.logging.set_info(True)`, `bt.logging.set_debug(True)`, `bt.logging(config=..., logging_dir=...)`, `bt.logging.set_trace(True)` (10 statements) were TWM025, by hand | **TWM032** (auto): bare `bt.logging` set-up statements are removed |
-| `bt.Wallet(config=self.config)` (6) was TWM014, by hand | **TWM033** (auto): v11's `bt.Wallet(name=, hotkey=, path=)`; scan treats that v11 shape as v11 |
-| `bt.wallet.add_args(parser)` etc. and `bt.config(parser)` were TWM006, by hand | **TWM031** (auto, from the llm-detection port): `add_v10_args`, `compat.config` |
-| `config: bt.Config` annotations failed at import on v11 | **TWM031** maps them to compat `Config` |
-| `bt.Subtensor(network=...)` is a valid v11 call, so scan does not flag it, but the object is then used with v10 method names (`get_commitment`, `get_uid_for_hotkey_on_subnet`) | limit, documented: scan cannot tell which API an object is used with. The hand port replaces these |
-| `uid.item()` on `metagraph.uids` elements (TWM023 covers `metagraph.<v>.item()` only) | limit, documented |
-| compat `Axon.start()` blocks, v10's did not | limit, documented (`docs/migration-from-v10.md`): `axon.miner.serve_in_background()` when code runs after `start()` |
+| `bt.logging` set-up statements (10) by hand | **TWM032** (auto, Phase 3) |
+| `bt.Wallet(config=self.config)` (6) by hand | **TWM033** (auto, Phase 3) |
+| `bt.wallet.add_args(parser)`, `bt.config(parser)`, `config: bt.Config` | **TWM031** (auto, Phase 3) |
+| v10 `subtensor` reads and commitments: a 49-line hand facade | **`compat.Subtensor`** (10b.2.6, D34) and **TWM008** (auto): `bt.subtensor(...)`, `bt.Subtensor(config=...)` and annotations |
+| `bt.Subtensor(network=...)` is a valid v11 call, but here it is used with v10 method names | **TWM008** (auto) when the file also calls a method v11's client lacks (`get_commitment`, `get_uid_for_hotkey_on_subnet`, ...) |
+| v10 writes `compat.Subtensor` does not perform (stake, transfer, register, ...) | **TWM036** (manual, names the v11 replacement); the facade raises `NotImplementedError` with the same text. data-universe makes none |
+| `uid.item()` on `metagraph.uids` elements (TWM023 covers `metagraph.<v>.item()` only) | limit, documented (4 lines here) |
+| compat `Axon.start()` blocks, v10's did not | limit, documented (`docs/migration-from-v10.md`): `axon.miner.serve_in_background()` when code runs after `start()` (3 lines here) |
+| their `bt.logging.trace` monkeypatch | manual (TWM025): v11 has no `bt.logging`; 11 lines here |
 
-## What would lower it
+## What would lower it further
 
-49 of the 91 lines are `common/chain.py`, a small v10-shaped facade over v11
-reads. A compat version of it (`tensorwire.compat` offering the v10
-`subtensor` reads and writes that template code and subnets like this use)
-would remove most of them for every such subnet. That is a product decision
-(the compat layer's scope is spec 10b.2-10b.3), so it is a spec question for
-the PM, not something this port added on its own.
+13 of the 24 lines are the `bt.logging.trace` monkeypatch, a workaround for a
+v10 log message that v11 does not print; removing it is the right port, and a
+rule that deletes arbitrary assignments to `bt.logging` attributes would be
+guessing. A non-blocking `Axon.start()` option would save the 2 `start()`
+lines, but changes compat's documented behaviour; not done.
 
 ## Time
 
-About 60 minutes for the hand port and its checks (apply at 19:27, port
-committed 19:33 after a first pass on the previous apply from about 18:40),
-plus the time to add TWM031-TWM033 to the kit. The engineer is an AI; these
-times do not stand for what a human team needs.
+About 15 minutes for the hand port on top of `compat.Subtensor` and the
+checks above, plus the time to build `compat.Subtensor`, TWM008 (auto),
+TWM035 and TWM036 in the kit. The engineer is an AI; these times do not stand
+for what a human team needs.

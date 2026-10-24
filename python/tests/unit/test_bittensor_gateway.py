@@ -145,6 +145,9 @@ class World:
     finalized: int = 50
     certificates: list[Any] = field(default_factory=list)
     certificate_blocks: list[int | None] = field(default_factory=list)
+    block_infos: dict[int, Any] = field(default_factory=dict)
+    commitments: dict[str, Any] = field(default_factory=dict)
+    storage: dict[tuple[str, tuple[Any, ...]], Any] = field(default_factory=dict)
 
     def fail(self, op: str, *errors: Any) -> None:
         self.faults[op].extend(errors)
@@ -177,6 +180,7 @@ class FakeSdkClient:
         self.epochs = SimpleNamespace(
             blocks_since_last_update=self._blocks_since_last_update
         )
+        self.identity = SimpleNamespace(commitment=self._commitment)
 
     async def connect(self) -> None:
         await self.world.run("connect", None)
@@ -195,9 +199,19 @@ class FakeSdkClient:
     async def block_time(self) -> float:
         return 0.0
 
+    async def block_info(self, block: int) -> Any:
+        return await self.world.run("block_info", self.world.block_infos.get(block))
+
+    async def _commitment(self, netuid: int, hotkey: str) -> Any:
+        assert netuid == NETUID
+        return await self.world.run("commitment", self.world.commitments.get(hotkey))
+
     async def query(self, item: tuple[str, str], params: list[int]) -> Any:
         if item == ("SubtensorModule", "ServingRateLimit"):
             return await self.world.run("serving_rate_limit", self.world.serving)
+        if (item[1], tuple(params)) in self.world.storage:
+            value = self.world.storage[item[1], tuple(params)]
+            return await self.world.run("storage", value)
         assert item == ("SubtensorModule", "NetworksAdded")
         return bool(await self.world.run("query", params[0] in self.world.subnets))
 
@@ -236,6 +250,9 @@ class FakeSdkClient:
             ),
         )
 
+    async def submit_call(self, call: Any, signer: Any, **kwargs: Any) -> Any:
+        return await self.execute(call, signer, **kwargs)
+
     async def execute(self, intent: Any, signer: Any, **kwargs: Any) -> Any:
         self.world.executed.append((intent, signer, kwargs))
         self.world.calls.append("execute")
@@ -270,7 +287,7 @@ def _gateway(
 
     return BittensorGateway(
         "ws://primary:9944",
-        hotkey=HOTKEY,
+        hotkey=kwargs.pop("hotkey", HOTKEY),
         fallback_endpoints=fallbacks,
         timeout_s=timeout_s,
         sleep=sleep,
@@ -1136,3 +1153,107 @@ def test_timelock_round_trip_locally() -> None:
     assert gw.timelock_parse(sealed_hex).reveal_round == 1000
     with pytest.raises(TimelockMalformed):  # a signature of no round at all
         gw.timelock_decrypt(sealed_hex, "ab" * 48)
+
+
+# -- compat.Subtensor reads and the commitment write (10b.2.6, D34) -------------
+
+
+async def test_block_hash(world: World, sleeps: list[float]) -> None:
+    good = "0x" + "ab" * 32
+    world.block_infos = {
+        7: SimpleNamespace(hash=good),
+        8: SimpleNamespace(hash=8),
+        10: SimpleNamespace(hash="0x07"),
+    }
+    gw = await _connected(world, sleeps)
+    assert await gw.block_hash(7) == good
+    assert await gw.block_hash(8) is None  # not a string: never trusted
+    assert await gw.block_hash(10) is None  # not a block hash's shape
+    assert await gw.block_hash(9) is None  # no such block
+    calls = world.calls.count("block_info")
+    assert await gw.block_hash(-1) is None
+    assert world.calls.count("block_info") == calls  # not even asked
+
+
+async def test_commitment(world: World, sleeps: list[float]) -> None:
+    world.commitments = {
+        "5A": SimpleNamespace(data="sha"),
+        "5B": SimpleNamespace(data=""),
+        "5C": SimpleNamespace(data=b"bytes"),
+    }
+    gw = await _connected(world, sleeps)
+    assert await gw.commitment(NETUID, "5A") == "sha"
+    for hotkey in ("5B", "5C", "5D"):
+        assert await gw.commitment(NETUID, hotkey) is None
+
+
+async def test_storage(world: World, sleeps: list[float]) -> None:
+    world.storage = {("SubnetOwnerHotkey", (NETUID,)): "5Owner"}
+    gw = await _connected(world, sleeps)
+    assert await gw.storage("SubnetOwnerHotkey", [NETUID]) == "5Owner"
+    for name in ("", "lower", "Has Space", "Module.Item", "X" * 65):
+        with pytest.raises(ValueError, match="storage item name"):
+            await gw.storage(name, [])
+
+
+async def test_storage_read_retries_like_every_read(
+    world: World, sleeps: list[float]
+) -> None:
+    world.storage = {("Keys", (NETUID, 0)): "5Key"}
+    world.fail("storage", ConnectionError("reset"))
+    gw = await _connected(world, sleeps)
+    assert await gw.storage("Keys", [NETUID, 0]) == "5Key"
+    assert world.calls.count("storage") == 2
+
+
+async def test_commit(world: World, sleeps: list[float]) -> None:
+    gw = await _connected(world, sleeps)
+    outcome = await gw.commit(NETUID, "é" * 64)  # 128 UTF-8 bytes
+    assert outcome.ok
+    ((call, signer, kwargs),) = world.executed
+    assert signer is HOTKEY  # the hotkey; there is no coldkey to use
+    assert kwargs["wait_for_inclusion"] is True
+    assert (call.module, call.function) == ("Commitments", "set_commitment")
+    assert call.params == {
+        "netuid": NETUID,
+        "info": {"fields": [{"Raw128": ("é" * 64).encode()}]},
+    }
+    assert world.planned == []  # a raw call: there is no intent to plan
+
+
+@pytest.mark.parametrize("data", ["", "x" * 129, "é" * 65])
+async def test_commit_size_is_checked_before_anything_is_signed(
+    world: World, sleeps: list[float], data: str
+) -> None:
+    gw = await _connected(world, sleeps)
+    outcome = await gw.commit(NETUID, data)
+    assert (outcome.ok, outcome.code) == (False, "invalid_argument")
+    assert world.executed == []
+
+
+async def test_commit_needs_a_hotkey(world: World, sleeps: list[float]) -> None:
+    gw = await _connected(world, sleeps, hotkey=None)
+    with pytest.raises(RuntimeError, match="no hotkey"):
+        await gw.commit(NETUID, "x")
+
+
+@pytest.mark.parametrize("name", sorted(RESIGN_ERROR_NAMES))
+async def test_commit_pool_rejections_are_resigned(
+    world: World, sleeps: list[float], name: str
+) -> None:
+    world.results = [_failed(name), _ok("0xdef")]
+    gw = await _connected(world, sleeps)
+    outcome = await gw.commit(NETUID, "x")
+    assert outcome.ok
+    assert outcome.block_hash == "0xdef"
+    assert len(world.executed) == 2
+
+
+async def test_commit_unknown_fate_is_never_resent(
+    world: World, sleeps: list[float]
+) -> None:
+    world.results = [TimeoutError()]
+    gw = await _connected(world, sleeps)
+    outcome = await gw.commit(NETUID, "x")
+    assert (outcome.ok, outcome.code) == (False, "unknown")
+    assert len(world.executed) == 1

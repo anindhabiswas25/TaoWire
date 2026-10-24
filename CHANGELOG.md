@@ -85,3 +85,50 @@ All notable changes to this project are documented here. The format follows
 - `tensorwire bench` reaches Redis directly by default (container IP / host network) and
   prints which path it used; a `docker-proxy` run is marked as extra information.
 - Case studies: llm-detection (S6 recounted with its bases), data-universe.
+
+### Added (Phase 4: extensions)
+
+- Streaming (spec 9.2, D29): `@miner.route(..., stream=True)` streams `event: chunk` frames
+  after the whole request pipeline and ends with a signed `tw-end` trailer (digest, count,
+  twresp/1); `ValidatorClient.stream()` / `query_stream()` / `query_stream_many()` hand out
+  unverified chunks, then a verified `MinerResult`. `TW_STREAM_MAX_S`, `TW_STREAM_MAX_BYTES`,
+  `TW_STREAM_IDLE_S` (per route and per call too); `tw_stream_aborted_total`. Integration
+  test 11. `docs/streaming.md`.
+- `compat.StreamingSynapse` (10b.2.1, D33) on `compat.Axon` and
+  `compat.Dendrite(streaming=True)`; TWM002 is auto; new risk rule TWM034 (streaming routes
+  in a mixed fleet; v10-wire streaming is not supported).
+- Timelock (spec 8.10, D30): sealed challenges and sealed responses (`Task(sealed=True)`,
+  `Miner.timelock`), `bt.timelock` only through the chain gateway, a process-wide drand
+  limiter, retries and deadlines (`TW_TIMELOCK_CONCURRENCY`, `_RETRIES`, `_TIMEOUT_S`);
+  `tw.timelock_unavailable`, `tw_timelock_open_total{result}`; opt-in `drand` test marker.
+  `docs/timelock.md`.
+- TLS (spec 16.3, D31, ADR-0011): HTTPS from uvicorn (`TW_TLS_CERT_FILE` / `TW_TLS_KEY_FILE`)
+  or at a reverse proxy (`TW_TLS_PUBLISHED_CERT_FILE`), the key published with `ServeAxonTls`;
+  validators `TW_SCHEME_POLICY=https` / `https-if-tls-published` pin the published key and never
+  fall back to HTTP for a miner that published one (`tw.tls_pin_mismatch`,
+  `tw_tls_pin_failures_total`). `deploy/proxy` Caddy and nginx examples; `docs/tls.md`.
+- `compat.Subtensor` (10b.2.6, D34): v10 `subtensor` reads and commitments on the kit's
+  gateway (`ChainGateway.block_hash`, `commitment`, `storage`, `commit`), hotkey-signed only;
+  other v10 writes raise `NotImplementedError` naming the v11 replacement. `migrate`: TWM008
+  is auto, new TWM035 (`bt.AsyncSubtensor`) and TWM036 (writes the facade does not perform).
+
+### Changed (Phase 4)
+
+- Timelocked weight commits rejected for their reveal round (`expired` / `too_early`) are
+  re-planned as new extrinsics, at most 3 per weight window (spec 8.9, D32).
+- `just check` never falls back to a host Go tool: `scripts/go_tools.sh` builds the pinned
+  staticcheck / govulncheck or fails clearly (D23).
+- The G3-3 startup refusal of `https-if-tls-published` is lifted (ADR-0011 accepted).
+- TWM100 / TWM101 fix text warns that changing `required_hash_fields` breaks a mixed fleet
+  (D28; also `docs/migration-rollout.md`).
+- Case study recounts: data-universe S6 91 → 24 (`compat.Subtensor`), llm-detection 8,
+  template 17.
+
+### Security (Phase 4)
+
+- At most 16 open streams per caller hotkey per miner process (429 beyond); a stream that
+  stalls, drips or never ends is cut on both sides.
+- Sealed answers are bound to the miner that sealed them; stale sealed challenges are refused
+  without a drand fetch.
+- Chain data for TLS keys is decoded strictly and fails closed; the pin is checked inside the
+  TLS handshake (no renegotiation).

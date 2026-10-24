@@ -59,12 +59,21 @@ rollback use them.
 
 ## Stage 0: prepare
 
+<a id="required_hash_fields"></a>
+
 - Port the code: `tensorwire migrate scan .`, `tensorwire migrate apply .`
   (on a clean git tree), then fix the `# TW-MIGRATE:` items by hand
   (`docs/migration-from-v10.md`).
 - Run the mixed fleet on localnet (spec 13.8): `just mixed-fleet`. All four
   cells (v10 or TensorWire validator × v10 or TensorWire miner) must be
   green. Use the `testnet` image tag of the localnet chain.
+- **Do not change a Synapse's `required_hash_fields` in this release**
+  (D28). `scan` reports Synapses with empty or partial hash fields (TWM100,
+  TWM101) as risks, and fixing them is right, but the field list feeds the v10
+  body hash that old and new nodes must compute the same way: a ported miner
+  with a different list fails every request from a v10 validator (and a ported
+  validator every request to a v10 miner). Ship that change to all peers at
+  once, or after stage 4, when no v10 peer is left.
 - **Exit:** the mixed-fleet matrix is green.
 
 Localnet note: localnet miners gain permits and stake quickly (one held

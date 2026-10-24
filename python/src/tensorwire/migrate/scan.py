@@ -31,7 +31,14 @@ from typing import Literal
 import libcst as cst
 from libcst.metadata import MetadataWrapper, ParentNodeProvider, PositionProvider
 
-from tensorwire.migrate.rules import ATTRIBUTE_RULES, MODULE_RULES, RULES, V11_PUBLIC
+from tensorwire.migrate.rules import (
+    ATTRIBUTE_RULES,
+    MODULE_RULES,
+    RULES,
+    V10_SUBTENSOR_METHODS,
+    V10_SUBTENSOR_WRITES,
+    V11_PUBLIC,
+)
 
 __all__ = [
     "CONFIG_GROUPS",
@@ -40,6 +47,7 @@ __all__ = [
     "STOCK_VALIDATOR_METHODS",
     "Finding",
     "ScanReport",
+    "calls_v10_subtensor_methods",
     "is_axons_list",
     "is_metagraph_tensor_call",
     "python_files",
@@ -116,6 +124,8 @@ ANNOTATION_COMPAT: dict[str, str] = {
     "metagraph.Metagraph": "Metagraph",
     "Config": "Config",
     "config": "Config",
+    "subtensor": "Subtensor",
+    "Subtensor": "Subtensor",
 }
 #: ``bt.logging.<name>(...)`` set-up calls a bare statement may make (TWM032).
 LOGGING_SETUP = frozenset(
@@ -363,6 +373,23 @@ def _is_bool(node: cst.BaseExpression, value: bool) -> bool:
     return isinstance(node, cst.Name) and node.value == ("True" if value else "False")
 
 
+def calls_v10_subtensor_methods(module: cst.Module) -> bool:
+    """Whether ``module`` calls a method only v10's ``subtensor`` has (TWM008)."""
+    found = False
+
+    class _Calls(cst.CSTVisitor):
+        def visit_Call(self, node: cst.Call) -> None:  # noqa: N802 - libcst API
+            nonlocal found
+            func = node.func
+            if isinstance(func, cst.Attribute) and (
+                func.attr.value in V10_SUBTENSOR_METHODS
+            ):
+                found = True
+
+    module.visit(_Calls())
+    return found
+
+
 class _Visitor(cst.CSTVisitor):
     METADATA_DEPENDENCIES = (PositionProvider, ParentNodeProvider)
 
@@ -383,6 +410,7 @@ class _Visitor(cst.CSTVisitor):
         self._annotation_depth = 0
         self.template = False
         self.streaming_classes: set[str] = set()  # this module's StreamingSynapses
+        self.v10_subtensor_calls = calls_v10_subtensor_methods(module)
 
     def add(self, node: cst.CSTNode, rule: str, detail: str = "") -> None:
         line = self.get_metadata(PositionProvider, node).start.line
@@ -580,10 +608,14 @@ class _Visitor(cst.CSTVisitor):
         if attr != "Subtensor" or self._annotation_depth:
             return _RENAMED_V10[attr]
         parent = self.get_metadata(ParentNodeProvider, node, None)
-        if isinstance(parent, cst.Call) and any(
-            a.keyword is not None and a.keyword.value == "config" for a in parent.args
+        if isinstance(parent, cst.Call) and (
+            self.v10_subtensor_calls
+            or any(
+                a.keyword is not None and a.keyword.value == "config"
+                for a in parent.args
+            )
         ):
-            return "TWM008"  # bt.Subtensor(config=...): v10's constructor
+            return "TWM008"  # v10's constructor, or v10 methods called in this file
         return None  # bt.Subtensor("test"): v11
 
     def outermost(self, node: cst.Attribute) -> cst.Attribute:
@@ -649,6 +681,8 @@ class _Visitor(cst.CSTVisitor):
             self.add(node, "TWM010", name)
         elif last == "serve_axon" and "subtensor" in receiver:
             self.add(node, "TWM011", name)
+        elif last in V10_SUBTENSOR_WRITES and "subtensor" in receiver:
+            self.add(node, "TWM036", f"{name}: v11 {V10_SUBTENSOR_WRITES[last]}")
         elif last == "sync" and receiver.endswith("metagraph"):
             self.add(node, "TWM009", name)
         elif last == "add_argument":
