@@ -85,3 +85,11 @@ def test_cli_rejects_a_bad_name(tmp_path: Path) -> None:
     result = CliRunner().invoke(app, ["init", str(tmp_path / "x"), "--name", "9x"])
     assert result.exit_code == 2
     assert not (tmp_path / "x").exists()
+
+
+def test_init_rejects_an_injected_name_with_a_package(tmp_path: Path) -> None:
+    result = CliRunner().invoke(
+        app, ["init", str(tmp_path / "p"), "--name", 'x"\nevil', "--package", "okpkg"]
+    )
+    assert result.exit_code != 0
+    assert not (tmp_path / "p").exists()

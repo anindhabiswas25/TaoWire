@@ -275,3 +275,42 @@ def test_base64_body_reaches_the_check() -> None:
         body=actions.decode_body(encoded, "base64"),
     )
     assert report["result"]["ok"] is True
+
+
+@pytest.mark.parametrize(
+    "name",
+    ['x"\nevil = 1', "a\nb", "with space", "-dash", "a" * 65],
+)
+def test_scaffold_rejects_injected_names_even_with_a_package(
+    tmp_path: Path, name: str
+) -> None:
+    with pytest.raises(ValueError, match="project name"):
+        actions.scaffold_project(tmp_path / "p", name=name, package="okpkg")
+    assert not (tmp_path / "p").exists()
+
+
+def test_scaffold_explicit_package_with_reserved_derived_name(tmp_path: Path) -> None:
+    out = actions.scaffold_project(tmp_path / "p", name="test", package="okpkg")
+    assert out["package"] == "okpkg"
+
+
+@pytest.mark.parametrize("network", ["local", "test", "finney", "ws://127.0.0.1:9944"])
+def test_check_network_accepts(network: str) -> None:
+    assert actions.check_network(network) == network
+
+
+@pytest.mark.parametrize(
+    "network",
+    [
+        "http://169.254.169.254/latest",
+        "file:///etc/passwd",
+        "ws://",
+        "ws://host:notaport",
+        "wss:///path",
+        "mainnet",
+        "",
+    ],
+)
+async def test_read_metagraph_rejects_other_networks(network: str) -> None:
+    with pytest.raises(ValueError, match="network must be"):
+        await actions.read_metagraph(network, 2)

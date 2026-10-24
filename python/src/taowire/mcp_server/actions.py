@@ -17,6 +17,7 @@ from collections.abc import Mapping
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import anyio
 
@@ -35,6 +36,7 @@ from taowire.extensions.response_sig import (
 from taowire.mcp_server.knowledge import ERROR_HINTS
 
 __all__ = [
+    "check_network",
     "decode_body",
     "doctor",
     "inspect_request",
@@ -334,6 +336,27 @@ def _finite(value: float) -> float | None:
     return round(value, 6) if math.isfinite(value) else None
 
 
+_NAMED_NETWORKS = frozenset({"local", "test", "finney"})
+
+
+def check_network(network: str) -> str:
+    """A named network or a ``ws://`` / ``wss://`` endpoint with a host; else raise.
+
+    Private addresses stay allowed (localnet is ``ws://127.0.0.1:9944``).
+    """
+    if network in _NAMED_NETWORKS:
+        return network
+    message = "network must be local, test, finney or a ws(s):// endpoint"
+    try:
+        parts = urlsplit(network)
+        _ = parts.port  # a malformed port raises here
+    except ValueError:
+        raise ValueError(message) from None
+    if parts.scheme not in {"ws", "wss"} or not parts.hostname:
+        raise ValueError(message)
+    return network
+
+
 async def read_metagraph(
     network: str, netuid: int, *, limit: int = 64, timeout_s: float = 30.0
 ) -> dict[str, Any]:
@@ -341,14 +364,21 @@ async def read_metagraph(
     from taowire.chain.gateway import (  # noqa: PLC0415 - heavy import
         BittensorGateway,
         GatewayError,
+        SubnetNotFound,
     )
 
+    check_network(network)
     gateway = BittensorGateway(network, timeout_s=timeout_s, allow_private_axons=True)
     try:
         await gateway.connect()
         mg = await gateway.metagraph(netuid)
+    except SubnetNotFound:
+        raise RuntimeError(f"chain read failed: no subnet {netuid}") from None
     except GatewayError as exc:
-        raise RuntimeError(f"chain read failed: {exc}") from None
+        # The remote's own text is not passed on, only what kind of failure it was.
+        raise RuntimeError(
+            f"chain read failed: {type(exc).__name__} (check the network endpoint)"
+        ) from None
     finally:
         await gateway.close()
     neurons = [

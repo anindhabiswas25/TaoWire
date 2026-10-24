@@ -31,7 +31,14 @@ if TYPE_CHECKING:
     else:
         from importlib.abc import Traversable
 
-__all__ = ["TEMPLATES", "check_package", "init", "package_name", "render_project"]
+__all__ = [
+    "TEMPLATES",
+    "check_package",
+    "check_project",
+    "init",
+    "package_name",
+    "render_project",
+]
 
 TEMPLATES = ("text-ops",)
 _NAME_TOKEN = "text-ops-subnet"  # noqa: S105 - a template placeholder
@@ -40,13 +47,19 @@ _NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9._-]{0,63}")
 _RESERVED = frozenset({"taowire", "bittensor", "test", "tests"})
 
 
-def package_name(project: str) -> str:
-    """The Python package for a project name: ``my-subnet`` -> ``my_subnet``."""
+def check_project(project: str) -> str:
+    """``project`` if it is a valid project name (it is written into files)."""
     if not _NAME_RE.fullmatch(project):
         raise ValueError(
             "project name must start with a letter and use letters, digits, "
             "'-', '_' or '.' (at most 64 characters)"
         )
+    return project
+
+
+def package_name(project: str) -> str:
+    """The Python package for a project name: ``my-subnet`` -> ``my_subnet``."""
+    check_project(project)
     return check_package(re.sub(r"[^a-z0-9]+", "_", project.lower()).strip("_"))
 
 
@@ -87,7 +100,12 @@ def _walk(node: Traversable, prefix: str = "") -> list[tuple[str, Traversable]]:
 def render_project(
     project: str, template: str = "text-ops", package: str | None = None
 ) -> dict[str, str]:
-    """``{relative path: content}`` of a new project (nothing is written)."""
+    """``{relative path: content}`` of a new project (nothing is written).
+
+    The project name is written into files (pyproject.toml, README), so it is
+    checked against the name rule even when ``package`` is given.
+    """
+    check_project(project)
     package = package_name(project) if package is None else check_package(package)
     files: dict[str, str] = {}
     for rel, source in _walk(_template_root(template)):
