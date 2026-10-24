@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
-"""Live interop without a chain (early Phase 5): Go and Rust against the Python kit.
+"""Live interop without a chain (Phase 5): Go, Rust and TypeScript against Python.
 
     cd python
     uv run python ../conformance/interop/live_check.py --out ../reports/phase-5/interop
 
-Four directions, ``--count`` requests each (default 200), every one with a
+Six directions, ``--count`` requests each (default 200), every one with a
 fresh signature:
 
 1. Go signer (sr25519 and ed25519) -> the Python miner.
 2. Rust signer (sr25519 and ed25519) -> the Python miner.
-3. Python signer -> the Go middleware.
-4. Python signer -> the Rust middleware.
+3. TypeScript signer (sr25519 and ed25519) -> the Python miner.
+4. Python signer -> the Go middleware.
+5. Python signer -> the Rust middleware.
+6. Python signer -> the TypeScript Fastify adapter.
 
 A cell passes when every answer is 200 and its ``twresp/1`` signature
-verifies (checked by the Go/Rust client, or here with
+verifies (checked by the Go/Rust/TypeScript client, or here with
 ``tensorwire.extensions.response_sig``). The Python miner is the real kit
 (``tensorwire.Miner`` under uvicorn) on 127.0.0.2 with a FakeChain inside the
-process; Go and Rust serve on 127.0.0.3. Public dev keys only: //Bob is every
-miner, //Alice the caller. The localnet matrix of spec 13.5 is
+process; Go, Rust and TypeScript serve on 127.0.0.3. Public dev keys only:
+//Bob is every miner, //Alice the caller. The localnet matrix of spec 13.5 is
 ``run_matrix.py`` (later in Phase 5).
 """
 
@@ -111,29 +113,42 @@ def _tool(name: str) -> str:
     return path
 
 
-def build(out: Path) -> tuple[Path, Path]:
-    """Build the Go and Rust interop binaries (build log in ``out``)."""
+def build(out: Path) -> dict[str, list[str]]:
+    """Build the Go, Rust and TypeScript interop programs (build log in ``out``).
+
+    Returns each language's command prefix.
+    """
     go_bin = Path(tempfile.mkdtemp(prefix="tw-interop-go-")) / "btauth-interop"
     go = [_tool("go"), "build", "-o", str(go_bin), "./cmd/btauth-interop"]
     cargo = [_tool("cargo"), "build", "-j", "2", "--example", "interop"]
     cargo += ["--features", "axum,client"]
+    npm = [_tool("npm"), "run", "build:examples"]
     env = {**os.environ, "GOTOOLCHAIN": "local"}
     with (out / "build.txt").open("w", encoding="utf-8") as log:
-        for cmd, cwd in ((go, REPO / "go"), (cargo, REPO / "rust")):
+        steps = [(go, REPO / "go"), (cargo, REPO / "rust")]
+        if not (REPO / "typescript" / "node_modules").is_dir():
+            steps.append(([_tool("npm"), "ci", "--no-fund"], REPO / "typescript"))
+        steps.append((npm, REPO / "typescript"))
+        for cmd, cwd in steps:
             subprocess.run(  # noqa: S603 - fixed argv
                 cmd, cwd=cwd, env=env, check=True, stdout=log, stderr=subprocess.STDOUT
             )
-    return go_bin, REPO / "rust" / "target" / "debug" / "examples" / "interop"
+    ts_entry = REPO / "typescript" / "build" / "examples" / "interop.js"
+    return {
+        "go": [str(go_bin)],
+        "rust": [str(REPO / "rust" / "target" / "debug" / "examples" / "interop")],
+        "typescript": [_tool("node"), str(ts_entry)],
+    }
 
 
 def serve_args(lang: str, addr: str, seed: str) -> list[str]:
-    if lang == "go":
+    if lang in {"go", "typescript"}:
         return ["serve", "--addr", addr, "--seed", seed]
     return ["serve", addr, seed]
 
 
 def sign_args(lang: str, url: str, seed: str, scheme: str, count: int) -> list[str]:
-    if lang == "go":
+    if lang in {"go", "typescript"}:
         flags = ["--url", url, "--seed", seed, "--receiver", BOB, "--scheme", scheme]
         return ["sign", *flags, "--count", str(count)]
     return ["sign", url, seed, BOB, scheme, str(count)]
@@ -188,7 +203,7 @@ def main() -> int:
     args = parser.parse_args()
     out: Path = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    go_bin, rust_bin = build(out)
+    programs = build(out)
     procs: list[subprocess.Popen[bytes]] = []
     cells: list[dict[str, Any]] = []
     try:
@@ -221,21 +236,21 @@ def main() -> int:
         py_url = f"http://127.0.0.2:{py_port}"
         wait_http(f"{py_url}/readyz", procs[-1], out / "python-miner.log")
         servers = {}
-        for lang, binary in (("go", go_bin), ("rust", rust_bin)):
+        for lang, program in programs.items():
             port = free_port("127.0.0.3")
             cmd = [
-                str(binary),
+                *program,
                 *serve_args(lang, f"127.0.0.3:{port}", SEEDS["bob_sr25519"]),
             ]
             procs.append(spawn(cmd, out / f"{lang}-miner.log"))
             servers[lang] = f"http://127.0.0.3:{port}"
             wait_http(f"{servers[lang]}/healthz", procs[-1], out / f"{lang}-miner.log")
 
-        for lang, binary in (("go", go_bin), ("rust", rust_bin)):
+        for lang, program in programs.items():
             for scheme in ("sr25519", "ed25519"):
                 seed = SEEDS[f"alice_{scheme}"]
                 url = f"{py_url}/v1/upper"
-                cmd = [str(binary), *sign_args(lang, url, seed, scheme, args.count)]
+                cmd = [*program, *sign_args(lang, url, seed, scheme, args.count)]
                 run = subprocess.run(  # noqa: S603 - fixed argv
                     cmd, capture_output=True, text=True, timeout=600, check=False
                 )
@@ -255,7 +270,9 @@ def main() -> int:
                 p.wait(timeout=15)
             except subprocess.TimeoutExpired:
                 p.kill()
-    passed = all(c["ok"] == c["count"] == args.count for c in cells) and len(cells) == 8
+    expected_cells = 4 * len(programs)
+    passed = all(c["ok"] == c["count"] == args.count for c in cells)
+    passed = passed and len(cells) == expected_cells
     lines = ["| cell | ok / count | statuses | errors |", "|---|---|---|---|"]
     lines += [
         f"| {c['cell']} | {c['ok']}/{c['count']} | {c['statuses']} | {c['errors']} |"

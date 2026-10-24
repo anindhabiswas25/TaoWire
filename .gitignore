@@ -31,9 +31,11 @@ dist/
 .coverage.*
 htmlcov/
 
-# TypeScript
+# TypeScript (dist/ and build/ are ignored above)
 node_modules/
 *.tsbuildinfo
+typescript/coverage/
+typescript/docs-api/
 
 # Go toolchain helpers (just go-tools)
 .tools/

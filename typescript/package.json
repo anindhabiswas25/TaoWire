@@ -1,0 +1,96 @@
+{
+  "name": "@tensorwire/btauth",
+  "version": "0.1.0",
+  "description": "btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets (TensorWire, spec 11.3)",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    },
+    "./fastify": {
+      "import": {
+        "types": "./dist/esm/fastify.d.ts",
+        "default": "./dist/esm/fastify.js"
+      },
+      "require": {
+        "types": "./dist/cjs/fastify.d.ts",
+        "default": "./dist/cjs/fastify.js"
+      }
+    },
+    "./redis": {
+      "import": {
+        "types": "./dist/esm/redis.d.ts",
+        "default": "./dist/esm/redis.js"
+      },
+      "require": {
+        "types": "./dist/cjs/redis.d.ts",
+        "default": "./dist/cjs/redis.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json && tsc -p tsconfig.cjs.json && node scripts/cjs-package.mjs",
+    "build:examples": "npm run build && tsc -p tsconfig.examples.json",
+    "lint": "eslint . && prettier --check .",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "conformance": "vitest run test/conformance.test.ts",
+    "fuzz": "TW_FUZZ_SECONDS=${TW_FUZZ_SECONDS:-20} vitest run test/fuzz.test.ts --reporter=verbose --silent=false",
+    "bench": "npm run build && node bench/verify.mjs",
+    "docs": "typedoc",
+    "audit": "npm audit --audit-level=high",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "@polkadot/util": "14.0.3",
+    "@polkadot/util-crypto": "14.0.3",
+    "@polkadot/wasm-crypto": "7.5.4"
+  },
+  "peerDependencies": {
+    "fastify": "^5.0.0",
+    "ioredis": "^5.0.0 || ^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "fastify": {
+      "optional": true
+    },
+    "ioredis": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@types/node": "20.19.43",
+    "@vitest/coverage-v8": "4.1.12",
+    "eslint": "9.39.5",
+    "fast-check": "4.10.2",
+    "fastify": "5.12.7",
+    "ioredis": "6.0.0",
+    "prettier": "3.9.9",
+    "typedoc": "0.28.20",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.71.1",
+    "vitest": "4.1.12"
+  }
+}
