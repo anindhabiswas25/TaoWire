@@ -25,6 +25,12 @@ type MiddlewareConfig struct {
 	// signed; a handler streaming with ServeStream bypasses the buffer and
 	// signs the stream's tw-end trailer instead (spec 9.2).
 	ResponseKey *Keypair
+	// Policy, when set, decides after verification whether the caller may use
+	// the route (spec 8.5; e.g. sidecar.Client.Policy). A returned *Error is
+	// answered with its code and status, signed unless the code is one of
+	// UnsignedCodes (Appendix A, as in the Python pipeline); any other error
+	// is tw.internal.
+	Policy func(r *http.Request, c *Caller) error
 	// Logger receives one line per refusal (code and detail, never headers).
 	// nil = slog.Default().
 	Logger *slog.Logger
@@ -116,6 +122,24 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 				refuse(e)
 				return
 			}
+			if cfg.Policy != nil {
+				if err := cfg.Policy(r, caller); err != nil {
+					var e *Error
+					if !errors.As(err, &e) || e.Status == 0 {
+						log.Error("btauth_policy_failed", "error", err.Error())
+						e = NewError(CodeInternal, "")
+					}
+					log.Info("btauth_refused", "code", e.Code, "target", r.URL.Path)
+					if cfg.ResponseKey == nil || UnsignedCodes[e.Code] {
+						writeError(w, e)
+						return
+					}
+					buf := &bufferedWriter{header: http.Header{}, status: http.StatusOK}
+					writeError(buf, e)
+					writeSigned(w, buf, cfg.ResponseKey, caller, log)
+					return
+				}
+			}
 			st := &streamTarget{w: w, key: cfg.ResponseKey, log: log}
 			ctx := context.WithValue(context.WithValue(r.Context(), callerKey, caller), bodyKey, body)
 			ctx = context.WithValue(ctx, streamKey, st)
@@ -131,23 +155,35 @@ func Middleware(cfg MiddlewareConfig) func(http.Handler) http.Handler {
 			if buf.streamed {
 				return // ServeStream answered on the connection itself
 			}
-			sig, err := SignResponse(cfg.ResponseKey, caller.Nonce, caller.Hotkey, buf.status, buf.body.Bytes())
-			if err != nil {
-				log.Error("btauth_response_sign_failed", "error", err.Error())
-				writeError(w, NewError(CodeInternal, ""))
-				return
-			}
-			for k, v := range buf.header {
-				w.Header()[k] = v
-			}
-			for k, v := range sig {
-				w.Header()[k] = v
-			}
-			w.Header().Set("Content-Length", strconv.Itoa(buf.body.Len()))
-			w.WriteHeader(buf.status)
-			_, _ = w.Write(buf.body.Bytes())
+			writeSigned(w, buf, cfg.ResponseKey, caller, log)
 		})
 	}
+}
+
+// UnsignedCodes are answered unsigned even after authentication (Appendix A
+// "Response signed? no"), as in the Python pipeline: e.g. a policy's 503
+// tw.metagraph_stale.
+var UnsignedCodes = map[string]bool{
+	CodeInternal: true, "tw.metagraph_stale": true, CodeReplayStoreUnavailable: true,
+}
+
+// writeSigned sends the buffered answer with its twresp/1 headers.
+func writeSigned(w http.ResponseWriter, buf *bufferedWriter, key *Keypair, caller *Caller, log *slog.Logger) {
+	sig, err := SignResponse(key, caller.Nonce, caller.Hotkey, buf.status, buf.body.Bytes())
+	if err != nil {
+		log.Error("btauth_response_sign_failed", "error", err.Error())
+		writeError(w, NewError(CodeInternal, ""))
+		return
+	}
+	for k, v := range buf.header {
+		w.Header()[k] = v
+	}
+	for k, v := range sig {
+		w.Header()[k] = v
+	}
+	w.Header().Set("Content-Length", strconv.Itoa(buf.body.Len()))
+	w.WriteHeader(buf.status)
+	_, _ = w.Write(buf.body.Bytes())
 }
 
 // WriteError writes the JSON error body of e with its Appendix A status.

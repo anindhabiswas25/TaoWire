@@ -24,7 +24,8 @@
     "paths": {
       "@tensorwire/btauth": ["./src/index.ts"],
       "@tensorwire/btauth/fastify": ["./src/fastify.ts"],
-      "@tensorwire/btauth/redis": ["./src/redis.ts"]
+      "@tensorwire/btauth/redis": ["./src/redis.ts"],
+      "@tensorwire/btauth/sidecar": ["./src/sidecar.ts"]
     }
   },
   "include": ["src", "test", "bench", "examples", "vitest.config.ts"]

@@ -3,7 +3,8 @@
 btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets: the Rust crate of
 [TensorWire](../README.md) (spec 11.5). Rust ≥ 1.80, `#![forbid(unsafe_code)]`. Not published.
 
-Features: `axum` (middleware), `client` (reqwest), `redis` (shared replay store). Default: none.
+Features: `axum` (middleware), `client` (reqwest), `redis` (shared replay store), `sidecar` (sidecar client,
+implies `client`). Default: none.
 
 ## Quickstart (miner, feature `axum`)
 
@@ -50,6 +51,8 @@ Validator side (feature `client`): `Client::new(Signer::new(validator_key), reqw
 | `client::Client::send` | Signed request + verified answer; client codes `tw.timeout`, `tw.connect_error`, `tw.response_too_large`, `tw.bad_response_signature` |
 | `axum::stream_response`, `axum::StreamConfig`, `axum::StreamContext` | SSE stream with a signed `tw-end` from a protected handler (spec 9.2): per-caller slots (D36), first chunk before any byte, limits, abort hook |
 | `client::Client::stream`, `client::Stream`, `client::UnverifiedChunk` | Streaming query: `next().await` gives unverified chunks, `Ok(None)` only after the trailer verified |
+| `axum::MinerAuth::with_policy`, `PolicyFn` | Caller policy after verification (spec 8.5); refusals signed except `axum::UNSIGNED_CODES` |
+| `sidecar::{SidecarClient, Config, CallerPolicy, read_token_file, parse_snapshot, parse_decision, parse_health}` | Feature `sidecar`: the sidecar client (spec 11.6, `docs/multi-language.md` "Sidecar API") — cached metagraph with the 8.5.1 stages, the Python caller policy, `serve_axon` |
 | `sse::{Parser, decode_chunk, encode_chunk, parse_trailer, encode_trailer, encode_event, StreamDigest, StreamLimits, StreamSlots}` | The shared stream pieces (WHATWG SSE parser, D35 chunk rule, strict trailer) |
 | `decode_ss58`, `encode_ss58`, `is_weak_public_key` | Appendix D (prefix 42 only), weak-key rule |
 | `Error`, `codes`, `status_of`, `error_body` | Appendix A codes, statuses and the JSON error body |
@@ -64,7 +67,7 @@ cd rust
 cargo test --test conformance          # every vector in conformance/vectors (except legacy_v10)
 cargo test --all-features              # + integration tests; TENSORWIRE_TEST_REDIS_URL for Redis
 cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings
-cargo +nightly fuzz run verify -- -max_total_time=300   # also: sse, trailer
+cargo +nightly fuzz run verify -- -max_total_time=300   # also: sse, trailer, sidecar
 cargo audit
 ```
 

@@ -38,6 +38,8 @@ pub mod axum;
 pub mod client;
 #[cfg(feature = "redis")]
 pub mod redis_store;
+#[cfg(feature = "sidecar")]
+pub mod sidecar;
 
 pub use error::{codes, error_body, status_of, Error};
 pub use keys::{is_weak_public_key, Keypair, Signer};
@@ -48,4 +50,6 @@ pub use store::{MemoryStore, NonceStore, StoreError, StoreFuture};
 pub use twresp::{
     response_payload, sign_response, verify_response, verify_response_digest, RESP_PROTOCOL,
 };
-pub use verify::{headers, Caller, Config, Verifier, DEFAULT_ALLOWED_SKEW, DEFAULT_MAX_AGE};
+pub use verify::{
+    headers, Caller, Config, PolicyFn, Verifier, DEFAULT_ALLOWED_SKEW, DEFAULT_MAX_AGE,
+};

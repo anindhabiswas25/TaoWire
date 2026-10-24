@@ -317,7 +317,7 @@ describe("btauth Fastify plugin", () => {
         expect(res.statusCode).toBe(200);
     });
 
-    it("a policy bug fails closed (500, signed)", async () => {
+    it("a policy bug fails closed (500, unsigned like Python's tw.internal)", async () => {
         const app = await miner({
             policy: () => {
                 throw new Error("policy bug");
@@ -329,7 +329,22 @@ describe("btauth Fastify plugin", () => {
             500,
             "tw.internal",
         ]);
-        checkSigned(res, s.nonce);
+        expect(res.headers["x-tw-resp-signature"]).toBeUndefined();
+    });
+
+    it("a stale metagraph from the policy is 503 and unsigned (Appendix A)", async () => {
+        const app = await miner({
+            policy: () => {
+                throw new TWError("tw.metagraph_stale");
+            },
+        });
+        const s = signed("POST", "/v1/echo", Buffer.from("{}"));
+        const res = await app.inject({ method: "POST", url: "/v1/echo", payload: "{}", headers: s.headers });
+        expect([res.statusCode, res.json<{ error: { code: string } }>().error.code]).toEqual([
+            503,
+            "tw.metagraph_stale",
+        ]);
+        expect(res.headers["x-tw-resp-signature"]).toBeUndefined();
     });
 
     it("works without response signing and without the rate limit", async () => {

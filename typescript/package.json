@@ -41,6 +41,16 @@
         "types": "./dist/cjs/redis.d.ts",
         "default": "./dist/cjs/redis.js"
       }
+    },
+    "./sidecar": {
+      "import": {
+        "types": "./dist/esm/sidecar.d.ts",
+        "default": "./dist/esm/sidecar.js"
+      },
+      "require": {
+        "types": "./dist/cjs/sidecar.d.ts",
+        "default": "./dist/cjs/sidecar.js"
+      }
     }
   },
   "files": [

@@ -32,6 +32,7 @@ use crate::sse::{
     StreamSlots, Trailer, CONTENT_TYPE, EVENT_CHUNK, EVENT_END, TRAILER_RESERVE,
 };
 use crate::twresp::{response_payload, sign_response};
+pub use crate::verify::PolicyFn;
 use crate::verify::{Caller, Verifier};
 
 /// Default request body cap (`TW_MAX_BODY_BYTES`, 1 MiB).
@@ -39,23 +40,48 @@ pub const DEFAULT_MAX_BODY_BYTES: usize = 1 << 20;
 /// Largest handler answer that is buffered for signing (64 MiB).
 pub const MAX_SIGNED_RESPONSE_BYTES: usize = 64 << 20;
 
+/// Codes answered unsigned even after authentication (Appendix A "Response
+/// signed? no"), as in the Python pipeline: e.g. a policy's 503
+/// `tw.metagraph_stale`.
+pub const UNSIGNED_CODES: [&str; 3] =
+    [codes::INTERNAL, codes::METAGRAPH_STALE, codes::REPLAY_STORE_UNAVAILABLE];
+
 /// Settings for [`protect`].
-#[derive(Debug)]
 pub struct MinerAuth {
     verifier: Verifier,
     max_body_bytes: usize,
     response_key: Option<Arc<Keypair>>,
+    policy: Option<PolicyFn>,
+}
+
+impl std::fmt::Debug for MinerAuth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MinerAuth")
+            .field("verifier", &self.verifier)
+            .field("max_body_bytes", &self.max_body_bytes)
+            .field("response_key", &self.response_key)
+            .field("policy", &self.policy.is_some())
+            .finish()
+    }
 }
 
 impl MinerAuth {
     /// Verify with `verifier`, 1 MiB body cap, answers unsigned.
     pub fn new(verifier: Verifier) -> Self {
-        Self { verifier, max_body_bytes: DEFAULT_MAX_BODY_BYTES, response_key: None }
+        Self { verifier, max_body_bytes: DEFAULT_MAX_BODY_BYTES, response_key: None, policy: None }
     }
 
     /// Change the body cap; larger bodies are 413 `tw.payload_too_large`.
     pub fn with_max_body_bytes(mut self, limit: usize) -> Self {
         self.max_body_bytes = limit;
+        self
+    }
+
+    /// Run `policy` after verification (spec 8.5): an [`Error`] is answered
+    /// with its code and status, signed unless the code is one of
+    /// [`UNSIGNED_CODES`]; a client-side code (status 0) becomes `tw.internal`.
+    pub fn with_policy(mut self, policy: PolicyFn) -> Self {
+        self.policy = Some(policy);
         self
     }
 
@@ -125,6 +151,16 @@ pub async fn protect(State(auth): State<Arc<MinerAuth>>, req: Request, next: Nex
             Ok(c) => c,
             Err(e) => return error_response(&e),
         };
+    if let Some(policy) = &auth.policy {
+        if let Err(e) = policy(&caller, uri.path()) {
+            let e = if e.status == 0 { Error::new(codes::INTERNAL, e.detail) } else { e };
+            let resp = error_response(&e);
+            return match &auth.response_key {
+                Some(key) if !UNSIGNED_CODES.contains(&e.code) => sign(key, &caller, resp).await,
+                _ => resp,
+            };
+        }
+    }
     parts.extensions.insert(caller.clone());
     parts.extensions.insert(body.clone());
     parts

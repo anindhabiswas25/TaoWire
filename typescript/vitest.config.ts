@@ -17,6 +17,7 @@ const BTAUTH = [
     "client",
     "redis",
     "streaming",
+    "sidecar",
 ];
 const per = { lines: 90, branches: 90, functions: 90, statements: 90 };
 
@@ -41,6 +42,7 @@ export default defineConfig({
     resolve: {
         alias: {
             "@tensorwire/btauth/fastify": new URL("./src/fastify.ts", import.meta.url).pathname,
+            "@tensorwire/btauth/sidecar": new URL("./src/sidecar.ts", import.meta.url).pathname,
             "@tensorwire/btauth/redis": new URL("./src/redis.ts", import.meta.url).pathname,
             "@tensorwire/btauth": new URL("./src/index.ts", import.meta.url).pathname,
         },

@@ -31,6 +31,11 @@ pub const DEFAULT_MAX_AGE: Duration = Duration::from_secs(10);
 /// Default forward clock drift (spec 4.3).
 pub const DEFAULT_ALLOWED_SKEW: Duration = Duration::from_secs(2);
 
+/// A caller policy run after verification: the verified caller and the route
+/// path; an [`Error`] refuses the request (spec 8.5). Used by
+/// `axum::MinerAuth::with_policy` and built by `sidecar::SidecarClient::policy`.
+pub type PolicyFn = Arc<dyn Fn(&Caller, &str) -> Result<(), Error> + Send + Sync>;
+
 /// The verified sender of one request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Caller {

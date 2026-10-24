@@ -15,6 +15,7 @@ default = []
 axum = ["dep:axum", "dep:tower", "dep:http-body-util", "dep:tokio", "dep:futures-util"]
 client = ["dep:reqwest", "dep:tokio"]
 redis = ["dep:redis"]
+sidecar = ["client"]
 
 [dependencies]
 schnorrkel = { version = "0.11.5", default-features = false, features = ["std", "getrandom"] }
@@ -57,6 +58,11 @@ required-features = ["axum", "client", "redis"]
 [lints.rust]
 unsafe_code = "forbid"
 missing_docs = "warn"
+
+[[test]]
+name = "sidecar"
+path = "tests/sidecar.rs"
+required-features = ["axum", "sidecar"]
 
 [[test]]
 name = "streaming"

@@ -810,3 +810,34 @@ func TestStreamClientErrorPaths(t *testing.T) {
 		t.Fatal(s.Err())
 	}
 }
+
+func TestMiddlewarePolicy(t *testing.T) {
+	for _, tc := range []struct {
+		err    error
+		status int
+		code   string
+		signed bool
+	}{
+		{NewError("tw.forbidden_not_validator", ""), 403, "tw.forbidden_not_validator", true},
+		{NewError("tw.metagraph_stale", ""), 503, "tw.metagraph_stale", false},
+		{errors.New("policy bug"), 500, CodeInternal, false},
+		{NewError(CodeTimeout, "a client code"), 500, CodeInternal, false},
+	} {
+		policy := func(*http.Request, *Caller) error { return tc.err }
+		srv := miner(t, MiddlewareConfig{ResponseKey: bob(t), Policy: policy}, echo)
+		resp := signedRequest(t, srv.URL+"/x", []byte("{}"), nil)
+		body, _ := io.ReadAll(resp.Body)
+		if resp.StatusCode != tc.status || !strings.Contains(string(body), tc.code) || (resp.Header.Get(RespHeaderSignature) != "") != tc.signed {
+			t.Errorf("%v: %d %s signed=%v", tc.err, resp.StatusCode, body, resp.Header.Get(RespHeaderSignature) != "")
+		}
+	}
+	// Allowed: the handler runs; without a response key nothing is signed.
+	srv := miner(t, MiddlewareConfig{Policy: func(*http.Request, *Caller) error { return nil }}, echo)
+	if resp := signedRequest(t, srv.URL+"/x", []byte("{}"), nil); resp.StatusCode != 201 {
+		t.Fatal(resp.StatusCode)
+	}
+	srv = miner(t, MiddlewareConfig{Policy: func(*http.Request, *Caller) error { return NewError("tw.forbidden_denied", "") }}, echo)
+	if resp := signedRequest(t, srv.URL+"/x", []byte("{}"), nil); resp.StatusCode != 403 || resp.Header.Get(RespHeaderSignature) != "" {
+		t.Fatal(resp.StatusCode)
+	}
+}

@@ -82,10 +82,24 @@ export function rawBody(request: FastifyRequest): Buffer {
     return Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
 }
 
+/**
+ * Codes answered unsigned even after authentication (Appendix A "Response
+ * signed? no"), as in the Python pipeline: e.g. a policy's 503
+ * `tw.metagraph_stale`.
+ */
+export const UNSIGNED_CODES: ReadonlySet<string> = new Set([
+    "tw.internal",
+    "tw.metagraph_stale",
+    "tw.replay_store_unavailable",
+]);
+
+const unsigned = new WeakSet<FastifyRequest>();
+
 function refuse(reply: FastifyReply, error: TWError): FastifyReply {
     // A client-side code (e.g. a ClientError from an upstream call) has no
     // HTTP status: it is a handler failure here.
     const tw = error.status === 0 ? new TWError("tw.handler_error", error.message) : error;
+    if (UNSIGNED_CODES.has(tw.code)) unsigned.add(reply.request);
     return reply.code(tw.status).type("application/json").send(errorBody(tw));
 }
 
@@ -189,8 +203,8 @@ export const btauth: FastifyPluginAsync<BtauthOptions> = async (scope, options) 
     if (responseKey !== undefined) {
         scope.addHook("onSend", async (request, reply, payload: unknown) => {
             const caller = request.btauthCaller;
-            if (caller === null) {
-                return payload; // refused before authentication: never signed
+            if (caller === null || unsigned.has(request)) {
+                return payload; // refused before authentication, or an unsigned code
             }
             let bytes: Buffer;
             if (payload === null || payload === undefined) {

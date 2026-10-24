@@ -12,7 +12,7 @@ btauth/1 package for their language (spec 11). Status on `eng/lang` (Phase 5 Par
 | Client | httpx | `Client` (`net/http`) | `client::Client` (reqwest, feature) | `Client` (fetch / undici) |
 | twresp/1 sign + verify | ✅ | ✅ | ✅ | ✅ |
 | SSE streaming with signed trailer | ✅ | ✅ `ServeStream`, `(*Client).Stream` | ✅ `axum::stream_response`, `Client::stream` | ✅ `streamReply` (`/fastify`), `Client.stream` |
-| Caller policy / chain writes | native | via sidecar (not built yet) | via sidecar (not built yet) | `policy` hook; sidecar client not built yet |
+| Caller policy / chain writes | native | via sidecar: `go/sidecar` + `MiddlewareConfig.Policy` | via sidecar: `sidecar` (feature) + `MinerAuth::with_policy` | via sidecar: `@tensorwire/btauth/sidecar` + the `policy` hook |
 
 Package docs and quickstarts: [`go/README.md`](../go/README.md), [`rust/README.md`](../rust/README.md),
 [`typescript/README.md`](../typescript/README.md).
@@ -75,6 +75,50 @@ miner and the Python client against every language's miner, through a relay that
 or adds chunks, tampers with, duplicates or removes the trailer, or adds an event after it; evidence in
 `reports/phase-5/stream-interop/`).
 
+## Sidecar API (spec 11.6)
+
+Non-Python miners get their caller policy and their chain writes from the Python sidecar, `tensorwire sidecar`
+(127.0.0.1:`TW_SIDECAR_PORT`, default 9910; it runs with the miner's own hotkey, `TW_WALLET_*`). This table is
+the contract: the server (`python/src/tensorwire/sidecar/`) implements exactly it and the three clients parse
+exactly it.
+
+Every request carries `Authorization: Bearer <token>` (the token is in `TW_SIDECAR_TOKEN_FILE`, default
+`$TW_STATE_DIR/sidecar.token`, mode 0600, generated on first run). Missing or wrong → `401` with the error body
+`{"error":{"code":"tw.sidecar_unauthorized","message":…,"request_id":null}}`. Answers are `application/json`;
+request bodies are capped at 64 KiB (`413 tw.payload_too_large`); bad parameters are `422 tw.invalid_request`.
+
+| Method & path | 200 body | Errors |
+|---|---|---|
+| `GET /v1/health` | `{"ok":true,"hotkey":"5…","netuid":2,"block":123,"metagraph_age_s":42.5,"stage":"fresh"}`. `ok` is false (still 200) without a snapshot or past the max age; `block` / `metagraph_age_s` are `null` before the first snapshot; `stage` is `fresh`, `degraded` or `known_callers_only` | 401 |
+| `GET /v1/metagraph?netuid=N` | `{"netuid":N,"block":B,"tempo":T,"age_s":A,"neurons":[{"uid":0,"hotkey":"5…","validator_permit":true,"total_stake_tao":1000.0,"axon":"203.0.113.7:8091"},…]}`. Neurons in UID order; `axon` is `host:port` / `[v6]:port` or `null`; `age_s` is the snapshot's age when answered | 401; 422 (netuid missing or not the configured one); 503 `tw.metagraph_stale` before the first snapshot |
+| `GET /v1/caller/{hotkey}?netuid=N` | `{"allowed":true}` or `{"allowed":false,"code":C}`, `C` one of `tw.forbidden_denied`, `tw.forbidden_not_registered`, `tw.forbidden_not_validator`, `tw.forbidden_low_stake`, `tw.metagraph_stale` (the sidecar's own `CallerGate`, from `TW_REQUIRE_PERMIT`, `TW_MIN_CALLER_STAKE_TAO`, `TW_ALLOW_HOTKEYS`, `TW_DENY_HOTKEYS`, `TW_METAGRAPH_STRICT`) | 401; 422 (netuid; not an SS58 prefix-42 address) |
+| `POST /v1/serve-axon` with `{"netuid":N,"ip":"203.0.113.7","port":8091,"tls_cert_hex":null}` (`tls_cert_hex`: optional, `0x` + 1 algorithm byte + 1–64 key bytes, ADR-0011) | `{"ok":true,"block_hash":"0x<64 hex>"}` | 401; 413; 422 (netuid not the configured one, an address `parse_axon` refuses under `TW_ALLOW_PRIVATE_AXONS`, port, certificate hex); 409 `{"ok":false,"code":"<bt.ErrorCode>","error_name":…,"remediation":…}` when the chain refuses; 503 `{"ok":false,"code":"chain_unavailable",…}` when it cannot be reached |
+
+No weight setting through the sidecar (11.6).
+
+**The clients** (`@tensorwire/btauth/sidecar` `SidecarClient`, Go `sidecar.Client`, Rust `sidecar::SidecarClient`)
+read the token file with the TLS-key rule (regular file, no group/other access, 16–1024 printable ASCII; never
+printed), refuse a non-loopback URL unless told otherwise (`unsafeAllowRemote` / `UnsafeAllowRemote` /
+`unsafe_allow_remote`: the token travels in clear), check at start that the sidecar follows their netuid and,
+with `expectedHotkey`, runs with the miner's hotkey, cache `/v1/metagraph` (refresh 60 s ± 10%) and apply the
+Python `CallerPolicy` + `CallerGate` locally:
+
+- stages from the reported age and tempo: max age = `TW_METAGRAPH_MAX_AGE_S` or 2 tempos × 12 s, soft age =
+  `TW_METAGRAPH_SOFT_AGE_S` or min(900 s, max / 2); no snapshot is known-callers-only (fail closed); a failed
+  refresh keeps the snapshot, which keeps aging;
+- known callers (per route) are kept past the max age and cleared only when a **newer** snapshot arrives (a
+  sidecar repeating its own stale snapshot does not clear them); strict mode refuses everyone past the max age;
+- every answer is parsed strictly: a wrong type, a missing field, a duplicate key at any depth, a duplicate uid
+  or hotkey, an invalid SS58 address, a non-finite or negative number, a body over 32 MiB rejects the whole
+  answer; `/v1/caller` allows only exactly `{"allowed": true}`. Property / fuzz tests in each language check that
+  arbitrary JSON never admits a caller;
+- `serveAxon` is sent once (a chain write is never resent blindly); a chain refusal is a typed error with the
+  `bt.ErrorCode` value.
+
+The adapters' policy hooks (Go `MiddlewareConfig.Policy`, Rust `MinerAuth::with_policy`, the Fastify `policy`
+option) answer a refusal signed with twresp/1, except the codes Appendix A marks unsigned (`tw.metagraph_stale`,
+`tw.replay_store_unavailable`, `tw.internal`), as the Python pipeline does.
+
 ## TypeScript notes
 
 - **Headers.** The verifier takes `[name, value]` pairs or Node's flat `rawHeaders` (the Fastify adapter passes
@@ -124,5 +168,4 @@ cd typescript && npm run conformance
 Live checks without a chain: `conformance/interop/live_check.py` runs Go, Rust and TypeScript signers against
 the Python miner, and the Python signer against the Go and Rust middleware and the TypeScript Fastify adapter
 (evidence in `reports/phase-5/interop-ts/`).
-The localnet matrix of spec 13.5 (`conformance/interop/run_matrix.py`, `just interop`) and the sidecar
-(11.6) come with the rest of Phase 5.
+The localnet matrix of spec 13.5 is `conformance/interop/run_matrix.py` (`just interop`).

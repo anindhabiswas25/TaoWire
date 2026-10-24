@@ -56,6 +56,7 @@ var catalogue = map[string]errorSpec{
 	"tw.handler_timeout":          {504, "handler timed out"},
 	"tw.legacy_auth_failed":       {401, "legacy v10 authentication failed"},
 	"tw.legacy_disabled":          {410, "legacy v10 requests are no longer accepted"},
+	"tw.sidecar_unauthorized":     {401, "sidecar token missing or wrong"},
 }
 
 // Error is a refusal with a stable tw.* code. Status is its HTTP status

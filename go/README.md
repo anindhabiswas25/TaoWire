@@ -52,6 +52,8 @@ answer's twresp/1 signature verified.
 | `Client.Do` | Signed request + verified answer; client codes `tw.timeout`, `tw.connect_error`, `tw.response_too_large`, `tw.bad_response_signature` |
 | `ServeStream`, `StreamConfig`, `ChunkFunc`, `StreamSlots` | SSE stream with a signed `tw-end` inside a `Middleware` handler (spec 9.2): per-caller slots (D36), first chunk before any byte, limits, abort hook |
 | `(*Client).Stream`, `Stream`, `StreamOptions`, `UnverifiedChunk` | Streaming query: unverified chunks, `Err() == nil` only after the trailer verified; `tw.invalid_response` for a chunk that is not a JSON object or array |
+| `MiddlewareConfig.Policy` | Caller policy after verification (spec 8.5); refusals signed except `UnsignedCodes` |
+| `sidecar.New`, `(*sidecar.Client).Start`, `Check`, `Policy`, `Health`, `Metagraph`, `Caller`, `ServeAxon`, `sidecar.ReadTokenFile`, `sidecar.NewPolicy` | Package `go/sidecar`: the sidecar client (spec 11.6, `docs/multi-language.md` "Sidecar API") — cached metagraph with the 8.5.1 stages, the Python caller policy, serve-axon |
 | `SSEParser`, `DecodeChunk`, `EncodeChunk`, `ParseTrailer`, `EncodeTrailer`, `EncodeEvent`, `StreamDigest`, `StreamLimits` | The shared stream pieces (WHATWG SSE parser, D35 chunk rule, strict trailer) |
 | `DecodeSS58`, `EncodeSS58`, `IsWeakPublicKey` | Appendix D (prefix 42 only), weak-key rule (ADR-0010) |
 | `NewError`, `StatusOf`, `ErrorBody`, `WriteError` | Appendix A codes, statuses and the JSON error body |
@@ -74,5 +76,5 @@ go test ./btauth -run '^$' -fuzz FuzzVerify -fuzztime 5m
 ../scripts/go_tools.sh run govulncheck ./...
 ```
 
-Fuzz targets: `FuzzVerify`, `FuzzSSEParser`, `FuzzParseTrailer`, `FuzzDecodeChunk`
+Fuzz targets: `FuzzVerify`, `FuzzSSEParser`, `FuzzParseTrailer`, `FuzzDecodeChunk`; `sidecar`: `FuzzParseSnapshot`, `FuzzParseDecision`
 (`go test ./btauth -run '^$' -fuzz '^FuzzSSEParser$' -fuzztime 5m`).

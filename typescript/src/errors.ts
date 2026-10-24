@@ -27,6 +27,7 @@ const CATALOGUE = {
     "tw.handler_timeout": [504, "handler timed out"],
     "tw.legacy_auth_failed": [401, "legacy v10 authentication failed"],
     "tw.legacy_disabled": [410, "legacy v10 requests are no longer accepted"],
+    "tw.sidecar_unauthorized": [401, "sidecar token missing or wrong"],
 } as const satisfies Record<string, readonly [number, string]>;
 
 /** A server-side code of Appendix A. */

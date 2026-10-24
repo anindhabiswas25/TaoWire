@@ -9,7 +9,8 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-tensorwire-btauth = { path = ".." }
+tensorwire-btauth = { path = "..", features = ["sidecar"] }
+serde_json = "1"
 
 [[bin]]
 name = "verify"
@@ -28,6 +29,13 @@ bench = false
 [[bin]]
 name = "trailer"
 path = "fuzz_targets/trailer.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sidecar"
+path = "fuzz_targets/sidecar.rs"
 test = false
 doc = false
 bench = false

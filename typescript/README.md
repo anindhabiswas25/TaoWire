@@ -3,6 +3,8 @@
 btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets: the TypeScript package of
 [TensorWire](../README.md) (spec 11.3). Node.js ≥ 20, ESM and CommonJS builds. Not published (`"private": true`).
 
+Entry points: `@tensorwire/btauth`, `/fastify`, `/redis`, `/sidecar`.
+
 Dependencies: `@polkadot/util-crypto`, `@polkadot/util` and `@polkadot/wasm-crypto` (sr25519 / ed25519 in
 WASM, SS58). Optional peers: `fastify` (the adapter, `@tensorwire/btauth/fastify`) and `ioredis` (the shared
 replay store, `@tensorwire/btauth/redis`).
@@ -51,6 +53,7 @@ resolves only when the answer's twresp/1 signature verified for this request.
 | `streamReply` (`/fastify`), `StreamSlots`, `StreamLimits`                                                    | SSE stream with a signed `tw-end` from a `btauth` route (spec 9.2): per-caller slots (D36), first chunk before any byte, limits, `onAbort`                                                                                                |
 | `Client.stream`, `MinerStream`, `UnverifiedChunk`                                                            | Streaming query: unverified chunks, `result()` resolves only after the trailer verified                                                                                                                                                   |
 | `SSEParser`, `decodeChunk`, `encodeChunk`, `parseTrailer`, `encodeTrailer`, `encodeEvent`, `StreamDigest`    | The shared stream pieces (WHATWG SSE parser, D35 chunk rule, strict trailer)                                                                                                                                                              |
+| `SidecarClient`, `CallerPolicy`, `readTokenFile` (`/sidecar`)                                                | The sidecar client (spec 11.6, `docs/multi-language.md` "Sidecar API"): cached metagraph with the 8.5.1 stages, the Python caller policy (`policyHook()` for the plugin), `serveAxon`                                                     |
 | `TokenBuckets`                                                                                               | Per-hotkey, per-route token bucket (8.6.2 defaults 20/s, burst 40)                                                                                                                                                                        |
 | `TWError`, `errorBody`, `statusOf`, `decodeSS58`, `encodeSS58`                                               | Appendix A codes / statuses / JSON error body; Appendix D (prefix 42 only, 48 characters checked before base58)                                                                                                                           |
 

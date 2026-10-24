@@ -22,6 +22,10 @@ pub mod codes {
     pub const HANDLER_ERROR: &str = "tw.handler_error";
     /// Handler exceeded its timeout (504).
     pub const HANDLER_TIMEOUT: &str = "tw.handler_timeout";
+    /// Snapshot past the max age and the caller not known (503, not signed).
+    pub const METAGRAPH_STALE: &str = "tw.metagraph_stale";
+    /// The sidecar's bearer token is missing or wrong (401).
+    pub const SIDECAR_UNAUTHORIZED: &str = "tw.sidecar_unauthorized";
     /// Generic fallback (500).
     pub const INTERNAL: &str = "tw.internal";
     /// Client side: the answer's twresp/1 signature does not check out.
@@ -59,6 +63,7 @@ const CATALOGUE: &[(&str, u16, &str)] = &[
     ("tw.handler_timeout", 504, "handler timed out"),
     ("tw.legacy_auth_failed", 401, "legacy v10 authentication failed"),
     ("tw.legacy_disabled", 410, "legacy v10 requests are no longer accepted"),
+    ("tw.sidecar_unauthorized", 401, "sidecar token missing or wrong"),
 ];
 
 const CLIENT_CODES: &[&str] = &[
