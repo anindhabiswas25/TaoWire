@@ -2,8 +2,11 @@
 
 **A production-grade networking starter kit for Bittensor v11 subnets, and the migration path for existing v10 subnets.**
 
-> Status: pre-release (Phase 5: multi-language). Nothing is
-> published yet. "TaoWire" is a working name.
+> **Alpha (0.1.0a1).** TaoWire has **not been security-reviewed** yet, and its APIs may change between
+> alphas. Use it on localnet and testnet; **do not use it to protect mainnet value**. Feedback and bugs:
+> [GitHub issues](https://github.com/anindhabiswas25/TaoWire/issues). Security problems: report them privately through
+> [GitHub private vulnerability reporting](https://github.com/anindhabiswas25/TaoWire/security/advisories/new) (see
+> [SECURITY.md](SECURITY.md)), never in a public issue.
 
 Bittensor v11 removed `Axon`, `Dendrite` and `Synapse`. What is left is `btauth/1` (hotkey-signed
 HTTP), `ServeAxon` and the metagraph. TaoWire fills the gap in between, securely by default:
@@ -39,9 +42,14 @@ from `taowire init` to weights on chain. For development of the kit itself, see
 
 ## Compatibility
 
-| TaoWire | bittensor allowed | bittensor tested | Python |
-|---|---|---|---|
-| 0.1.x (dev) | `>=11.3.0,<12` | 11.3.0 | 3.10–3.14 |
+| TaoWire | bittensor allowed | bittensor tested | Python | Node | Go | Rust |
+|---|---|---|---|---|---|---|
+| 0.1.0a1 (alpha) | `>=11.3.0,<12` | 11.3.0 | 3.10–3.14 | 20, 22 | 1.22+ | 1.80+ |
+
+Packages: `taowire` on PyPI (`pip install "taowire==0.1.0a1"`; a pre-release, so plain `pip install taowire`
+skips it), `@taowire/btauth` on npm (`npm install @taowire/btauth@alpha`), `taowire-btauth` on crates.io
+(`taowire-btauth = "0.1.0-alpha.1"`) and the Go module `github.com/anindhabiswas25/TaoWire/go`
+(`go get github.com/anindhabiswas25/TaoWire/go@go/v0.1.0-alpha.1`).
 
 ## Security
 

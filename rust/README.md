@@ -1,7 +1,18 @@
 # taowire-btauth (Rust)
 
+> **Alpha (0.1.0a1).** TaoWire has **not been security-reviewed** yet, and its APIs may change between
+> alphas. Use it on localnet and testnet; **do not use it to protect mainnet value**. Feedback and bugs:
+> [GitHub issues](https://github.com/anindhabiswas25/TaoWire/issues). Security problems: report them privately through
+> [GitHub private vulnerability reporting](https://github.com/anindhabiswas25/TaoWire/security/advisories/new) (see
+> [SECURITY.md](https://github.com/anindhabiswas25/TaoWire/blob/main/SECURITY.md)), never in a public issue.
+
 btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets: the Rust crate of
-[TaoWire](../README.md) (spec 11.5). Rust ≥ 1.80, `#![forbid(unsafe_code)]`. Not published.
+[TaoWire](https://github.com/anindhabiswas25/TaoWire) (spec 11.5). Rust ≥ 1.80, `#![forbid(unsafe_code)]`.
+
+```toml
+[dependencies]
+taowire-btauth = { version = "0.1.0-alpha.1", features = ["axum"] }
+```
 
 Features: `axum` (middleware), `client` (reqwest), `redis` (shared replay store), `sidecar` (sidecar client,
 implies `client`). Default: none.
@@ -29,10 +40,10 @@ async fn main() {
 }
 ```
 
-A full miner (caller policy and `ServeAxon` through the [sidecar](../docs/sidecar.md), per-IP and per-hotkey
-limits, a streaming route): [`examples/textops_miner.rs`](examples/textops_miner.rs)
+A full miner (caller policy and `ServeAxon` through the [sidecar](https://github.com/anindhabiswas25/TaoWire/blob/main/docs/sidecar.md), per-IP and per-hotkey
+limits, a streaming route): [`examples/textops_miner.rs`](https://github.com/anindhabiswas25/TaoWire/blob/main/rust/examples/textops_miner.rs)
 (`cargo run --example textops_miner --features axum,client,sidecar,redis`; settings in
-[examples/text-ops-miners](../examples/text-ops-miners/README.md)).
+[examples/text-ops-miners](https://github.com/anindhabiswas25/TaoWire/blob/main/examples/text-ops-miners/README.md)).
 
 A runnable miner and signer with dev keys: `examples/interop.rs`
 (`cargo run --example interop --features axum,client,sidecar -- serve 127.0.0.3:8096 <seed-hex>`).
@@ -66,7 +77,7 @@ Validator side (feature `client`): `Client::new(Signer::new(validator_key), reqw
 | `Error`, `codes`, `status_of`, `error_body` | Appendix A codes, statuses and the JSON error body |
 
 ed25519 uses `verify` (RFC 8032), not `verify_strict`, plus the weak-key refusal: see
-[ADR-0010](../docs/adr/0010-ed25519-verify-and-weak-keys.md). API docs: `cargo doc --all-features --open`.
+[ADR-0010](https://github.com/anindhabiswas25/TaoWire/blob/main/docs/adr/0010-ed25519-verify-and-weak-keys.md). API docs: `cargo doc --all-features --open`.
 
 ## Checks
 

@@ -5,16 +5,28 @@ build-backend = "hatchling.build"
 [project]
 name = "taowire"
 dynamic = ["version"]
-description = "Production-grade networking starter kit for Bittensor v11 subnets, and the migration path for v10 subnets"
+description = "ALPHA, not security-reviewed, not for mainnet value: networking kit for Bittensor v11 subnets (btauth/1 miner server, validator client) and the migration path for v10 subnets"
 readme = "README.md"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10,<3.15"
+keywords = ["bittensor", "subnet", "btauth", "validator", "miner", "sr25519"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
   "Operating System :: POSIX :: Linux",
   "Operating System :: MacOS",
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Framework :: FastAPI",
+  "Framework :: Pytest",
+  "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+  "Topic :: Security :: Cryptography",
   "Typing :: Typed",
 ]
 dependencies = [
@@ -53,6 +65,14 @@ dev = [
   "pyyaml>=6.0",       # tests/localnet reads examples/migrations/.../mixed-fleet.yml
 ]
 
+[project.urls]
+Homepage = "https://github.com/anindhabiswas25/TaoWire"
+Documentation = "https://github.com/anindhabiswas25/TaoWire/tree/main/docs"
+Repository = "https://github.com/anindhabiswas25/TaoWire"
+Issues = "https://github.com/anindhabiswas25/TaoWire/issues"
+Changelog = "https://github.com/anindhabiswas25/TaoWire/blob/main/CHANGELOG.md"
+Security = "https://github.com/anindhabiswas25/TaoWire/security/policy"
+
 [project.scripts]
 taowire = "taowire.cli.main:app"
 
@@ -69,7 +89,7 @@ packages = ["src/taowire"]
 # git-ignored virtualenv not named .venv, e.g. the .venv-py310 of the Python 3.10
 # check). tests/unit/test_packaging.py checks the archive against this list.
 [tool.hatch.build.targets.sdist]
-only-include = ["src/taowire", "pyproject.toml", "README.md"]
+only-include = ["src/taowire", "pyproject.toml", "README.md", "LICENSE"]
 exclude = ["__pycache__", "*.py[cod]"]
 
 # ---------------------------------------------------------------- ruff

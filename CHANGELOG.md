@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0a1] - 2026-10-24
+
+The first alpha (spec 18.5, D47): a labelled pre-release so subnet builders can build on the kit and
+review it. **Not security-reviewed; APIs may change; for localnet and testnet, not for mainnet value.**
+Packages: `taowire` 0.1.0a1 (PyPI), `@taowire/btauth` 0.1.0-alpha.1 (npm, dist-tag `alpha`),
+`taowire-btauth` 0.1.0-alpha.1 (crates.io), Go module `github.com/anindhabiswas25/TaoWire/go` (tag
+`go/v0.1.0-alpha.1`). The date is the planned tag date.
+
+What is in it (details in the sections below):
+- Python: the btauth/1 miner server with the full request pipeline (body cap, rate limits, verification,
+  replay store, caller policy, signed `twresp/1` responses), the validator client and loop with SQLite scores
+  and commit-reveal weights, signed SSE streaming, timelock, TLS modes, the sidecar, `taowire init` / `doctor`
+  / `bench` / `sign-request` / `conformance`, and the testing package (FakeChain, pytest plugin).
+- v10 migration: `taowire.compat`, the time-boxed two-way v10 bridge, `taowire migrate scan` / `apply` /
+  `status`, the rollout runbook, and the ported v10 template.
+- TypeScript, Go and Rust: btauth/1, `twresp/1` and signed streams, the sidecar clients and example miners,
+  all passing the shared conformance vectors (143) and the localnet interop matrix.
+
+What is not in it yet:
+- No testnet end-to-end run (spec 15, T1–T16): checked on localnet only.
+- No external security review (spec 16.5): only the team's own review, fuzzing and abuse tests.
+- No response-time commitments for security reports (spec 20.2).
+
 ### Renamed
 
 - The project is now **TaoWire** (spec v1.10, D46): the Python distribution and import package

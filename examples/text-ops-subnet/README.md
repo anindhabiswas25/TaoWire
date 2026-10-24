@@ -28,7 +28,7 @@ them identical).
 | `docker-compose.yml` | miner + validator + Redis next to a localnet chain (Linux, host network) |
 
 Miners in TypeScript, Go and Rust implement the same route with byte-identical
-results; they arrive with the multi-language packages (Phase 5).
+results; they are in [`examples/text-ops-miners`](../text-ops-miners/README.md).
 
 ## Tests
 

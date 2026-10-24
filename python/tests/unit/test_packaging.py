@@ -30,7 +30,10 @@ def _uv() -> str:
 def test_include_list_is_the_documented_one() -> None:
     text = (PYTHON_DIR / "pyproject.toml").read_text()
     section = text.split("[tool.hatch.build.targets.sdist]", 1)[1].split("\n[", 1)[0]
-    assert 'only-include = ["src/taowire", "pyproject.toml", "README.md"]' in section
+    assert (
+        'only-include = ["src/taowire", "pyproject.toml", "README.md", "LICENSE"]'
+        in section
+    )
 
 
 def test_sdist_holds_only_the_include_list(tmp_path: Path) -> None:
@@ -40,7 +43,7 @@ def test_sdist_holds_only_the_include_list(tmp_path: Path) -> None:
         project / "src",
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
     )
-    for name in ("pyproject.toml", "README.md"):
+    for name in ("pyproject.toml", "README.md", "LICENSE"):
         shutil.copy(PYTHON_DIR / name, project / name)
     # What broke G6-1: a git-ignored virtualenv with another name, and tests.
     stray = project / ".venv-py310" / "lib" / "python3.10" / "site-packages"
@@ -66,7 +69,7 @@ def test_sdist_holds_only_the_include_list(tmp_path: Path) -> None:
     with tarfile.open(sdist) as tar:
         names = tar.getnames()
     root = names[0].split("/", 1)[0]
-    allowed_files = {"PKG-INFO", "pyproject.toml", "README.md", ".gitignore"}
+    allowed_files = {"PKG-INFO", "pyproject.toml", "README.md", "LICENSE", ".gitignore"}
     for name in names:
         rel = name.removeprefix(root + "/")
         if rel in {root, ""} or rel in allowed_files:
@@ -76,3 +79,11 @@ def test_sdist_holds_only_the_include_list(tmp_path: Path) -> None:
         assert not rel.endswith(".pyc"), rel
     assert any(n.endswith("src/taowire/py.typed") for n in names)
     assert any("cli/templates" in n for n in names)
+    assert f"{root}/LICENSE" in names
+
+
+def test_every_package_ships_the_repository_license() -> None:
+    """Each package directory holds an exact copy of the root LICENSE (Apache-2.0)."""
+    want = (PYTHON_DIR.parent / "LICENSE").read_bytes()
+    for package in ("python", "typescript", "rust"):
+        assert (PYTHON_DIR.parent / package / "LICENSE").read_bytes() == want, package

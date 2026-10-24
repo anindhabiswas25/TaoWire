@@ -1,14 +1,18 @@
 [package]
 name = "taowire-btauth"
-version = "0.1.0-dev"
+version = "0.1.0-alpha.1"
 edition = "2021"
 rust-version = "1.80"
 license = "Apache-2.0"
-description = "btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets (TaoWire)"
+description = "ALPHA, not security-reviewed, not for mainnet value: btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets (TaoWire)"
 readme = "README.md"
-keywords = ["bittensor", "sr25519", "ed25519", "authentication"]
+repository = "https://github.com/anindhabiswas25/TaoWire"
+homepage = "https://github.com/anindhabiswas25/TaoWire/tree/main/rust"
+documentation = "https://docs.rs/taowire-btauth"
+keywords = ["bittensor", "subnet", "btauth", "sr25519", "ed25519"]
 categories = ["authentication", "cryptography"]
-publish = false # not published until the PM's go-ahead (spec 18.4)
+# The crate holds the library, its tests and examples; the fuzz crate stays in the repository.
+exclude = ["fuzz/", "target/"]
 
 [features]
 default = []

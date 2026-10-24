@@ -1,5 +1,8 @@
 # Quickstart: your first TaoWire subnet on a local chain
 
+> **Alpha (0.1.0a1).** Not security-reviewed; APIs may change. For localnet and
+> testnet, **not for mainnet value**. Feedback: [GitHub issues](https://github.com/anindhabiswas25/TaoWire/issues).
+
 You will start a local Bittensor chain, scaffold a subnet project, run a
 miner and a validator, and watch the validator's weights land on chain.
 Target time: under 60 minutes. Everything runs on your machine; nothing
@@ -8,9 +11,9 @@ touches testnet or mainnet, and only public development keys are used.
 | Step | Machine time (measured) |
 |---|---|
 | 0. Prerequisites | — |
-| 1. Get TaoWire | 20 s (empty package cache) |
-| 2. Start a local chain | 1–2 min on a fresh machine, plus the image pull |
-| 3. Create your subnet project | 10 s |
+| 1. Get TaoWire | 22 s (empty package cache) |
+| 2. Start a local chain | about 3 min on a fresh chain (registrations retry), plus the image pull |
+| 3. Create your subnet project | 6 s |
 | 4. Configure the miner and the validator | — |
 | 5. Check the setup | 2 s |
 | 6–7. Run the miner and the validator | 5 s to the first weights |
@@ -23,26 +26,38 @@ Add your own reading and typing time.
 - Linux (x86-64). macOS works too, but use your LAN address instead of
   `127.0.0.2` below (step 4).
 - Docker (the local chain runs in a container).
-- `git`, Python 3.12 and [`uv`](https://docs.astral.sh/uv/).
+- `git`, Python 3.10–3.14 and [`uv`](https://docs.astral.sh/uv/).
 
 ## 1. Get TaoWire
 
-TaoWire is not on PyPI yet, so install it from the repository:
+The alpha is a pre-release: `pip install taowire` skips it, so name the
+version (or pass `--pre`). One virtual environment holds the kit, its CLI and,
+later, your subnet:
 
 ```bash
-git clone <taowire repository URL> taowire
-cd taowire
-export TAOWIRE_REPO="$PWD"
-(cd python && uv sync --all-extras)
-export PATH="$TAOWIRE_REPO/python/.venv/bin:$PATH"
-taowire --version
+uv venv ~/taowire-env
+. ~/taowire-env/bin/activate
+uv pip install "taowire[all]==0.1.0a1"
+taowire --version                        # taowire 0.1.0a1
 ```
+
+The local-chain scripts live in the repository:
+
+```bash
+git clone --depth 1 https://github.com/anindhabiswas25/TaoWire.git ~/taowire-repo
+export TAOWIRE_REPO=~/taowire-repo
+```
+
+Every new terminal below starts with `. ~/taowire-env/bin/activate`.
 
 ## 2. Start a local chain
 
 ```bash
-"$TAOWIRE_REPO/scripts/localnet_up.sh"
+LOCALNET_PYTHON="$(command -v python)" "$TAOWIRE_REPO/scripts/localnet_up.sh"
 ```
+
+`LOCALNET_PYTHON` is the Python that sets the chain up (it needs `bittensor`,
+which the environment from step 1 has).
 
 This starts `subtensor-localnet` (fast 0.25 s blocks), creates a subnet,
 development wallets (`owner`, `validator`, `miner_py`, ...), stakes the
@@ -67,9 +82,8 @@ repository path above is `TAOWIRE_REPO`.
 ```bash
 taowire init ~/my-subnet
 cd ~/my-subnet
-uv venv
-uv pip install -e "$TAOWIRE_REPO/python" -e '.[dev]'
-.venv/bin/pytest -q                      # 7 passed: miner, scoring and a validator round, in process
+uv pip install -e '.[dev]'
+pytest -q                                # 9 passed: miner, scoring and a validator round, in process
 ```
 
 The project is the text-ops example subnet: validators send random text and
@@ -136,7 +150,7 @@ yet). `doctor` exits with status 1 if anything fails, and says what to fix.
 
 ```bash
 cd ~/my-subnet
-(set -a; . ./miner.env; set +a; exec .venv/bin/python -m my_subnet.miner)
+(set -a; . ./miner.env; set +a; exec python -m my_subnet.miner)
 ```
 
 It logs JSON lines. Within a few seconds you see `axon_published` (it
@@ -146,7 +160,7 @@ published `127.0.0.2:8091` with protocol tag 87) and `miner_ready`.
 
 ```bash
 cd ~/my-subnet
-(set -a; . ./validator.env; set +a; exec .venv/bin/python -m my_subnet.validator)
+(set -a; . ./validator.env; set +a; exec python -m my_subnet.validator)
 ```
 
 Every 12 seconds it sends a task to the miners and logs `round ok` with
@@ -163,7 +177,7 @@ In a third terminal:
 ```bash
 cd ~/my-subnet
 set -a; . ./validator.env; set +a
-.venv/bin/python - <<'EOF'
+python - <<'EOF'
 import asyncio, os
 import bittensor as bt
 
@@ -211,6 +225,8 @@ The localnet settings above are not for public networks. Change these:
 
 ## Measured
 
-Followed by Engineer A on 2026-10-23 (Linux; the chain was already running):
-`reports/phase-2/a/quickstart-run.md` has the exact commands, their output
-and the time per step.
+Followed as written on 2026-10-24 (Linux, Python 3.13 picked by `uv venv`, an
+empty home directory and package cache, a fresh local chain), with the built
+`taowire-0.1.0a1` wheel standing in for `taowire[all]==0.1.0a1` before the
+upload. Every step worked; the first weights were committed 4 s after the
+validator started and revealed within seconds (`{1: {2: 1.0}}`).
