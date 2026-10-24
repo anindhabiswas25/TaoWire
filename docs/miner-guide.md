@@ -128,6 +128,16 @@ arrays). The whole request path runs first, the first chunk is fetched within
 stream; anything that cannot finish ends without a trailer. See
 [streaming.md](streaming.md).
 
+## Sealed challenges and answers (timelock)
+
+A validator can send a challenge nobody can read before a drand round, and
+ask for an answer sealed the same way, so a leaked answer is useless to other
+miners until scoring (spec 8.10). On the miner: `miner.timelock.open_challenge`
+waits for the reveal and opens the challenge; `miner.timelock.seal_response`
+seals the answer, bound to your hotkey. Give the route a `timeout_s` longer
+than the reveal. Drand trouble is `tw.timelock_unavailable`, never a hang. See
+[timelock.md](timelock.md#miner).
+
 ## Signed responses (`twresp/1`)
 
 With `TW_SIGN_RESPONSES=1` (the default) the miner signs every 200 and every
