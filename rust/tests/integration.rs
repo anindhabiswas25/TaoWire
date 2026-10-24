@@ -437,3 +437,46 @@ async fn backwards_clock_step_fails_closed() {
     let stale = v.verify(borrowed(&h), b"", "POST", "/x").await.unwrap_err();
     assert_eq!(stale.code, codes::STALE);
 }
+
+#[test]
+fn hotkey_files() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let dir = std::env::temp_dir().join(format!("tw-hotkey-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let write = |name: &str, content: &str, mode: u32| {
+        let p = dir.join(name);
+        std::fs::write(&p, content).unwrap();
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(mode)).unwrap();
+        p
+    };
+    let seed = "0xe5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a"; // //Alice, public
+    let good = write(
+        "good",
+        &format!(r#"{{"secretSeed":"{seed}","ss58Address":"{}"}}"#, alice().ss58()),
+        0o600,
+    );
+    assert_eq!(Keypair::from_hotkey_file(&good, Scheme::Sr25519).unwrap().ss58(), alice().ss58());
+    let ed = write("ed", &format!(r#"{{"secretSeed":"{seed}"}}"#), 0o600);
+    assert_eq!(Keypair::from_hotkey_file(&ed, Scheme::Ed25519).unwrap().scheme(), Scheme::Ed25519);
+    let cases = [
+        ("open", format!(r#"{{"secretSeed":"{seed}"}}"#), 0o644, "group or others"),
+        ("notjson", "x".into(), 0o600, "not JSON"),
+        ("noseed", "{}".into(), 0o600, "no secretSeed"),
+        ("phrase", r#"{"secretPhrase":"bottom drive obey"}"#.into(), 0o600, "secretSeed only"),
+        ("short", r#"{"secretSeed":"0x1234"}"#.into(), 0o600, "no secretSeed"),
+        (
+            "mismatch",
+            format!(r#"{{"secretSeed":"{seed}","ss58Address":"{}"}}"#, bob().ss58()),
+            0o600,
+            "does not match",
+        ),
+    ];
+    for (name, content, mode, want) in cases {
+        let e =
+            Keypair::from_hotkey_file(&write(name, &content, mode), Scheme::Sr25519).unwrap_err();
+        assert!(e.contains(want) && !e.contains(&seed[2..]), "{name}: {e}");
+    }
+    assert!(Keypair::from_hotkey_file(&dir.join("missing"), Scheme::Sr25519).is_err());
+    assert!(Keypair::from_hotkey_file(&dir, Scheme::Sr25519).is_err());
+    std::fs::remove_dir_all(&dir).unwrap();
+}

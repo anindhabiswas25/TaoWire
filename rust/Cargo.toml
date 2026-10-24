@@ -37,7 +37,7 @@ redis = { version = "0.32", optional = true, default-features = false, features 
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "io-util"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "time", "io-util", "signal"] }
 tower = { version = "0.5", features = ["util"] }
 futures-util = { version = "0.3", default-features = false }
 axum = { version = "0.8", default-features = false, features = ["tokio", "http1", "original-uri", "json"] }
@@ -45,6 +45,10 @@ axum = { version = "0.8", default-features = false, features = ["tokio", "http1"
 [[test]]
 name = "conformance"
 path = "tests/conformance.rs"
+
+[[example]]
+name = "textops_miner"
+required-features = ["axum", "client", "sidecar", "redis"]
 
 [[example]]
 name = "interop"

@@ -121,6 +121,14 @@ The adapters' policy hooks (Go `MiddlewareConfig.Policy`, Rust `MinerAuth::with_
 option) answer a refusal signed with twresp/1, except the codes Appendix A marks unsigned (`tw.metagraph_stale`,
 `tw.replay_store_unavailable`, `tw.internal`), as the Python pipeline does.
 
+## Server timeouts
+
+| | Headers | Body | Note |
+|---|---|---|---|
+| Go | set `http.Server.ReadHeaderTimeout` | read the body under a deadline (`http.ResponseController.SetReadDeadline`), then clear it | do **not** set `http.Server.ReadTimeout` on a server with streaming routes: when it fires, net/http cancels the request context, which ends a stream running past it |
+| Rust | `axum::serve` has none: use a reverse proxy, or hyper-util's builder with `header_read_timeout` | `MinerAuth::with_body_timeout` (default 10 s; 401 `tw.auth_malformed`) | |
+| TypeScript | Node's `headersTimeout` | Fastify `requestTimeout` | not `connectionTimeout` (socket inactivity), which can cut a stream between chunks |
+
 ## TypeScript notes
 
 - **Headers.** The verifier takes `[name, value]` pairs or Node's flat `rawHeaders` (the Fastify adapter passes

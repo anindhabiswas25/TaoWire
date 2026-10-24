@@ -806,3 +806,28 @@ async fn client_non_stream_answers() {
         .unwrap_err();
     assert_eq!(e.code, codes::CONNECT_ERROR);
 }
+
+#[tokio::test]
+async fn a_slow_body_is_refused_after_the_body_timeout() {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+    let store = Arc::new(MemoryStore::new(Duration::from_secs(60)));
+    let auth = Arc::new(
+        MinerAuth::new(Verifier::new(Config::new(bob().ss58(), store)).unwrap())
+            .with_body_timeout(Duration::from_millis(300)),
+    );
+    let app = Router::new()
+        .fallback(|| async { "ok" })
+        .layer(::axum::middleware::from_fn_with_state(auth, protect));
+    let url = serve(app).await;
+    let addr = url.trim_start_matches("http://");
+    let mut sock = tokio::net::TcpStream::connect(addr).await.unwrap();
+    sock.write_all(b"POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 100\r\n\r\n{").await.unwrap();
+    let started = Instant::now();
+    let mut buf = vec![0u8; 512];
+    let n =
+        tokio::time::timeout(Duration::from_secs(5), sock.read(&mut buf)).await.unwrap().unwrap();
+    let head = String::from_utf8_lossy(&buf[..n]);
+    assert!(head.starts_with("HTTP/1.1 401"), "{head}");
+    assert!(head.contains("tw.auth_malformed"));
+    assert!(started.elapsed() < Duration::from_secs(3));
+}

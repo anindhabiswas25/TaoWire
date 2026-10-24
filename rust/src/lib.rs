@@ -26,6 +26,7 @@ mod error;
 mod keys;
 mod nonce;
 mod payload;
+mod ratelimit;
 mod ss58;
 pub mod sse;
 mod store;
@@ -45,6 +46,7 @@ pub use error::{codes, error_body, status_of, Error};
 pub use keys::{is_weak_public_key, Keypair, Signer};
 pub use nonce::NonceSource;
 pub use payload::{body_sha256, build_payload, Scheme, PROTOCOL};
+pub use ratelimit::{RateLimit, TokenBuckets, DEFAULT_HOTKEY_LIMIT, DEFAULT_IP_LIMIT};
 pub use ss58::{decode_ss58, encode_ss58, SS58_PREFIX};
 pub use store::{MemoryStore, NonceStore, StoreError, StoreFuture};
 pub use twresp::{

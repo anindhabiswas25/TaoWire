@@ -7,13 +7,23 @@ Run it with the ``TW_*`` settings of your miner hotkey (see ``.env.example``)::
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+
 from tensorwire import Miner, RouteContext
 
-from text_ops.protocol import ROUTE, TransformRequest, TransformResponse, expected
+from text_ops.protocol import (
+    ROUTE,
+    STREAM_ROUTE,
+    TransformPiece,
+    TransformRequest,
+    TransformResponse,
+    expected,
+    pieces,
+)
 
 
 def register(miner: Miner) -> Miner:
-    """Add the subnet's route to ``miner`` and return it."""
+    """Add the subnet's routes to ``miner`` and return it."""
 
     @miner.route(
         ROUTE,
@@ -24,6 +34,20 @@ def register(miner: Miner) -> Miner:
     )
     async def transform(req: TransformRequest, ctx: RouteContext) -> TransformResponse:
         return TransformResponse(result=expected(req))
+
+    @miner.route(
+        STREAM_ROUTE,
+        request=TransformRequest,
+        response=TransformPiece,
+        timeout_s=5.0,
+        max_body_bytes=64_000,
+        stream=True,
+    )
+    async def transform_stream(
+        req: TransformRequest, ctx: RouteContext
+    ) -> AsyncIterator[TransformPiece]:
+        for piece in pieces(req):
+            yield piece
 
     return miner
 

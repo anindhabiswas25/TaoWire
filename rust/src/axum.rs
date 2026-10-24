@@ -37,6 +37,8 @@ use crate::verify::{Caller, Verifier};
 
 /// Default request body cap (`TW_MAX_BODY_BYTES`, 1 MiB).
 pub const DEFAULT_MAX_BODY_BYTES: usize = 1 << 20;
+/// Default time to read a request body (slow-drip bodies are refused).
+pub const DEFAULT_BODY_TIMEOUT: Duration = Duration::from_secs(10);
 /// Largest handler answer that is buffered for signing (64 MiB).
 pub const MAX_SIGNED_RESPONSE_BYTES: usize = 64 << 20;
 
@@ -50,6 +52,7 @@ pub const UNSIGNED_CODES: [&str; 3] =
 pub struct MinerAuth {
     verifier: Verifier,
     max_body_bytes: usize,
+    body_timeout: Duration,
     response_key: Option<Arc<Keypair>>,
     policy: Option<PolicyFn>,
 }
@@ -59,6 +62,7 @@ impl std::fmt::Debug for MinerAuth {
         f.debug_struct("MinerAuth")
             .field("verifier", &self.verifier)
             .field("max_body_bytes", &self.max_body_bytes)
+            .field("body_timeout", &self.body_timeout)
             .field("response_key", &self.response_key)
             .field("policy", &self.policy.is_some())
             .finish()
@@ -68,7 +72,25 @@ impl std::fmt::Debug for MinerAuth {
 impl MinerAuth {
     /// Verify with `verifier`, 1 MiB body cap, answers unsigned.
     pub fn new(verifier: Verifier) -> Self {
-        Self { verifier, max_body_bytes: DEFAULT_MAX_BODY_BYTES, response_key: None, policy: None }
+        Self {
+            verifier,
+            max_body_bytes: DEFAULT_MAX_BODY_BYTES,
+            body_timeout: DEFAULT_BODY_TIMEOUT,
+            response_key: None,
+            policy: None,
+        }
+    }
+
+    /// The verifier (e.g. for a readiness probe: [`Verifier::failing_closed`]).
+    pub fn verifier(&self) -> &Verifier {
+        &self.verifier
+    }
+
+    /// Change the time a body may take to arrive (default 10 s); slower is 401
+    /// `tw.auth_malformed`, unsigned (hyper has no read timeout of its own).
+    pub fn with_body_timeout(mut self, timeout: Duration) -> Self {
+        self.body_timeout = timeout;
+        self
     }
 
     /// Change the body cap; larger bodies are 413 `tw.payload_too_large`.
@@ -127,7 +149,11 @@ pub async fn protect(State(auth): State<Arc<MinerAuth>>, req: Request, next: Nex
         ));
     }
     let (mut parts, body) = req.into_parts();
-    let body = match to_bytes(body, auth.max_body_bytes).await {
+    let read = tokio::time::timeout(auth.body_timeout, to_bytes(body, auth.max_body_bytes)).await;
+    let Ok(read) = read else {
+        return error_response(&Error::new(codes::MALFORMED, "body not read in time"));
+    };
+    let body = match read {
         Ok(b) => b,
         Err(e) => {
             let too_big = std::error::Error::source(&e)

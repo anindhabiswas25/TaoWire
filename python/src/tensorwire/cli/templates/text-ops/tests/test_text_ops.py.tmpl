@@ -25,9 +25,11 @@ from text_ops.miner import register
 from text_ops.protocol import (
     ALPHABET,
     ROUTE,
+    STREAM_ROUTE,
     TransformRequest,
     TransformResponse,
     expected,
+    pieces,
     random_request,
 )
 from text_ops.scoring import latency_factor, score
@@ -53,6 +55,30 @@ async def test_miner_answers(signed_client: Any, op: str, result: str) -> None:
     r = await signed_client.post(ROUTE, json={"text": "hello world", "op": op})
     assert r.status_code == 200
     assert r.json() == {"result": result}
+
+
+async def test_miner_streams_the_result_in_pieces(signed_client: Any) -> None:
+    text = "abc " * 20
+    r = await signed_client.post(STREAM_ROUTE, json={"text": text, "op": "upper"})
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/event-stream")
+    chunks = [
+        line.removeprefix("data: ")
+        for line in r.text.split("\n")
+        if line.startswith('data: {"i"')
+    ]
+    assert "".join(chunks) != ""
+    assert chunks == [
+        p.model_dump_json() for p in pieces(TransformRequest(text=text, op="upper"))
+    ]
+    assert "event: tw-end" in r.text
+
+
+def test_pieces_join_to_the_result() -> None:
+    req = TransformRequest(text="x" * 100, op="sha256")
+    got = pieces(req)
+    assert [p.i for p in got] == [0, 1]
+    assert "".join(p.piece for p in got) == expected(req)
 
 
 async def test_miner_rejects_bad_requests(signed_client: Any) -> None:

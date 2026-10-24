@@ -27,6 +27,64 @@ impl std::fmt::Debug for Keypair {
 }
 
 impl Keypair {
+    /// Read a Bittensor hotkey file (the JSON btcli writes in
+    /// `<wallet>/hotkeys/<name>`) as a key under `scheme`. The file must not be
+    /// readable by group or others (one open file for the mode check and the
+    /// read); its `secretSeed` (`0x` + 64 hex) is the seed, and its
+    /// `ss58Address`, when present, must match. A file with only a
+    /// `secretPhrase` is refused. Errors name the file, never its contents.
+    pub fn from_hotkey_file(path: &std::path::Path, scheme: Scheme) -> Result<Self, String> {
+        use std::io::Read as _;
+        let shown = path.display();
+        let mut f =
+            std::fs::File::open(path).map_err(|_| format!("cannot open hotkey file {shown}"))?;
+        let meta = f.metadata().map_err(|_| format!("cannot read hotkey file {shown}"))?;
+        if !meta.is_file() {
+            return Err(format!("hotkey file {shown} is not a regular file"));
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            if meta.permissions().mode() & 0o044 != 0 {
+                return Err(format!(
+                    "hotkey file {shown} is readable by group or others; run: chmod 600 {shown}"
+                ));
+            }
+        }
+        let mut data = Vec::new();
+        f.by_ref()
+            .take(1 << 16)
+            .read_to_end(&mut data)
+            .map_err(|_| format!("cannot read hotkey file {shown}"))?;
+        let v: serde_json::Value = serde_json::from_slice(&data)
+            .map_err(|_| format!("hotkey file {shown} is not JSON"))?;
+        let seed: Option<[u8; 32]> = v["secretSeed"]
+            .as_str()
+            .and_then(|s| s.strip_prefix("0x"))
+            .and_then(|h| hex::decode(h).ok())
+            .and_then(|b| b.try_into().ok());
+        let Some(seed) = seed else {
+            return Err(if v["secretPhrase"].is_string() {
+                format!("hotkey file {shown} has a secretPhrase but no secretSeed (0x + 64 hex); this crate reads secretSeed only")
+            } else {
+                format!("hotkey file {shown} has no secretSeed (0x + 64 hex)")
+            });
+        };
+        let key = match scheme {
+            Scheme::Sr25519 => Self::sr25519_from_seed(&seed),
+            Scheme::Ed25519 => Self::ed25519_from_seed(&seed),
+        };
+        if let Some(addr) = v.get("ss58Address").and_then(|a| a.as_str()) {
+            if addr != key.ss58() {
+                return Err(format!(
+                    "hotkey file {shown}: the seed does not match its ss58Address under {}",
+                    scheme.as_str()
+                ));
+            }
+        }
+        Ok(key)
+    }
+
     /// An sr25519 hotkey from its 32-byte mini secret (a Bittensor hotkey
     /// file's `secretSeed`), expanded the substrate way.
     pub fn sr25519_from_seed(seed: &[u8; 32]) -> Self {

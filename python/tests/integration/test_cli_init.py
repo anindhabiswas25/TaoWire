@@ -72,7 +72,7 @@ def test_scaffolded_project_passes_its_own_tests(tmp_path: Path) -> None:
         check=False,
     )
     assert run.returncode == 0, run.stdout + run.stderr
-    assert "7 passed" in run.stdout
+    assert "9 passed" in run.stdout
 
 
 def test_refuses_a_non_empty_directory(tmp_path: Path) -> None:
