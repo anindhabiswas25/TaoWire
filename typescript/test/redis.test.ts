@@ -1,11 +1,11 @@
-// RedisNonceStore against a real Redis (TENSORWIRE_TEST_REDIS_URL; skipped without it).
+// RedisNonceStore against a real Redis (TAOWIRE_TEST_REDIS_URL; skipped without it).
 import { Redis } from "ioredis";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Signer, TWError, Verifier, initCrypto } from "@tensorwire/btauth";
-import { DEFAULT_PREFIX, RedisNonceStore } from "@tensorwire/btauth/redis";
+import { Signer, TWError, Verifier, initCrypto } from "@taowire/btauth";
+import { DEFAULT_PREFIX, RedisNonceStore } from "@taowire/btauth/redis";
 import { keypair } from "./helpers.js";
 
-const url = process.env.TENSORWIRE_TEST_REDIS_URL;
+const url = process.env.TAOWIRE_TEST_REDIS_URL;
 const prefix = `tw:test-ts:${process.pid}:${Date.now()}:`;
 
 describe.skipIf(url === undefined)("RedisNonceStore (real Redis)", () => {

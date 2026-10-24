@@ -23,8 +23,8 @@ from typing import Any
 
 import httpx
 
-from tensorwire.testing import bench as tb
-from tensorwire.testing.keys import dev_key
+from taowire.testing import bench as tb
+from taowire.testing.keys import dev_key
 
 ROUTE = tb.BENCH_ROUTE
 BODY = tb.bench_body(256)
@@ -112,7 +112,7 @@ def start_miner(tmp: Path, **settings: str) -> MinerProcess:
     log = tmp / f"miner-{port}.log"
     with log.open("wb") as out:
         proc = subprocess.Popen(
-            [sys.executable, "-m", "tensorwire.testing.bench"],
+            [sys.executable, "-m", "taowire.testing.bench"],
             env=env,
             stdout=out,
             stderr=subprocess.STDOUT,
@@ -265,8 +265,8 @@ def flood_process(
 
 
 def write_evidence(name: str, data: dict[str, Any]) -> None:
-    """Append one result to ``$TENSORWIRE_ABUSE_REPORT`` (JSON lines), if set."""
-    path = os.environ.get("TENSORWIRE_ABUSE_REPORT")
+    """Append one result to ``$TAOWIRE_ABUSE_REPORT`` (JSON lines), if set."""
+    path = os.environ.get("TAOWIRE_ABUSE_REPORT")
     if path:
         with Path(path).open("a", encoding="utf-8") as out:
             out.write(json.dumps({"test": name, **data}) + "\n")

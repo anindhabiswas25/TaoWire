@@ -10,13 +10,13 @@ from typing import Any
 import pytest
 import structlog
 
-from tensorwire.chain.gateway import ChainUnavailable, MetagraphView, SubnetNotFound
-from tensorwire.observability.metrics import Metrics
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.validator.lock import HotkeyLock, HotkeyLockHeld
-from tensorwire.validator.scores import RoundRecord, ScoreStore, WeightRecord
-from tensorwire.validator.selection import eligible_miners, select_miners
-from tensorwire.validator.weights import (
+from taowire.chain.gateway import ChainUnavailable, MetagraphView, SubnetNotFound
+from taowire.observability.metrics import Metrics
+from taowire.testing.fake_chain import FakeChain
+from taowire.validator.lock import HotkeyLock, HotkeyLockHeld
+from taowire.validator.scores import RoundRecord, ScoreStore, WeightRecord
+from taowire.validator.selection import eligible_miners, select_miners
+from taowire.validator.weights import (
     MAX_REPLANS,
     WeightScheduler,
     blocks_from_remediation,

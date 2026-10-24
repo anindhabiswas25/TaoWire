@@ -27,7 +27,7 @@ from typing import Any
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from tensorwire.extensions import streaming as sse
+from taowire.extensions import streaming as sse
 
 BOM = b"\xef\xbb\xbf"
 LINE_ENDS = [b"\r\n", b"\n", b"\r"]

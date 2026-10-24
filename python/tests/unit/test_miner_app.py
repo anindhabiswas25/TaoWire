@@ -8,14 +8,14 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from tensorwire import Miner as LazyMiner
-from tensorwire.errors import ConfigError, StartupError
-from tensorwire.miner import app as app_mod
-from tensorwire.miner.app import Miner
-from tensorwire.miner.pipeline import raw_target
-from tensorwire.miner.routes import RouteContext, RouteRegistry
-from tensorwire.policy.caller import CallerPolicy
-from tensorwire.testing.keys import dev_key
+from taowire import Miner as LazyMiner
+from taowire.errors import ConfigError, StartupError
+from taowire.miner import app as app_mod
+from taowire.miner.app import Miner
+from taowire.miner.pipeline import raw_target
+from taowire.miner.routes import RouteContext, RouteRegistry
+from taowire.policy.caller import CallerPolicy
+from taowire.testing.keys import dev_key
 
 
 class Model(BaseModel):
@@ -99,12 +99,12 @@ def test_app_has_no_public_docs(tw_miner: Miner) -> None:
 
 
 def test_lazy_public_api() -> None:
-    import tensorwire
+    import taowire
 
     assert LazyMiner is Miner
-    assert tensorwire.CallerPolicy is CallerPolicy
+    assert taowire.CallerPolicy is CallerPolicy
     with pytest.raises(AttributeError, match="no attribute 'Nope'"):
-        _ = tensorwire.Nope
+        _ = taowire.Nope
 
 
 @pytest.mark.parametrize(

@@ -1,6 +1,6 @@
 # Security
 
-What TensorWire defends against, how, what you must still do yourself, and
+What TaoWire defends against, how, what you must still do yourself, and
 the test that proves each default. The reference is spec Section 16. To report
 a vulnerability, see `SECURITY.md` at the repository root.
 
@@ -23,7 +23,7 @@ a vulnerability, see `SECURITY.md` at the repository root.
 | 1 | Replay across processes or hosts | Redis replay store required when `TW_WORKERS > 1` or `TW_INSTANCE_COUNT > 1`; the miner refuses to start with a per-process store; a Redis outage fails closed (503 `tw.replay_store_unavailable`) | `tests/integration/test_miner_process.py`, `test_redis_nonce_store.py`, `tests/unit/test_nonce_store.py`; replay storm across 2 workers never served twice: `tests/abuse/test_abuse.py::test_replay_storm` |
 | 2 | Hashing a re-serialised body | Signatures are verified on the raw bytes before parsing; handlers only see verified bytes | integration test 1 (`test_miner_requests.py`), `tests/property/test_auth_properties.py` |
 | 3 | Decoded path used as the signed target | The raw request target (`raw_path` + query) is what is verified | `tests/unit/test_miner_app.py`, property tests; conformance P4 (Phase 5) |
-| 4 | Clock drift and clock steps | NTP check at startup and on a schedule; `/readyz` reports `clock_skew`; `tensorwire doctor` checks it. Replay stores keep at least `2 × (max_age + allowed_skew)`; the memory store forgets a pair only when both clocks agree; a backwards wall-clock step larger than the margin fails closed for `retention` seconds (503 `tw.replay_store_unavailable`, `/readyz` `clock_step`), D21 | `tests/unit/test_clock_guard.py`, `tests/integration/test_miner_lifecycle.py`; D21: `tests/unit/test_clock_step.py` (memory and Redis, injected clocks), `tests/integration/test_redis_nonce_store.py` (real Redis), `tests/integration/test_miner_pipeline.py::test_backwards_clock_step_fails_closed`, `tests/unit/test_config.py::test_nonce_retention_covers_twice_the_window` |
+| 4 | Clock drift and clock steps | NTP check at startup and on a schedule; `/readyz` reports `clock_skew`; `taowire doctor` checks it. Replay stores keep at least `2 × (max_age + allowed_skew)`; the memory store forgets a pair only when both clocks agree; a backwards wall-clock step larger than the margin fails closed for `retention` seconds (503 `tw.replay_store_unavailable`, `/readyz` `clock_step`), D21 | `tests/unit/test_clock_guard.py`, `tests/integration/test_miner_lifecycle.py`; D21: `tests/unit/test_clock_step.py` (memory and Redis, injected clocks), `tests/integration/test_redis_nonce_store.py` (real Redis), `tests/integration/test_miner_pipeline.py::test_backwards_clock_step_fails_closed`, `tests/unit/test_config.py::test_nonce_retention_covers_twice_the_window` |
 | 5 | Unbound receiver | Miners always require `X-Bittensor-Receiver` to be their own hotkey; the signer refuses an empty receiver | `tests/unit/test_signer.py`, `tests/unit/test_verifier.py` |
 | 6 | Transport retries resend a signed request | The validator client uses `retries=0`; its own retries sign afresh with a new nonce | `tests/unit/test_validator_client.py::test_the_default_transport_never_retries`, `::test_each_attempt_is_signed_afresh_and_bound_to_the_miner` |
 | 7 | Authenticated is not authorised | Strict caller policy (registered + permit) by default; staged metagraph staleness (below) | `tests/unit/test_policy.py`, `tests/unit/test_chain_metagraph_cache.py`, `tests/integration/test_miner_requests.py` |
@@ -38,7 +38,7 @@ a vulnerability, see `SECURITY.md` at the repository root.
 | 15 | Nonce collisions on coarse clocks | Monotonic nanosecond nonce | `tests/unit/test_signer.py` |
 | 16 | Redirects breaking target binding / SSRF | `follow_redirects=False`; private and loopback axons rejected unless `TW_ALLOW_PRIVATE_AXONS=1` (localnet) | `tests/unit/test_validator_client.py::test_redirects_are_not_followed`, `tests/unit/test_chain_axon.py` |
 | 17 | Error messages leaking internals | Fixed public messages per `tw.*` code; request IDs for correlation; handler exceptions are logged, never sent | `tests/unit/test_errors.py`, `tests/integration/test_miner_requests.py` |
-| 18 | Sidecar abuse | `tensorwire sidecar` binds `127.0.0.1` / `::1` only (anything else needs `TW_SIDECAR_UNSAFE_BIND=1`: WARNING + `tw_unsafe_settings_active`); every request needs the bearer token from an owner-only file (generated 0600, never logged, constant-time compare, a repeated header never matches; 401 `tw.sidecar_unauthorized`); `POST /v1/serve-axon` only for the configured netuid, addresses through `parse_axon`, strict bodies, each write sent once; no weight setting. The TS / Go / Rust clients refuse a non-loopback URL unless told otherwise, check the sidecar runs with the miner's hotkey, parse every answer strictly and fail closed (arbitrary JSON never admits a caller), and apply the staleness stages locally ([sidecar.md](sidecar.md)) | `tests/unit/test_sidecar.py`, `tests/property/test_sidecar_properties.py`; clients: `typescript/test/sidecar.test.ts`, `go/sidecar/sidecar_test.go` (+ `FuzzParseSnapshot`, `FuzzParseDecision`), `rust/tests/sidecar.rs` (+ `cargo fuzz` target `sidecar`); live: `conformance/interop/sidecar_check.py`, `run_matrix.py` |
+| 18 | Sidecar abuse | `taowire sidecar` binds `127.0.0.1` / `::1` only (anything else needs `TW_SIDECAR_UNSAFE_BIND=1`: WARNING + `tw_unsafe_settings_active`); every request needs the bearer token from an owner-only file (generated 0600, never logged, constant-time compare, a repeated header never matches; 401 `tw.sidecar_unauthorized`); `POST /v1/serve-axon` only for the configured netuid, addresses through `parse_axon`, strict bodies, each write sent once; no weight setting. The TS / Go / Rust clients refuse a non-loopback URL unless told otherwise, check the sidecar runs with the miner's hotkey, parse every answer strictly and fail closed (arbitrary JSON never admits a caller), and apply the staleness stages locally ([sidecar.md](sidecar.md)) | `tests/unit/test_sidecar.py`, `tests/property/test_sidecar_properties.py`; clients: `typescript/test/sidecar.test.ts`, `go/sidecar/sidecar_test.go` (+ `FuzzParseSnapshot`, `FuzzParseDecision`), `rust/tests/sidecar.rs` (+ `cargo fuzz` target `sidecar`); live: `conformance/interop/sidecar_check.py`, `run_matrix.py` |
 
 ## Secure defaults (spec 16.2)
 
@@ -177,7 +177,7 @@ always has an end date. What the **v10** scheme protects, and what it does
 not:
 
 - It binds the receiver (the axon checks against its own hotkey), the sender
-  and the nonce. On TensorWire miners, the kit's own freshness window and
+  and the nonce. On TaoWire miners, the kit's own freshness window and
   replay store apply on top; v10 alone allows future nonces and any nonce for
   a new uuid.
 - It does **not** cover the HTTP method, the path, or any body field outside
@@ -260,15 +260,15 @@ certbot `--reuse-key`) or restart the miner right after renewing.
 `TW_LEGACY_V10_UNTIL` with TLS is warned about at startup: v10 validators
 connect over plain HTTP only. The chain cannot
 remove a key: a miner that turns TLS off while a key is published is refused
-by validators in the HTTPS modes (startup and `tensorwire doctor` warn).
+by validators in the HTTPS modes (startup and `taowire doctor` warn).
 
-Test certificates are generated at test time (`tensorwire.testing.tls`);
-none is committed. The `tensorwire.tls` functions are listed in
+Test certificates are generated at test time (`taowire.testing.tls`);
+none is committed. The `taowire.tls` functions are listed in
 [tls.md](tls.md).
 
 ## The migration tools
 
-`tensorwire migrate scan` and `apply` parse the subnet's code with libcst.
+`taowire migrate scan` and `apply` parse the subnet's code with libcst.
 They never import or run it. They read and write only `.py` files under the
 given directory, never follow or write through symlinks, and never touch
 wallets or `.env` files. `apply` refuses to run on a git tree with

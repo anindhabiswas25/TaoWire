@@ -1,5 +1,5 @@
 // Package btauth implements the btauth/1 signed-request protocol and the
-// twresp/1 signed responses of TensorWire (spec Sections 4, 9.1 and 11.4) for
+// twresp/1 signed responses of TaoWire (spec Sections 4, 9.1 and 11.4) for
 // Bittensor v11 subnets.
 //
 // A miner wraps its protected routes with [Middleware]: it caps the body,

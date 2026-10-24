@@ -21,9 +21,9 @@ from pathlib import Path
 
 import pytest
 
-import tensorwire
+import taowire
 
-PACKAGE = Path(tensorwire.__file__).parent
+PACKAGE = Path(taowire.__file__).parent
 GATEWAY = Path("chain/gateway.py")
 AUTH_ALLOWED = frozenset({"http_auth", "signing", "sp_core"})
 CRYPTO_ALLOWED = AUTH_ALLOWED | {"keyfiles", "wallet"}

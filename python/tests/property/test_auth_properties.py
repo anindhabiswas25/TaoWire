@@ -20,12 +20,12 @@ from bittensor import http_auth
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from tensorwire.auth.nonce_store import MemoryNonceStore
-from tensorwire.auth.verifier import RequestVerifier
-from tensorwire.errors import AuthFailed, TWError
-from tensorwire.miner.pipeline import raw_target
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.keys import dev_key
+from taowire.auth.nonce_store import MemoryNonceStore
+from taowire.auth.verifier import RequestVerifier
+from taowire.errors import AuthFailed, TWError
+from taowire.miner.pipeline import raw_target
+from taowire.testing.clock import FakeClock
+from taowire.testing.keys import dev_key
 
 ALICE = dev_key("alice")
 ALICE_ED = dev_key("alice", "ed25519")

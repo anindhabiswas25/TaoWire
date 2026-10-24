@@ -16,7 +16,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tensorwire/tensorwire/go/btauth"
+	"github.com/anindhabiswas25/TaoWire/go/btauth"
 )
 
 // Public dev keys: //Alice and //Bob (sr25519), //Alice (ed25519), //Dave.

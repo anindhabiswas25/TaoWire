@@ -20,13 +20,13 @@ import httpx
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from tensorwire.config import SidecarSettings
-from tensorwire.errors import InvalidRequest
-from tensorwire.policy.caller import CallerGate, CallerPolicy
-from tensorwire.sidecar import create_app, parse_serve_axon, token_matches
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
+from taowire.config import SidecarSettings
+from taowire.errors import InvalidRequest
+from taowire.policy.caller import CallerGate, CallerPolicy
+from taowire.sidecar import create_app, parse_serve_axon, token_matches
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
 
 TOKEN = "k" * 43
 BOB = dev_key("bob").ss58

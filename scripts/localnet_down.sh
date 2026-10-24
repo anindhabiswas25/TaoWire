@@ -5,11 +5,11 @@
 #   localnet_down.sh --purge   also delete $LOCALNET_DIR (dev wallets, localnet.json, localnet.env)
 #
 # --purge only deletes a directory that localnet_setup.py created (it holds the
-# .tensorwire-localnet marker), so it can never remove real wallets.
+# .taowire-localnet marker), so it can never remove real wallets.
 set -euo pipefail
 
 LOCALNET_CONTAINER="${LOCALNET_CONTAINER:-local_chain}"
-LOCALNET_DIR="${LOCALNET_DIR:-$HOME/.tensorwire/localnet}"
+LOCALNET_DIR="${LOCALNET_DIR:-$HOME/.taowire/localnet}"
 
 purge=0
 case "${1:-}" in
@@ -26,7 +26,7 @@ else
 fi
 
 if [[ "$purge" == 1 && -d "$LOCALNET_DIR" ]]; then
-  if [[ ! -f "$LOCALNET_DIR/.tensorwire-localnet" ]]; then
+  if [[ ! -f "$LOCALNET_DIR/.taowire-localnet" ]]; then
     echo "localnet_down: $LOCALNET_DIR was not created by localnet_setup.py; not deleting" >&2
     exit 1
   fi

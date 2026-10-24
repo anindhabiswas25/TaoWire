@@ -8,7 +8,7 @@ import httpx
 import pytest
 from fastapi import FastAPI, Request
 
-from tensorwire.limits.body import BodySizeLimit
+from taowire.limits.body import BodySizeLimit
 
 LIMIT = 1024
 

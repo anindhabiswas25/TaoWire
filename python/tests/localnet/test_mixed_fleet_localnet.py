@@ -1,17 +1,17 @@
-"""Mixed fleet on localnet (spec 13.8): v10 and TensorWire nodes on one subnet.
+"""Mixed fleet on localnet (spec 13.8): v10 and TaoWire nodes on one subnet.
 
 The fleet is described in
 ``examples/migrations/template-v10-to-v11/mixed-fleet.yml``: a real
 bittensor==10.5.0 miner (Axon + v10 ``serve_axon``) and validator (v10
-metagraph + Dendrite) from ``scripts/legacy_venv.sh``, next to a TensorWire
-miner (subprocess, ``TW_LEGACY_V10_UNTIL`` set) and a TensorWire validator
+metagraph + Dendrite) from ``scripts/legacy_venv.sh``, next to a TaoWire
+miner (subprocess, ``TW_LEGACY_V10_UNTIL`` set) and a TaoWire validator
 (``ValidatorClient`` with the legacy client and ``ProtocolSelector``).
 
 Pass = every cell answers ``requests_per_cell`` template requests, all
-correct; TensorWire → TensorWire answers are twresp/1-verified.
+correct; TaoWire → TaoWire answers are twresp/1-verified.
 
 Run with ``just mixed-fleet`` after ``just localnet-up``. Set
-``TENSORWIRE_MIXED_FLEET_EVIDENCE=<dir>`` to keep the results and node logs.
+``TAOWIRE_MIXED_FLEET_EVIDENCE=<dir>`` to keep the results and node logs.
 """
 
 from __future__ import annotations
@@ -37,9 +37,9 @@ import pytest_asyncio
 import yaml
 from localnet_env import ENDPOINT, Localnet
 
-from tensorwire import crypto
-from tensorwire.chain.gateway import BittensorGateway, NeuronView
-from tensorwire.extensions.legacy_v10.client import LegacyClient, ProtocolSelector
+from taowire import crypto
+from taowire.chain.gateway import BittensorGateway, NeuronView
+from taowire.extensions.legacy_v10.client import LegacyClient, ProtocolSelector
 
 pytestmark = pytest.mark.mixed_fleet
 
@@ -50,16 +50,16 @@ PEER = REPO / "scripts" / "v10_peer.py"
 LEGACY_PY = Path(
     os.environ.get(
         "TW_LEGACY_PYTHON",
-        str(Path.home() / ".tensorwire/venvs/bittensor-10.5.0/bin/python"),
+        str(Path.home() / ".taowire/venvs/bittensor-10.5.0/bin/python"),
     )
 )
 PROTOCOL_TAG = 87
 TIMEOUT_S = 180.0
 
 try:
-    _compat: Any = importlib.import_module("tensorwire.compat.synapse")
-    _validator: Any = importlib.import_module("tensorwire.validator.client")
-    _signer: Any = importlib.import_module("tensorwire.auth.signer")
+    _compat: Any = importlib.import_module("taowire.compat.synapse")
+    _validator: Any = importlib.import_module("taowire.validator.client")
+    _signer: Any = importlib.import_module("taowire.auth.signer")
 except ImportError:
     pytest.skip("needs Engineer A's compat and validator", allow_module_level=True)
 if not LEGACY_PY.exists():
@@ -96,7 +96,7 @@ def until() -> str:
 
 
 def evidence_dir() -> Path | None:
-    value = os.environ.get("TENSORWIRE_MIXED_FLEET_EVIDENCE")
+    value = os.environ.get("TAOWIRE_MIXED_FLEET_EVIDENCE")
     if not value:
         return None
     path = Path(value)
@@ -204,7 +204,7 @@ def _wait_ready(url: str, proc: subprocess.Popen[bytes], log: Path) -> None:
                 return
         time.sleep(0.5)
     tail = log.read_text(errors="replace")[-4000:]
-    raise AssertionError(f"TensorWire miner never became ready at {url}:\n{tail}")
+    raise AssertionError(f"TaoWire miner never became ready at {url}:\n{tail}")
 
 
 @pytest_asyncio.fixture

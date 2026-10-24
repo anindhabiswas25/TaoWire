@@ -7,8 +7,8 @@ import datetime as dt
 from hypothesis import given
 from hypothesis import strategies as st
 
-from tensorwire.migrate import status as rollout
-from tensorwire.observability.metrics import Metrics
+from taowire.migrate import status as rollout
+from taowire.observability.metrics import Metrics
 
 RESULTS = ["ok", "tw.legacy_auth_failed", "tw.handler_error", "tw.timeout"]
 TODAY_NS = int(dt.datetime(2026, 10, 23, tzinfo=dt.timezone.utc).timestamp() * 1e9)

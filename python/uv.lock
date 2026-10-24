@@ -2967,7 +2967,7 @@ wheels = [
 ]
 
 [[package]]
-name = "tensorwire"
+name = "taowire"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },

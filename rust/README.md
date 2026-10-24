@@ -1,7 +1,7 @@
-# tensorwire-btauth (Rust)
+# taowire-btauth (Rust)
 
 btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets: the Rust crate of
-[TensorWire](../README.md) (spec 11.5). Rust ≥ 1.80, `#![forbid(unsafe_code)]`. Not published.
+[TaoWire](../README.md) (spec 11.5). Rust ≥ 1.80, `#![forbid(unsafe_code)]`. Not published.
 
 Features: `axum` (middleware), `client` (reqwest), `redis` (shared replay store), `sidecar` (sidecar client,
 implies `client`). Default: none.
@@ -11,7 +11,7 @@ implies `client`). Default: none.
 ```rust
 use std::{sync::Arc, time::Duration};
 use axum::{body::Bytes, routing::post, Extension, Router};
-use tensorwire_btauth::{axum::{protect, MinerAuth}, Caller, Config, Keypair, MemoryStore, Verifier};
+use taowire_btauth::{axum::{protect, MinerAuth}, Caller, Config, Keypair, MemoryStore, Verifier};
 
 #[tokio::main]
 async fn main() {
@@ -73,7 +73,7 @@ ed25519 uses `verify` (RFC 8032), not `verify_strict`, plus the weak-key refusal
 ```bash
 cd rust
 cargo test --test conformance          # every vector in conformance/vectors (except legacy_v10)
-cargo test --all-features              # + integration tests; TENSORWIRE_TEST_REDIS_URL for Redis
+cargo test --all-features              # + integration tests; TAOWIRE_TEST_REDIS_URL for Redis
 cargo fmt --check && cargo clippy --all-targets --all-features -- -D warnings
 cargo +nightly fuzz run verify -- -max_total_time=300   # also: sse, trailer, sidecar
 cargo audit

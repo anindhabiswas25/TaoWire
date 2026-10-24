@@ -3,12 +3,12 @@
 Source: <https://github.com/macrocosm-os/data-universe> at `bb261aa`, MIT licence,
 `bittensor==10.3.0`. A public open-source subnet standing in for a design partner
 (S7); nobody from the team was involved. The port lives outside this repository
-(`~/Project/tensorwire/.ports/data-universe`, branch `tensorwire-port-2`,
+(`~/Project/taowire/.ports/data-universe`, branch `taowire-port-2`,
 git-ignored): none of the subnet's code is committed here, only these counts and
 the evidence in `reports/phase-4/wp7/` (Phase 3: `reports/phase-3/gate-fix/port-data-universe/`).
 
 **Result: S6 = 24 changed lines** (target ≤ 50, spec 1.5 with D18), counted as
-for the template: `git diff` between the `tensorwire migrate apply` output and
+for the template: `git diff` between the `taowire migrate apply` output and
 the finished port, subnet code only (tests, scripts and docs left out), without
 import lines and removed `# TW-MIGRATE:` markers. Phase 3 measured **91**; the
 difference is `compat.Subtensor` (spec 10b.2.6, D34) and the TWM008 rewrite onto
@@ -68,7 +68,7 @@ they mock v10 objects (`bt.MockSubtensor`, `bt.Metagraph(netuid=1, sync=False)`)
 - Imports: `neurons.miner`, `neurons.validator`, `common.utils`,
   `common.metagraph_syncer`, `dynamic_desirability.{chain_utils,desirability_retrieval,desirability_uploader}`,
   `vali_utils.miner_evaluator` and `upload_utils.s3_uploader` import on
-  bittensor 11.3.0 + TensorWire with the subnet's own requirements.
+  bittensor 11.3.0 + TaoWire with the subnet's own requirements.
 - Their chain code on localnet (`data-universe-chain-check.txt`): the subnet
   owner hotkey (`get_subnet_owner_hotkey` → `query_subtensor`), their
   `ChainPreferenceStore.store_preferences` (a commitment written with the dev
@@ -78,7 +78,7 @@ they mock v10 objects (`bt.MockSubtensor`, `bt.Metagraph(netuid=1, sync=False)`)
   `reports/phase-4/reviews.md`, WP7 finding 2).
 - Their ported miner on localnet (dev `miner_ts`, 127.0.0.4:8097, settings
   from `TW_*`; `data-universe-query.txt`): the kit published the axon, and
-  their `GetMinerIndex` handler answered a TensorWire `compat.Dendrite` signed
+  their `GetMinerIndex` handler answered a TaoWire `compat.Dendrite` signed
   by the dev `validator` hotkey over btauth/1.
 
 **Not run:** the validator end to end, and no mixed fleet for this subnet. The

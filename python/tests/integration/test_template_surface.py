@@ -17,18 +17,18 @@ from typing import Any
 import httpx
 import pytest
 
-from tensorwire.compat import Synapse, TemplateMinerAdapter, TemplateValidatorAdapter
-from tensorwire.compat.neuron import interrupt
-from tensorwire.compat.template_miner import EPOCH_POLL_S
-from tensorwire.config import HostPort, ValidatorSettings
-from tensorwire.miner.app import Miner
-from tensorwire.testing.client import SignedClient
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
-from tensorwire.testing.pytest_plugin import TEST_NETUID
-from tensorwire.testing.transport import AppRouter
+from taowire.compat import Synapse, TemplateMinerAdapter, TemplateValidatorAdapter
+from taowire.compat.neuron import interrupt
+from taowire.compat.template_miner import EPOCH_POLL_S
+from taowire.config import HostPort, ValidatorSettings
+from taowire.miner.app import Miner
+from taowire.testing.client import SignedClient
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
+from taowire.testing.pytest_plugin import TEST_NETUID
+from taowire.testing.transport import AppRouter
 
 ALICE = dev_key("alice")
 BOB = dev_key("bob")
@@ -154,7 +154,7 @@ def _real_ports(kwargs: dict[str, Any]) -> tuple[dict[str, Any], int]:
 def test_miner_with_block_serves_in_the_background(
     tw_miner_kwargs: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr("tensorwire.compat.template_miner.EPOCH_POLL_S", 0.2)
+    monkeypatch.setattr("taowire.compat.template_miner.EPOCH_POLL_S", 0.2)
     kwargs, port = _real_ports(tw_miner_kwargs)
     m = TemplateMiner(miner=Miner(**kwargs))
     with m:
@@ -221,7 +221,7 @@ def test_miner_run_blocks_until_sigterm(tw_miner_kwargs: dict[str, Any]) -> None
 def test_unregistered_miner_refuses_in_the_background(
     tw_miner_kwargs: dict[str, Any], fake_chain: FakeChain
 ) -> None:
-    from tensorwire.errors import StartupError
+    from taowire.errors import StartupError
 
     fake_chain.deregister(TEST_NETUID, BOB.ss58)
     kwargs, _port = _real_ports(tw_miner_kwargs)

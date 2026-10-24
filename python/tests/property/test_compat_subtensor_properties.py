@@ -18,9 +18,9 @@ from typing import Any
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from tensorwire.chain.gateway import REQUIRED_CLIENT_READS, BittensorGateway
-from tensorwire.compat import Subtensor
-from tensorwire.testing.fake_chain import FakeChain
+from taowire.chain.gateway import REQUIRED_CLIENT_READS, BittensorGateway
+from taowire.compat import Subtensor
+from taowire.testing.fake_chain import FakeChain
 
 values = st.recursive(
     st.none() | st.booleans() | st.integers() | st.floats() | st.text() | st.binary(),

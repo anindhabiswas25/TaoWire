@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from tensorwire.compat.config import (
+from taowire.compat.config import (
     V10_GROUPS,
     Config,
     add_v10_args,
@@ -16,8 +16,8 @@ from tensorwire.compat.config import (
     fill_defaults,
     fill_v10_groups,
 )
-from tensorwire.config import MinerSettings, ValidatorSettings
-from tensorwire.testing.pytest_plugin import TWEnv
+from taowire.config import MinerSettings, ValidatorSettings
+from taowire.testing.pytest_plugin import TWEnv
 
 
 def parser_with(*groups: str) -> argparse.ArgumentParser:

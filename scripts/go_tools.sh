@@ -15,7 +15,7 @@
 #   go_tools.sh run TOOL ... run TOOL from .tools/go/bin (the justfile runs `ensure` first)
 #
 # Settings (environment):
-#   TENSORWIRE_GO_SDK   default ~/sdk/go1.26.10
+#   TAOWIRE_GO_SDK   default ~/sdk/go1.26.10
 set -euo pipefail
 export GOTOOLCHAIN=local
 
@@ -24,7 +24,7 @@ STATICCHECK_VERSION="v0.8.2"
 GOVULNCHECK_VERSION="v1.9.0"
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-go_sdk="${TENSORWIRE_GO_SDK:-$HOME/sdk/$GO_VERSION}"
+go_sdk="${TAOWIRE_GO_SDK:-$HOME/sdk/$GO_VERSION}"
 go_bin="$go_sdk/bin/go"
 tools_dir="$repo_dir/.tools/go/bin"
 
@@ -35,13 +35,13 @@ fail() {
 
 check_sdk() {
     if [ ! -x "$go_bin" ]; then
-        fail "project Go SDK not found at $go_sdk (TENSORWIRE_GO_SDK).
+        fail "project Go SDK not found at $go_sdk (TAOWIRE_GO_SDK).
   install it (user-local, D23): go install golang.org/dl/$GO_VERSION@latest && $GO_VERSION download"
     fi
     local found
     found="$("$go_bin" env GOVERSION)"
     if [ "$found" != "$GO_VERSION" ]; then
-        fail "$go_bin is $found, the project pins $GO_VERSION (set TENSORWIRE_GO_SDK to a $GO_VERSION SDK)"
+        fail "$go_bin is $found, the project pins $GO_VERSION (set TAOWIRE_GO_SDK to a $GO_VERSION SDK)"
     fi
 }
 

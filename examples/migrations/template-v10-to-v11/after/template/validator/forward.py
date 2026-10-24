@@ -19,7 +19,7 @@
 
 import asyncio
 import logging
-from tensorwire.compat import axons_from
+from taowire.compat import axons_from
 
 from template.protocol import Dummy
 from template.validator.reward import get_rewards

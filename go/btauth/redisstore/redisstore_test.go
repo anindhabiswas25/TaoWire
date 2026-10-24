@@ -33,12 +33,12 @@ func TestUnreachableRedisIsAnError(t *testing.T) {
 	}
 }
 
-// TestRealRedis runs against TENSORWIRE_TEST_REDIS_URL (the Python suite's
+// TestRealRedis runs against TAOWIRE_TEST_REDIS_URL (the Python suite's
 // variable), e.g. redis://127.0.0.1:6379/15.
 func TestRealRedis(t *testing.T) {
-	url := os.Getenv("TENSORWIRE_TEST_REDIS_URL")
+	url := os.Getenv("TAOWIRE_TEST_REDIS_URL")
 	if url == "" {
-		t.Skip("TENSORWIRE_TEST_REDIS_URL not set")
+		t.Skip("TAOWIRE_TEST_REDIS_URL not set")
 	}
 	opts, err := redis.ParseURL(url)
 	if err != nil {

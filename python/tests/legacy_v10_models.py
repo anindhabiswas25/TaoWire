@@ -2,7 +2,7 @@
 
 The models mirror the ones ``scripts/capture_v10_vectors.py`` captured with
 bittensor 10.5.0, on a plain pydantic base that has the v10 envelope fields
-(the shape ``tensorwire.compat.Synapse`` has). ``legacy_v10`` types Synapses
+(the shape ``taowire.compat.Synapse`` has). ``legacy_v10`` types Synapses
 structurally, so these stand in for ``compat.Synapse`` on ``eng-b/chain``.
 """
 

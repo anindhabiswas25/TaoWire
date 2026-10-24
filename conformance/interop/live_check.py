@@ -16,8 +16,8 @@ fresh signature:
 
 A cell passes when every answer is 200 and its ``twresp/1`` signature
 verifies (checked by the Go/Rust/TypeScript client, or here with
-``tensorwire.extensions.response_sig``). The Python miner is the real kit
-(``tensorwire.Miner`` under uvicorn) on 127.0.0.2 with a FakeChain inside the
+``taowire.extensions.response_sig``). The Python miner is the real kit
+(``taowire.Miner`` under uvicorn) on 127.0.0.2 with a FakeChain inside the
 process; Go, Rust and TypeScript serve on 127.0.0.3. Public dev keys only:
 //Bob is every miner, //Alice the caller. The localnet matrix of spec 13.5 is
 ``run_matrix.py`` (later in Phase 5).
@@ -39,8 +39,8 @@ from typing import Any, Literal
 
 import httpx
 
-from tensorwire.extensions.response_sig import ResponseSignatureError, verify_response
-from tensorwire.testing.keys import dev_key
+from taowire.extensions.response_sig import ResponseSignatureError, verify_response
+from taowire.testing.keys import dev_key
 
 REPO = Path(__file__).resolve().parents[2]
 VECTOR_KEYS = json.loads(
@@ -51,11 +51,11 @@ BOB = VECTOR_KEYS["bob_sr25519"]["ss58"]
 
 MINER_SCRIPT = """
 from pydantic import BaseModel
-from tensorwire import Miner, RouteContext
-from tensorwire.config import MinerSettings
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
+from taowire import Miner, RouteContext
+from taowire.config import MinerSettings
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
 
 bob = dev_key("bob")
 chain = FakeChain(signer_hotkey=bob.ss58)

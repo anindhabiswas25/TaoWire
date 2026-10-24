@@ -1,8 +1,8 @@
 """``conformance/vectors/twresp.json`` against spec 9.1 / 9.2 and ``response_sig``.
 
 Two independent checks: the payloads, digests and signatures are re-derived
-here from the spec text with only ``hashlib`` and ``tensorwire.crypto``; and
-``tensorwire.extensions.response_sig`` (when present) must agree with every
+here from the spec text with only ``hashlib`` and ``taowire.crypto``; and
+``taowire.extensions.response_sig`` (when present) must agree with every
 vector, accept and reject alike.
 """
 
@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from tensorwire import crypto
+from taowire import crypto
 
 PATH = Path(__file__).resolve().parents[3] / "conformance" / "vectors" / "twresp.json"
 DATA: dict[str, Any] = json.loads(PATH.read_text(encoding="utf-8"))
@@ -150,9 +150,9 @@ def test_verify_vectors_follow_the_spec(vector: dict[str, Any]) -> None:
 @pytest.fixture(scope="module")
 def rs() -> Any:
     try:
-        return importlib.import_module("tensorwire.extensions.response_sig")
+        return importlib.import_module("taowire.extensions.response_sig")
     except ImportError:
-        pytest.skip("tensorwire.extensions.response_sig is not in this build")
+        pytest.skip("taowire.extensions.response_sig is not in this build")
 
 
 @pytest.mark.parametrize("vector", BUILDS, ids=lambda v: v["id"])

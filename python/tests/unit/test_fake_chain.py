@@ -3,9 +3,9 @@ from __future__ import annotations
 import pytest
 import pytest_asyncio
 
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import ChainUnavailable, SubnetNotFound, TxOutcome
-from tensorwire.testing.fake_chain import FakeChain
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import ChainUnavailable, SubnetNotFound, TxOutcome
+from taowire.testing.fake_chain import FakeChain
 
 VALIDATOR = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
 MINER = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"

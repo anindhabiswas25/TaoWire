@@ -10,13 +10,13 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from tensorwire.chain.axon import parse_axon
-from tensorwire.chain.gateway import NeuronView
-from tensorwire.crypto import HotkeySigner
-from tensorwire.extensions.response_sig import sign_response
-from tensorwire.observability.metrics import Metrics
-from tensorwire.testing.keys import dev_key
-from tensorwire.validator.client import ValidatorClient, check_scheme_policy
+from taowire.chain.axon import parse_axon
+from taowire.chain.gateway import NeuronView
+from taowire.crypto import HotkeySigner
+from taowire.extensions.response_sig import sign_response
+from taowire.observability.metrics import Metrics
+from taowire.testing.keys import dev_key
+from taowire.validator.client import ValidatorClient, check_scheme_policy
 
 MINER = dev_key("bob")
 NEURON = NeuronView(

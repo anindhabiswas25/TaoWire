@@ -18,19 +18,19 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from tensorwire.chain.gateway import NeuronView
-from tensorwire.config import MinerSettings
-from tensorwire.extensions.response_sig import HEADER_HOTKEY
-from tensorwire.extensions.streaming import StreamingReply
-from tensorwire.miner.app import Miner
-from tensorwire.miner.routes import RouteContext
-from tensorwire.observability.metrics import Metrics
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.pytest_plugin import MINER_KEY, TEST_NETUID
-from tensorwire.testing.transport import AppRouter
-from tensorwire.validator.client import MinerResult, ValidatorClient
+from taowire.chain.gateway import NeuronView
+from taowire.config import MinerSettings
+from taowire.extensions.response_sig import HEADER_HOTKEY
+from taowire.extensions.streaming import StreamingReply
+from taowire.miner.app import Miner
+from taowire.miner.routes import RouteContext
+from taowire.observability.metrics import Metrics
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.pytest_plugin import MINER_KEY, TEST_NETUID
+from taowire.testing.transport import AppRouter
+from taowire.validator.client import MinerResult, ValidatorClient
 
 pytestmark = pytest.mark.asyncio
 

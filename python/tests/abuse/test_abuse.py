@@ -2,7 +2,7 @@
 
 Every test runs an attack on loopback while ``alice`` (a permitted
 validator, another source address) keeps querying, and asserts she is
-still served. With ``TENSORWIRE_TEST_REDIS_URL`` set the miner runs two
+still served. With ``TAOWIRE_TEST_REDIS_URL`` set the miner runs two
 workers on Redis (shared replay store and limits); otherwise one worker.
 ``just abuse`` always uses Redis.
 
@@ -11,7 +11,7 @@ about 7,000 req/s on one core of the reference machine, and the rest queue
 up in front of alice (recorded in ``docs/benchmarks.md``), so that test is
 skipped without Redis rather than weakened.
 
-Set ``TENSORWIRE_ABUSE_REPORT=<file>`` to record the measured numbers.
+Set ``TAOWIRE_ABUSE_REPORT=<file>`` to record the measured numbers.
 """
 
 from __future__ import annotations
@@ -39,11 +39,11 @@ from abuse_tools import (
     write_evidence,
 )
 
-from tensorwire.testing.keys import dev_key
+from taowire.testing.keys import dev_key
 
 pytestmark = pytest.mark.abuse
 
-REDIS = os.environ.get("TENSORWIRE_TEST_REDIS_URL")
+REDIS = os.environ.get("TAOWIRE_TEST_REDIS_URL")
 
 
 def fleet() -> dict[str, str]:
@@ -88,7 +88,7 @@ def assert_served(legit: Any, minimum: int) -> None:
 
 @pytest.mark.skipif(
     REDIS is None,
-    reason="10k req/s needs the 2-worker fleet (TENSORWIRE_TEST_REDIS_URL); "
+    reason="10k req/s needs the 2-worker fleet (TAOWIRE_TEST_REDIS_URL); "
     "one worker refuses ~7k req/s, see docs/benchmarks.md",
 )
 async def test_invalid_signature_flood(tmp_path: Path) -> None:

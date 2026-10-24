@@ -17,7 +17,7 @@ import {
     statusOf,
     TokenBuckets,
     verifySignature,
-} from "@tensorwire/btauth";
+} from "@taowire/btauth";
 import { headerMap } from "../src/headers.js";
 import { devKeys, keypair } from "./helpers.js";
 

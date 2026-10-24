@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import fc from "fast-check";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { TWError, initCrypto } from "@tensorwire/btauth";
+import { TWError, initCrypto } from "@taowire/btauth";
 import {
     CallerPolicy,
     SidecarChainError,
@@ -20,7 +20,7 @@ import {
     parseHealth,
     parseSnapshot,
     readTokenFile,
-} from "@tensorwire/btauth/sidecar";
+} from "@taowire/btauth/sidecar";
 import { devKeys } from "./helpers.js";
 
 beforeAll(initCrypto);

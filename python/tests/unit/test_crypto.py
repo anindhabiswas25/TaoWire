@@ -7,7 +7,7 @@ import pytest
 from bittensor import http_auth
 from bittensor.signing import Signer
 
-from tensorwire import crypto
+from taowire import crypto
 
 ALICE = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
 ALICE_PUBKEY = bytes.fromhex(

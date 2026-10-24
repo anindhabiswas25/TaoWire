@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Renamed
+
+- The project is now **TaoWire** (spec v1.10, D46): the Python distribution and import package
+  `taowire` (CLI `taowire`, state directory `~/.taowire`), the npm package `@taowire/btauth`, the
+  Rust crate `taowire-btauth` and the Go module `github.com/anindhabiswas25/TaoWire/go`. Nothing
+  was published under the old name, so there is no alias. Wire and operator names are unchanged:
+  `TW_*` settings, `tw.*` error codes, `twresp/1`, `X-TW-Resp-*`, `tw-end`, `tw_*` metrics, `TWM*`
+  rule ids and the btauth/1 headers. Entries below that were written before the rename use the old
+  name, TensorWire (`tensorwire`).
+
 ### Added
 
 - Repository skeleton, `justfile` quality gates, ruff / mypy `--strict` / import-linter rules

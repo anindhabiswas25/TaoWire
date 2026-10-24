@@ -1,10 +1,10 @@
 # Rolling out a migration: the subnet owner's runbook
 
-How to move a live v10 subnet to TensorWire without a flag day: old and new
+How to move a live v10 subnet to TaoWire without a flag day: old and new
 nodes keep working together (the legacy bridge, spec 8.11) while you move
 through five stages. Each stage has an entry check, an exit check and a
 rollback. You decide when to move on; the kit gives you the numbers
-(`tensorwire migrate status`).
+(`taowire migrate status`).
 
 Rules for every stage:
 
@@ -20,14 +20,14 @@ Rules for every stage:
 - Miners that never upgrade are simply scored as failures once stage 4 ends.
 
 This runbook was walked end to end on a localnet mixed fleet (v10 nodes on
-`bittensor==10.5.0`, TensorWire nodes from the ported template), including
+`bittensor==10.5.0`, TaoWire nodes from the ported template), including
 every rollback: 72 of 72 checks passed (Engineer B, `reports/phase-3/b/rollout/`).
 The numbers quoted below are from that walk.
 
-## The numbers: `tensorwire migrate status`
+## The numbers: `taowire migrate status`
 
 ```bash
-tensorwire migrate status \
+taowire migrate status \
   --metrics-url http://127.0.0.1:9102/metrics \   # a validator's TW_METRICS_BIND
   --metrics-url http://127.0.0.1:9101/metrics \   # a miner's
   [--min-btauth-share 0.95] [--format json]
@@ -44,7 +44,7 @@ tensorwire migrate status \
 Exit status: 0; 1 when `--min-btauth-share` is given and not met; 2 when a
 source cannot be read. Save the raw text to re-check later or to keep as
 evidence: `curl -s http://127.0.0.1:9102/metrics > stage2-validator.prom`,
-then `tensorwire migrate status --metrics-file stage2-validator.prom`.
+then `taowire migrate status --metrics-file stage2-validator.prom`.
 
 Validators also log one `round ok` line per round with `n_queried`, `n_ok`,
 `n_btauth` and `n_v10`.
@@ -61,11 +61,11 @@ rollback use them.
 
 <a id="required_hash_fields"></a>
 
-- Port the code: `tensorwire migrate scan .`, `tensorwire migrate apply .`
+- Port the code: `taowire migrate scan .`, `taowire migrate apply .`
   (on a clean git tree), then fix the `# TW-MIGRATE:` items by hand
   (`docs/migration-from-v10.md`).
 - Run the mixed fleet on localnet (spec 13.8): `just mixed-fleet`. All four
-  cells (v10 or TensorWire validator × v10 or TensorWire miner) must be
+  cells (v10 or TaoWire validator × v10 or TaoWire miner) must be
   green. Use the `testnet` image tag of the localnet chain.
 - **Do not change a Synapse's `required_hash_fields` in this release**
   (D28). `scan` reports Synapses with empty or partial hash fields (TWM100,
@@ -93,7 +93,7 @@ TW_WEIGHTS_VERSION_KEY=1                        # higher than the v10 key (0)
 TW_METRICS_BIND=127.0.0.1:9102
 ```
 
-Upgraded validators reach v10 and TensorWire miners alike. They try
+Upgraded validators reach v10 and TaoWire miners alike. They try
 btauth/1, and a v10 Axon's answer (HTTP 500 with `bt_header_axon_status_code`)
 switches that miner to v10 for the same query. Validators must use sr25519
 hotkeys for `auto`.
@@ -122,7 +122,7 @@ until the end date.
   btauth/1:
 
   ```bash
-  tensorwire migrate status --metrics-url http://<validator>:9102/metrics \
+  taowire migrate status --metrics-url http://<validator>:9102/metrics \
     --min-btauth-share 0.95; echo $?   # 0 = met
   ```
 
@@ -156,7 +156,7 @@ is part of every tempo too.
 - **Tell straggling validators.** A v10 validator's weight commit is still
   **accepted** ("Success", and its `LastUpdate` moves), but its reveal is
   dropped without an error. They will not notice on their own.
-- **TensorWire validators with a stale key are stopped at commit time
+- **TaoWire validators with a stale key are stopped at commit time
   (D38).** Before every commit the kit reads `WeightsVersionKey`; when
   `TW_WEIGHTS_VERSION_KEY` is lower it commits nothing, logs
   `weights_version_key_stale` at ERROR with both keys, counts
@@ -167,7 +167,7 @@ is part of every tempo too.
   apart against the miners' metrics:
 
   ```bash
-  tensorwire migrate status --metrics-url http://<miner>:9101/metrics --format json
+  taowire migrate status --metrics-url http://<miner>:9101/metrics --format json
   # inbound_v10_total unchanged between the two reads
   ```
 

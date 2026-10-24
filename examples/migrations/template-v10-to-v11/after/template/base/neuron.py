@@ -20,7 +20,7 @@ import copy
 import logging
 from abc import ABC, abstractmethod
 
-from tensorwire.compat import Synapse
+from taowire.compat import Synapse
 
 from template.utils.config import check_config, add_args, config
 from template import __spec_version__ as spec_version
@@ -30,7 +30,7 @@ class BaseNeuron(ABC):
     """
     Base class for Bittensor miners. This class is abstract and should be inherited by a subclass. It contains the core logic for all neurons; validators and miners.
 
-    On TensorWire the kit loads the hotkey (never the coldkey), connects to the
+    On TaoWire the kit loads the hotkey (never the coldkey), connects to the
     chain, keeps the metagraph fresh, checks registration and publishes the
     axon; settings come from TW_* variables. This class keeps the template's
     own config (neuron.*, blacklist.*).

@@ -12,10 +12,10 @@ from typing import Any
 
 import pytest
 
-from tensorwire.compat import Metagraph, Subtensor
-from tensorwire.compat.subtensor import V10_WRITES
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
+from taowire.compat import Metagraph, Subtensor
+from taowire.compat.subtensor import V10_WRITES
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
 
 NETUID = 3
 BOB = dev_key("bob")

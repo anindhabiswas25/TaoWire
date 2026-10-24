@@ -9,12 +9,12 @@
 #   legacy_venv.sh --relock  regenerate scripts/legacy_v10.requirements.txt
 #
 # Settings (environment):
-#   LEGACY_VENV_DIR   default ~/.tensorwire/venvs/bittensor-10.5.0
+#   LEGACY_VENV_DIR   default ~/.taowire/venvs/bittensor-10.5.0
 #   LEGACY_PYTHON     interpreter version for the venv, default 3.12
 set -euo pipefail
 
 LEGACY_VERSION="10.5.0"
-LEGACY_VENV_DIR="${LEGACY_VENV_DIR:-$HOME/.tensorwire/venvs/bittensor-$LEGACY_VERSION}"
+LEGACY_VENV_DIR="${LEGACY_VENV_DIR:-$HOME/.taowire/venvs/bittensor-$LEGACY_VERSION}"
 LEGACY_PYTHON="${LEGACY_PYTHON:-3.12}"
 
 scripts_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -5,7 +5,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use tensorwire_btauth::sidecar::{
+use taowire_btauth::sidecar::{
     parse_decision, parse_health, parse_snapshot, CallerPolicy, Decision,
 };
 

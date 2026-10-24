@@ -37,8 +37,8 @@ another validator's).
 5. On by default on both sides (`TW_SIGN_RESPONSES=1`,
    `TW_VERIFY_RESPONSES=1`); turning either off is a weakening setting
    (logged at WARNING, `tw_unsafe_settings_active`).
-6. Implementation: `tensorwire.extensions.response_sig` (`response_payload`,
-   `sign_response`, `verify_response`), using `tensorwire.crypto` only.
+6. Implementation: `taowire.extensions.response_sig` (`response_payload`,
+   `sign_response`, `verify_response`), using `taowire.crypto` only.
    Cross-language vectors: `conformance/vectors/twresp.json` (Engineer B).
 
 ## Consequences

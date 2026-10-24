@@ -6,7 +6,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from tensorwire.chain.axon import Endpoint, parse_axon
+from taowire.chain.axon import Endpoint, parse_axon
 
 
 @pytest.mark.parametrize(

@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from tensorwire.compat.stream import Frame, StreamContent, StreamResponse, frames
+from taowire.compat.stream import Frame, StreamContent, StreamResponse, frames
 
 pytestmark = pytest.mark.asyncio
 

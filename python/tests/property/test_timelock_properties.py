@@ -26,10 +26,10 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pydantic import BaseModel
 
-from tensorwire.chain.gateway import BittensorGateway, TimelockMalformed
-from tensorwire.extensions.timelock import Timelock, parse_reveal_in
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.validator.client import MinerResult
+from taowire.chain.gateway import BittensorGateway, TimelockMalformed
+from taowire.extensions.timelock import Timelock, parse_reveal_in
+from taowire.testing.fake_chain import FakeChain
+from taowire.validator.client import MinerResult
 
 GATEWAY = BittensorGateway("local")
 

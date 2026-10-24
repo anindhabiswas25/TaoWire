@@ -15,15 +15,15 @@ import anyio
 import pytest
 import structlog.testing
 
-from tensorwire.chain.gateway import ChainUnavailable, TxOutcome
-from tensorwire.config import MinerSettings
-from tensorwire.errors import ConfigError, StartupError
-from tensorwire.miner.app import Miner
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.pytest_plugin import MINER_KEY, TEST_NETUID, TWEnv
-from tensorwire.testing.tls import TestCertificate, make_certificate
-from tensorwire.tls import load_published_certificate
+from taowire.chain.gateway import ChainUnavailable, TxOutcome
+from taowire.config import MinerSettings
+from taowire.errors import ConfigError, StartupError
+from taowire.miner.app import Miner
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.pytest_plugin import MINER_KEY, TEST_NETUID, TWEnv
+from taowire.testing.tls import TestCertificate, make_certificate
+from taowire.tls import load_published_certificate
 
 pytestmark = pytest.mark.asyncio
 

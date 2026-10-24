@@ -8,15 +8,15 @@ from pathlib import Path
 import pytest
 from bittensor import sp_core
 
-from tensorwire.auth.keys import (
+from taowire.auth.keys import (
     ColdkeyState,
     coldkey_path,
     coldkey_state,
     hotkey_path,
     load_hotkey,
 )
-from tensorwire.errors import StartupError
-from tensorwire.testing.keys import dev_key
+from taowire.errors import StartupError
+from taowire.testing.keys import dev_key
 
 ALICE = dev_key("alice").keypair
 

@@ -29,8 +29,8 @@ import {
     responsePayload,
     signResponse,
     signatureHex,
-} from "@tensorwire/btauth";
-import { type AbortReason, type StreamReplyOptions, btauth, streamReply } from "@tensorwire/btauth/fastify";
+} from "@taowire/btauth";
+import { type AbortReason, type StreamReplyOptions, btauth, streamReply } from "@taowire/btauth/fastify";
 import { keypair } from "./helpers.js";
 
 beforeAll(initCrypto);

@@ -1,6 +1,6 @@
-// Package sidecar is the Go client of the TensorWire sidecar (spec 11.6): a
+// Package sidecar is the Go client of the TaoWire sidecar (spec 11.6): a
 // Go miner gets its caller policy and its chain writes from the Python
-// sidecar (`tensorwire sidecar`, loopback only, bearer token).
+// sidecar (`taowire sidecar`, loopback only, bearer token).
 //
 //	sc, err := sidecar.New(sidecar.Config{NetUID: 2, TokenFile: path, ExpectedHotkey: key.SS58()})
 //	if err := sc.Start(ctx); err != nil { ... } // first metagraph, then a refresh every 60 s
@@ -35,7 +35,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/tensorwire/tensorwire/go/btauth"
+	"github.com/anindhabiswas25/TaoWire/go/btauth"
 )
 
 // Defaults and bounds (spec 11.6, 8.5.1).

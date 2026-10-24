@@ -18,7 +18,7 @@
 # DEALINGS IN THE SOFTWARE.
 
 import typing
-from tensorwire.compat import Synapse
+from taowire.compat import Synapse
 
 # TODO(developer): Rewrite with your protocol definition.
 

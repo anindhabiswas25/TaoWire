@@ -1,17 +1,17 @@
-# Deploying TensorWire
+# Deploying TaoWire
 
-Reference files for running a TensorWire miner, validator or sidecar (spec 5.5,
+Reference files for running a TaoWire miner, validator or sidecar (spec 5.5,
 15.3, 16.4). Pick one of the following: container images, the localnet compose
 stack, or systemd units on a plain host.
 
 | Path | What it is |
 |---|---|
 | `docker/miner.Dockerfile`, `docker/validator.Dockerfile` | Kit + one subnet package, run as uid 10001 |
-| `docker/sidecar.Dockerfile` | `tensorwire sidecar` for non-Python miners (the command ships in Phase 5) |
+| `docker/sidecar.Dockerfile` | `taowire sidecar` for non-Python miners (the command ships in Phase 5) |
 | `docker/healthcheck.py` | Image `HEALTHCHECK`: `GET /healthz` on the port the process really uses |
 | `compose/localnet.yml` | Chain + Redis + miner + validator on a local chain (dev keys only) |
 | `compose/testnet-node.yml` | Your own testnet lite node for a validator host (never started by tests) |
-| `systemd/tensorwire-{miner,validator,sidecar}.service` | Hardened units for a plain Linux host |
+| `systemd/taowire-{miner,validator,sidecar}.service` | Hardened units for a plain Linux host |
 | `proxy/Caddyfile`, `proxy/nginx.conf` | TLS at a reverse proxy in front of a miner (spec 16.3); pass the request target and body unchanged |
 
 ## Keys: what goes where
@@ -27,13 +27,13 @@ refuses to start when it finds a coldkey next to the hotkey
 
 - Directories `0700`, hotkey file `0600`, owned by the user that runs the process.
 - Images contain no wallet at all. Mount the single hotkey file **read-only**:
-  `-v /srv/keys/miner/hotkeys/default:/run/tensorwire/wallets/miner/hotkeys/default:ro`
-  (`TW_WALLET_PATH=/run/tensorwire/wallets` is set in the image).
-- systemd units read the hotkey from `/etc/tensorwire/wallets/...`, which
+  `-v /srv/keys/miner/hotkeys/default:/run/taowire/wallets/miner/hotkeys/default:ro`
+  (`TW_WALLET_PATH=/run/taowire/wallets` is set in the image).
+- systemd units read the hotkey from `/etc/taowire/wallets/...`, which
   `ProtectSystem=strict` keeps read-only for the service.
 - Other secrets (`TW_REDIS_URL` with a password) come from the environment:
   a secrets manager, `docker run --env-file` with a `0600` file, or the unit's
-  `EnvironmentFile=` (`0640 root:tensorwire`). Never bake them into an image.
+  `EnvironmentFile=` (`0640 root:taowire`). Never bake them into an image.
 
 ## Container images
 
@@ -42,9 +42,9 @@ Build context is the repository root. Base images are pinned by digest (the
 exactly as locked (`uv sync --frozen`).
 
 ```bash
-docker build -f deploy/docker/miner.Dockerfile -t tensorwire-miner .
-docker build -f deploy/docker/validator.Dockerfile -t tensorwire-validator .
-docker build -f deploy/docker/sidecar.Dockerfile -t tensorwire-sidecar .
+docker build -f deploy/docker/miner.Dockerfile -t taowire-miner .
+docker build -f deploy/docker/validator.Dockerfile -t taowire-validator .
+docker build -f deploy/docker/sidecar.Dockerfile -t taowire-sidecar .
 
 # Your own subnet package instead of the text-ops example (its dependencies
 # must already be in python/uv.lock; it is installed with --no-deps):
@@ -62,11 +62,11 @@ Run a miner (production shape):
 ```bash
 docker run -d --name miner --restart unless-stopped \
   --read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges:true \
-  -v miner-state:/var/lib/tensorwire \
-  -v /srv/keys/miner/hotkeys/default:/run/tensorwire/wallets/miner/hotkeys/default:ro \
-  --env-file /etc/tensorwire/miner.env \
+  -v miner-state:/var/lib/taowire \
+  -v /srv/keys/miner/hotkeys/default:/run/taowire/wallets/miner/hotkeys/default:ro \
+  --env-file /etc/taowire/miner.env \
   -p 8091:8091 -p 127.0.0.1:9100:9100 \
-  tensorwire-miner
+  taowire-miner
 ```
 
 with `TW_METRICS_BIND=0.0.0.0:9100` in `miner.env` so the published loopback
@@ -121,31 +121,31 @@ about 4 vCPU, 16+ GB RAM and fast disk.
 
 ```bash
 # As root, on the server:
-useradd --system --home-dir /var/lib/tensorwire-miner --shell /usr/sbin/nologin tensorwire
+useradd --system --home-dir /var/lib/taowire-miner --shell /usr/sbin/nologin taowire
 
 # The kit and your subnet package, exactly as locked:
-install -d -m 0755 /opt/tensorwire
-UV_PROJECT_ENVIRONMENT=/opt/tensorwire/venv uv sync --frozen --no-dev --no-editable \
-  --extra redis --extra ntp --project /path/to/tensorwire/python
-uv pip install --python /opt/tensorwire/venv/bin/python --no-deps /path/to/your-subnet
+install -d -m 0755 /opt/taowire
+UV_PROJECT_ENVIRONMENT=/opt/taowire/venv uv sync --frozen --no-dev --no-editable \
+  --extra redis --extra ntp --project /path/to/taowire/python
+uv pip install --python /opt/taowire/venv/bin/python --no-deps /path/to/your-subnet
 
 # Settings and the hotkey (copied from the workstation, never the coldkey):
-install -d -m 0750 -o root -g tensorwire /etc/tensorwire
-install -m 0640 -o root -g tensorwire miner.env /etc/tensorwire/miner.env
-install -d -m 0700 -o tensorwire -g tensorwire \
-  /etc/tensorwire/wallets /etc/tensorwire/wallets/miner /etc/tensorwire/wallets/miner/hotkeys
-install -m 0600 -o tensorwire -g tensorwire default /etc/tensorwire/wallets/miner/hotkeys/default
+install -d -m 0750 -o root -g taowire /etc/taowire
+install -m 0640 -o root -g taowire miner.env /etc/taowire/miner.env
+install -d -m 0700 -o taowire -g taowire \
+  /etc/taowire/wallets /etc/taowire/wallets/miner /etc/taowire/wallets/miner/hotkeys
+install -m 0600 -o taowire -g taowire default /etc/taowire/wallets/miner/hotkeys/default
 
-install -m 0644 deploy/systemd/tensorwire-miner.service /etc/systemd/system/
-systemctl daemon-reload && systemctl enable --now tensorwire-miner
-journalctl -u tensorwire-miner -f          # JSON logs
-systemd-analyze security tensorwire-miner  # exposure ~1.2 "OK"
+install -m 0644 deploy/systemd/taowire-miner.service /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now taowire-miner
+journalctl -u taowire-miner -f          # JSON logs
+systemd-analyze security taowire-miner  # exposure ~1.2 "OK"
 ```
 
 `miner.env` holds the `TW_*` settings (`TW_NETWORK`, `TW_NETUID`,
 `TW_WALLET_NAME`, `TW_EXTERNAL_IP`, ...). The unit sets `TW_WALLET_PATH` and
-`TW_STATE_DIR` itself. Change the module (`TENSORWIRE_MODULE`, default
-`text_ops.miner`) or limits with `systemctl edit tensorwire-miner`. Exit codes 2
+`TW_STATE_DIR` itself. Change the module (`TAOWIRE_MODULE`, default
+`text_ops.miner`) or limits with `systemctl edit taowire-miner`. Exit codes 2
 (invalid settings) and 3 (hotkey not registered) are not restarted. Fix the
 cause, then `systemctl restart`.
 
@@ -163,7 +163,7 @@ unit with a drop-in, not in the shipped file.
 
 The kit cannot enforce these. Check them per host.
 
-- [ ] Processes run as a dedicated non-root user (images: uid 10001; systemd: `tensorwire`).
+- [ ] Processes run as a dedicated non-root user (images: uid 10001; systemd: `taowire`).
 - [ ] Wallet directories `0700`, hotkey files `0600`; only the hotkey is on the server.
 - [ ] Secrets come from a secrets manager or environment injection, never from the image or the repo.
 - [ ] Automatic security updates on (`unattended-upgrades` or your distribution's equivalent).

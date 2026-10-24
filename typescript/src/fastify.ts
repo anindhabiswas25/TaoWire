@@ -1,5 +1,5 @@
 /**
- * Fastify adapter (spec 11.3): `@tensorwire/btauth/fastify`.
+ * Fastify adapter (spec 11.3): `@taowire/btauth/fastify`.
  *
  * ```ts
  * await app.register(btauth, {

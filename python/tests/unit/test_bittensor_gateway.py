@@ -19,9 +19,9 @@ import bittensor as bt
 import pytest
 from bittensor.result import ExtrinsicResult
 
-from tensorwire.chain import gateway as gateway_module
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import (
+from taowire.chain import gateway as gateway_module
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import (
     BACKOFF_MAX_S,
     RESIGN_ERROR_NAMES,
     BittensorGateway,
@@ -681,7 +681,7 @@ async def test_serve_axon_success_and_log(
     world: World, sleeps: list[float], caplog: pytest.LogCaptureFixture
 ) -> None:
     gw = await _connected(world, sleeps)
-    with caplog.at_level(logging.INFO, logger="tensorwire.chain"):
+    with caplog.at_level(logging.INFO, logger="taowire.chain"):
         outcome = await gw.serve_axon(
             NETUID, "203.0.113.7", 8091, tls_cert_hex=None, protocol_tag=87
         )

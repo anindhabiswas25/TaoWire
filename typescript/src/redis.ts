@@ -1,5 +1,5 @@
 /**
- * A Redis-backed replay store (`@tensorwire/btauth/redis`) for miners that
+ * A Redis-backed replay store (`@taowire/btauth/redis`) for miners that
  * run more than one process or host for one hotkey.
  *
  * @module

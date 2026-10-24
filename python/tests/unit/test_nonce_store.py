@@ -9,9 +9,9 @@ import pytest
 from bittensor import http_auth
 from bittensor.keyfiles import Keypair
 
-from tensorwire.auth.nonce_store import MemoryNonceStore, NonceStore, RedisNonceStore
-from tensorwire.auth.signer import RequestSigner
-from tensorwire.errors import ReplayStoreUnavailable
+from taowire.auth.nonce_store import MemoryNonceStore, NonceStore, RedisNonceStore
+from taowire.auth.signer import RequestSigner
+from taowire.errors import ReplayStoreUnavailable
 
 
 class FakeClock:
@@ -180,7 +180,7 @@ def test_redis_from_url_uses_short_timeouts() -> None:
 
 def test_redis_extra_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "redis", None)
-    with pytest.raises(RuntimeError, match=r"tensorwire\[redis\]"):
+    with pytest.raises(RuntimeError, match=r"taowire\[redis\]"):
         RedisNonceStore("redis://x")
 
 

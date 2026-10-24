@@ -24,19 +24,19 @@ import httpx
 import pytest
 from abuse_tools import free_port, legit_validator, start_miner, write_evidence
 
-from tensorwire.auth.signer import RequestSigner
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import NeuronView
-from tensorwire.extensions.streaming import StreamLimits
-from tensorwire.miner.streaming import MAX_STREAMS_PER_CALLER
-from tensorwire.testing import bench as tb
-from tensorwire.testing.keys import dev_key
-from tensorwire.validator.client import ValidatorClient
+from taowire.auth.signer import RequestSigner
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import NeuronView
+from taowire.extensions.streaming import StreamLimits
+from taowire.miner.streaming import MAX_STREAMS_PER_CALLER
+from taowire.testing import bench as tb
+from taowire.testing.keys import dev_key
+from taowire.validator.client import ValidatorClient
 
 pytestmark = pytest.mark.abuse
 
 HERE = Path(__file__).resolve().parent
-REDIS = os.environ.get("TENSORWIRE_TEST_REDIS_URL")
+REDIS = os.environ.get("TAOWIRE_TEST_REDIS_URL")
 
 
 def neuron(port: int) -> NeuronView:

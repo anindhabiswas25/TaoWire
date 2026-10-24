@@ -17,7 +17,7 @@ import {
     verifyResponse,
     verifyResponseDigest,
     verifySignature,
-} from "@tensorwire/btauth";
+} from "@taowire/btauth";
 import {
     type VerifyVector,
     b64,

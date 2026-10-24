@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start a local subtensor chain and prepare it for TensorWire (spec Section 14).
+# Start a local subtensor chain and prepare it for TaoWire (spec Section 14).
 #
 # Result: a started subnet (netuid 2 on a fresh chain) with a validator that
 # holds a validator permit and four registered miners, plus
@@ -24,7 +24,7 @@
 #                        the chain's 9945 goes to LOCALNET_RPC_PORT + 1. A second
 #                        chain (e.g. 12 s blocks next to the shared fast one) needs
 #                        its own port, LOCALNET_CONTAINER and LOCALNET_DIR.
-#   LOCALNET_DIR         default ~/.tensorwire/localnet (never ~/.bittensor)
+#   LOCALNET_DIR         default ~/.taowire/localnet (never ~/.bittensor)
 #   LOCALNET_PYTHON      Python with bittensor 11.x; default: uv run in ./python
 set -euo pipefail
 
@@ -34,7 +34,7 @@ LOCALNET_FAST_BLOCKS="${LOCALNET_FAST_BLOCKS:-1}"
 LOCALNET_FALLBACK="${LOCALNET_FALLBACK:-1}"
 LOCALNET_FAST_ATTEMPTS="${LOCALNET_FAST_ATTEMPTS:-10}"
 LOCALNET_CONTAINER="${LOCALNET_CONTAINER:-local_chain}"
-LOCALNET_DIR="${LOCALNET_DIR:-$HOME/.tensorwire/localnet}"
+LOCALNET_DIR="${LOCALNET_DIR:-$HOME/.taowire/localnet}"
 LOCALNET_RPC_PORT="${LOCALNET_RPC_PORT:-9944}"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

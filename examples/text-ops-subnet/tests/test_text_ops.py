@@ -1,7 +1,7 @@
-"""text-ops-subnet tests: run in process on TensorWire's FakeChain, no network.
+"""text-ops-subnet tests: run in process on TaoWire's FakeChain, no network.
 
 The ``tw_miner_kwargs``, ``fake_chain`` and ``tw_clock`` fixtures come from
-TensorWire's pytest plugin (installed with ``tensorwire``).
+TaoWire's pytest plugin (installed with ``taowire``).
 """
 
 from __future__ import annotations
@@ -12,14 +12,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from tensorwire import Miner, MinerResult, ValidatorSettings
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
-from tensorwire.testing.pytest_plugin import TEST_NETUID
-from tensorwire.testing.transport import AppRouter
-from tensorwire.validator.loop import ValidatorRunner
+from taowire import Miner, MinerResult, ValidatorSettings
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
+from taowire.testing.pytest_plugin import TEST_NETUID
+from taowire.testing.transport import AppRouter
+from taowire.validator.loop import ValidatorRunner
 
 from text_ops.miner import register
 from text_ops.protocol import (

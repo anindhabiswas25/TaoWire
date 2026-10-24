@@ -34,9 +34,9 @@ import pytest
 from drand_guard import DrandWatch, require_drand_feed
 from localnet_env import ENDPOINT, Localnet
 
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import BittensorGateway
-from tensorwire.validator.weights import WeightDecision, WeightScheduler
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import BittensorGateway
+from taowire.validator.weights import WeightDecision, WeightScheduler
 
 EXAMPLE = Path(__file__).resolve().parents[3] / "examples" / "text-ops-subnet"
 MINER_WALLET = "miner_py"
@@ -122,7 +122,7 @@ def _stop(process: Process) -> None:
 
 @pytest.fixture
 def evidence_dir(tmp_path: Path) -> Path:
-    target = os.environ.get("TENSORWIRE_E2E_EVIDENCE_DIR")
+    target = os.environ.get("TAOWIRE_E2E_EVIDENCE_DIR")
     path = Path(target) if target else tmp_path / "evidence"
     path.mkdir(parents=True, exist_ok=True)
     return path

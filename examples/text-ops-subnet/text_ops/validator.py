@@ -1,7 +1,7 @@
 """The text-ops validator.
 
 Every round it sends one random task to a sample of miners, scores the
-answers (``scoring.py``) and lets TensorWire keep the scores and set
+answers (``scoring.py``) and lets TaoWire keep the scores and set
 weights::
 
     python -m text_ops.validator
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import random
 
-from tensorwire import (
+from taowire import (
     MinerResult,
     SubnetValidator,
     Task,

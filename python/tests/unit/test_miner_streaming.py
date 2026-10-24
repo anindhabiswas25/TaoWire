@@ -10,13 +10,13 @@ import anyio
 import pytest
 import structlog
 
-from tensorwire.auth.verifier import Caller
-from tensorwire.crypto import HotkeySigner
-from tensorwire.errors import RateLimited
-from tensorwire.extensions.streaming import StreamLimits
-from tensorwire.miner.streaming import MAX_STREAMS_PER_CALLER, StreamSlots, open_stream
-from tensorwire.observability.metrics import Metrics
-from tensorwire.testing.keys import dev_key
+from taowire.auth.verifier import Caller
+from taowire.crypto import HotkeySigner
+from taowire.errors import RateLimited
+from taowire.extensions.streaming import StreamLimits
+from taowire.miner.streaming import MAX_STREAMS_PER_CALLER, StreamSlots, open_stream
+from taowire.observability.metrics import Metrics
+from taowire.testing.keys import dev_key
 
 pytestmark = pytest.mark.asyncio
 

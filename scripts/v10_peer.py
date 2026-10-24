@@ -15,7 +15,7 @@ SIGTERM or when stdin closes. ``dendrite`` sends ``--count`` sequential
 line. ``stream-dendrite`` sends the template's ``StreamPrompting``
 (``docs/stream_tutorial``) once with ``streaming=True`` and prints one JSON
 object: the final Synapse's status and how many chunks arrived (spec 10b.3,
-D33: a TensorWire miner refuses v10 streaming).
+D33: a TaoWire miner refuses v10 streaming).
 
 On localnet (mixed fleet, spec 13.8), ``--chain ws://127.0.0.1:9944`` with
 ``--wallet-name``/``--wallet-path`` uses a localnet dev wallet's hotkey:

@@ -4,7 +4,7 @@
     PY=<tree>/python/.venv/bin/python
     "$PY" scripts/rollout_walkthrough.py --tree <tree> --out reports/phase-3/b/rollout
 
-``<tree>`` is a checkout with Engineer A's code merged (``tensorwire migrate
+``<tree>`` is a checkout with Engineer A's code merged (``taowire migrate
 status`` and the ported template in ``examples/migrations/template-v10-to-v11/after/``).
 Run this script with that tree's interpreter. The fleet, on the localnet from
 ``scripts/localnet_up.sh`` (netuid 2, dev wallets):
@@ -56,9 +56,7 @@ import bittensor as bt
 
 REPO = Path(__file__).resolve().parents[1]
 V10_PEER = REPO / "scripts" / "v10_peer.py"
-LEGACY_PY = (
-    Path.home() / ".tensorwire" / "venvs" / "bittensor-10.5.0" / "bin" / "python"
-)
+LEGACY_PY = Path.home() / ".taowire" / "venvs" / "bittensor-10.5.0" / "bin" / "python"
 ENDPOINT = "ws://127.0.0.1:9944"
 NETUID = 2
 SM = "SubtensorModule"
@@ -74,7 +72,7 @@ VALIDATORS: dict[str, dict[str, Any]] = {
     "validator": {"metrics": 9102},
     "owner": {"metrics": 9104},
 }
-#: TW_METAGRAPH_REFRESH_S for the TensorWire nodes (the config minimum).
+#: TW_METAGRAPH_REFRESH_S for the TaoWire nodes (the config minimum).
 REFRESH_S = 10
 #: Validator log event of spec 8.11.3 step 5 (D16).
 TAG_CHANGED = "legacy_v10_protocol_tag_changed"
@@ -429,7 +427,7 @@ def migrate_status(
     tree: Path, out: Path, label: str, ports: list[int], min_share: float | None = None
 ) -> tuple[int, dict[str, Any]]:
     files = scrape(out, label, ports)
-    cmd = [str(tree / "python" / ".venv" / "bin" / "tensorwire"), "migrate", "status"]
+    cmd = [str(tree / "python" / ".venv" / "bin" / "taowire"), "migrate", "status"]
     for f in files:
         cmd += ["--metrics-file", str(f)]
     text = subprocess.run(
@@ -680,7 +678,7 @@ class Walk:
         ok = all(x["ok"] for x in lines) and len(lines) == 3
         record(
             self.stage,
-            f"v10 Dendrite -> TensorWire miner {hotkey}: "
+            f"v10 Dendrite -> TaoWire miner {hotkey}: "
             + ("answered" if want_ok else "refused"),
             ok == want_ok,
             {"status_codes": codes, "summary": out.stdout.strip().splitlines()[-1:]},
@@ -876,7 +874,7 @@ class Walk:
         await self.weights_land(["owner", "validator"])
 
     async def stale_key_is_stopped_at_commit(self, hotkey: str) -> None:
-        """D38: a TensorWire validator with key 0 refuses to commit, says why."""
+        """D38: a TaoWire validator with key 0 refuses to commit, says why."""
         node = self.f.tw_validator(hotkey, "auto", UNTIL28, version_key=0)
         start = await self.chain.block()
         marker = '"event": "weights_version_key_stale"'
@@ -964,9 +962,7 @@ async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--tree", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument(
-        "--state-dir", type=Path, default=Path("~/.tensorwire/localnet")
-    )
+    parser.add_argument("--state-dir", type=Path, default=Path("~/.taowire/localnet"))
     parser.add_argument(
         "--through",
         type=int,

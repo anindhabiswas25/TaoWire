@@ -29,7 +29,7 @@ Probing the Python reference while building `negative.json` showed what matters 
 1. Rust uses `ed25519-dalek` 2 **`verify`**, not `verify_strict` (spec 11.5). Go uses
    `crypto/ed25519.Verify`. Both refuse non-canonical S, so they agree with each other and with the
    Python reference on every vector.
-2. **Every TensorWire verifier refuses weak public keys** as `tw.auth_bad_signature`, as part of step 4,
+2. **Every TaoWire verifier refuses weak public keys** as `tw.auth_bad_signature`, as part of step 4,
    before the replay store is consulted: the sr25519 identity, and ed25519 keys whose point has order
    1, 2, 4 or 8. Python: `crypto.is_weak_public_key` (checked inside `RequestVerifier` after the SDK's
    signature check, through a store wrapper, so the replay store is never written). Go:

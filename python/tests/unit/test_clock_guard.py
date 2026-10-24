@@ -11,8 +11,8 @@ import anyio
 import pytest
 import structlog.testing
 
-from tensorwire.auth import clock as clock_mod
-from tensorwire.auth.clock import ClockGuard, ClockReading, ClockStatus, ntplib_query
+from taowire.auth import clock as clock_mod
+from taowire.auth.clock import ClockGuard, ClockReading, ClockStatus, ntplib_query
 
 
 def fixed(offsets: dict[str, Any]) -> Any:

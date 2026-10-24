@@ -5,7 +5,7 @@
 
 - every vector is re-derived here from the spec text (Section 4, Appendix C,
   Appendix D) with only ``hashlib``, a base58 decoder written here and
-  ``tensorwire.crypto`` for the signature maths;
+  ``taowire.crypto`` for the signature maths;
 - the kit's ``RequestVerifier`` (the Python reference over
   ``bittensor.http_auth``) gives each vector's answer, or the
   ``python_reference`` answer where a vector declares a known divergence.
@@ -22,10 +22,10 @@ from typing import Any
 
 import pytest
 
-from tensorwire import crypto
-from tensorwire.auth.nonce_store import MemoryNonceStore
-from tensorwire.auth.verifier import RequestVerifier
-from tensorwire.errors import AuthFailed
+from taowire import crypto
+from taowire.auth.nonce_store import MemoryNonceStore
+from taowire.auth.verifier import RequestVerifier
+from taowire.errors import AuthFailed
 
 DIR = Path(__file__).resolve().parents[3] / "conformance" / "vectors"
 

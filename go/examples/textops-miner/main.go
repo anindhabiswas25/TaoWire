@@ -1,7 +1,7 @@
 // Command textops-miner is the text-ops example subnet's miner in Go (spec 10,
 // 11.1): the same routes and byte-identical answers as the Python miner in
 // examples/text-ops-subnet, on btauth.Middleware, with caller policy and
-// serve-axon from the TensorWire sidecar (`tensorwire sidecar`, spec 11.6).
+// serve-axon from the TaoWire sidecar (`taowire sidecar`, spec 11.6).
 //
 //	POST /v1/transform         {"text": s, "op": "upper"|"reverse"|"sha256"} -> {"result": ...}
 //	POST /v1/transform/stream  the same, as an SSE stream of {"i": n, "piece": ...} (32 characters each)
@@ -35,10 +35,10 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/anindhabiswas25/TaoWire/go/btauth"
+	"github.com/anindhabiswas25/TaoWire/go/btauth/redisstore"
+	"github.com/anindhabiswas25/TaoWire/go/sidecar"
 	"github.com/redis/go-redis/v9"
-	"github.com/tensorwire/tensorwire/go/btauth"
-	"github.com/tensorwire/tensorwire/go/btauth/redisstore"
-	"github.com/tensorwire/tensorwire/go/sidecar"
 )
 
 // The subnet's contract (examples/text-ops-subnet/text_ops/protocol.py).
@@ -195,7 +195,7 @@ func load() (config, error) {
 	c.externalPort = int(e.num("TW_EXTERNAL_PORT", float64(port)))
 	c.autoServe = e.flag("TW_AUTO_SERVE_AXON", true)
 	c.sidecarURL = "http://127.0.0.1:" + strconv.Itoa(int(e.num("TW_SIDECAR_PORT", 9910)))
-	c.tokenFile = home(e.str("TW_SIDECAR_TOKEN_FILE", filepath.Join(e.str("TW_STATE_DIR", "~/.tensorwire"), "sidecar.token")))
+	c.tokenFile = home(e.str("TW_SIDECAR_TOKEN_FILE", filepath.Join(e.str("TW_STATE_DIR", "~/.taowire"), "sidecar.token")))
 	policy, err := sidecar.NewPolicy(e.flag("TW_REQUIRE_PERMIT", true), e.num("TW_MIN_CALLER_STAKE_TAO", 0), e.list("TW_ALLOW_HOTKEYS"), e.list("TW_DENY_HOTKEYS"))
 	if err != nil {
 		e.missing = append(e.missing, err.Error())

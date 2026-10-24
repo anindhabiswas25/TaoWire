@@ -13,7 +13,7 @@
 # node can sync. Needs ~4 vCPU, 16+ GB RAM and fast disk for the database.
 # Not part of the localnet tests; nothing in this repository starts it.
 
-name: tensorwire-testnet-node
+name: taowire-testnet-node
 
 volumes:
   testnet-lite:

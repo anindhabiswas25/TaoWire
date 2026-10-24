@@ -1,9 +1,9 @@
 """RedisNonceStore against a real Redis (13.2).
 
-Skipped unless ``TENSORWIRE_TEST_REDIS_URL`` is set.
+Skipped unless ``TAOWIRE_TEST_REDIS_URL`` is set.
 
 Engineer B owns the ``tw-redis`` container; point the variable at it, e.g.
-``TENSORWIRE_TEST_REDIS_URL=redis://127.0.0.1:6379/15``.
+``TAOWIRE_TEST_REDIS_URL=redis://127.0.0.1:6379/15``.
 """
 
 from __future__ import annotations
@@ -14,15 +14,15 @@ import uuid
 
 import pytest
 
-from tensorwire.auth.clock import ClockStepGuard
-from tensorwire.auth.nonce_store import RedisNonceStore, StepGuardedNonceStore
-from tensorwire.errors import ReplayStoreUnavailable
+from taowire.auth.clock import ClockStepGuard
+from taowire.auth.nonce_store import RedisNonceStore, StepGuardedNonceStore
+from taowire.errors import ReplayStoreUnavailable
 
-URL = os.environ.get("TENSORWIRE_TEST_REDIS_URL")
+URL = os.environ.get("TAOWIRE_TEST_REDIS_URL")
 
 pytestmark = [
     pytest.mark.redis,
-    pytest.mark.skipif(not URL, reason="TENSORWIRE_TEST_REDIS_URL not set"),
+    pytest.mark.skipif(not URL, reason="TAOWIRE_TEST_REDIS_URL not set"),
 ]
 
 

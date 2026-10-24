@@ -3,7 +3,7 @@
 ``conformance/vectors/legacy_v10.json`` holds bytes captured from a real
 bittensor==10.5.0 Dendrite and Axon. These tests rebuild every derived value
 (body hash, signed messages, signatures) from those bytes using only the
-documented rules and ``tensorwire.crypto`` (the v11 SDK), so the spec text,
+documented rules and ``taowire.crypto`` (the v11 SDK), so the spec text,
 the vectors and the kit's crypto are checked against each other.
 """
 
@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 
-from tensorwire import crypto
+from taowire import crypto
 
 VECTORS_PATH = (
     Path(__file__).resolve().parents[3] / "conformance" / "vectors" / "legacy_v10.json"

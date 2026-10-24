@@ -1,15 +1,15 @@
-# Migrating a v10 subnet to TensorWire
+# Migrating a v10 subnet to TaoWire
 
 For subnets built on `bittensor` 10.x (most are forks of the archived
 template). v11 removed `bt.Synapse`, `bt.axon`, `bt.dendrite` and friends;
-TensorWire gives you the same shapes on top of v11, with signed requests and
+TaoWire gives you the same shapes on top of v11, with signed requests and
 responses, replay protection and caller policy built in, and a bridge so old
 and new nodes keep working together while the subnet migrates.
 
 The path:
 
-1. `tensorwire migrate scan .` lists everything that needs changing.
-2. `tensorwire migrate apply .` makes the mechanical rewrites and marks
+1. `taowire migrate scan .` lists everything that needs changing.
+2. `taowire migrate apply .` makes the mechanical rewrites and marks
    everything else with a `# TW-MIGRATE:` comment.
 3. Fix the marked items by hand. For a template-derived subnet that is mostly
    config and the template's own base classes; the subnet's code changes by
@@ -17,7 +17,7 @@ The path:
    `docs/migrations/`).
 4. Release. Old and new nodes keep talking (the legacy bridge).
 5. Follow the rollout runbook (`docs/migration-rollout.md`) to end the
-   transition; `tensorwire migrate status` gives its numbers.
+   transition; `taowire migrate status` gives its numbers.
 
 New subnets should use the native API (`Miner`, `SubnetValidator`); `compat`
 is for migrating code.
@@ -25,15 +25,15 @@ is for migrating code.
 ## Install
 
 ```bash
-pip install 'tensorwire[migrate]'      # libcst, for `tensorwire migrate`
+pip install 'taowire[migrate]'      # libcst, for `taowire migrate`
 ```
 
-## `tensorwire migrate scan`
+## `taowire migrate scan`
 
 ```bash
-tensorwire migrate scan path/to/subnet              # text
-tensorwire migrate scan path/to/subnet -f md        # Markdown, for the migration PR
-tensorwire migrate scan path/to/subnet -f json      # for tooling
+taowire migrate scan path/to/subnet              # text
+taowire migrate scan path/to/subnet -f md        # Markdown, for the migration PR
+taowire migrate scan path/to/subnet -f json      # for tooling
 ```
 
 It parses the code (it never imports or runs it), skips virtualenvs and
@@ -41,7 +41,7 @@ caches, never follows symlinks out of the repository, and reports each finding
 as `file:line: rule [severity] title`, with what it found and the fix. It says
 at the top when the repository has the template's shape. Severities:
 
-- `auto`: a mechanical rewrite (`tensorwire migrate apply` does these for
+- `auto`: a mechanical rewrite (`taowire migrate apply` does these for
   you);
 - `manual`: needs a person;
 - `risk`: works, but weakens the subnet's security.
@@ -49,12 +49,12 @@ at the top when the repository has the template's shape. Severities:
 Exit status 0 when every finding is `auto`, 1 otherwise (or when a file does
 not parse).
 
-## `tensorwire migrate apply`
+## `taowire migrate apply`
 
 ```bash
 git status                               # apply refuses a dirty tree: commit first
-tensorwire migrate apply path/to/subnet --dry-run   # the unified diff, nothing written
-tensorwire migrate apply path/to/subnet             # rewrite in place
+taowire migrate apply path/to/subnet --dry-run   # the unified diff, nothing written
+taowire migrate apply path/to/subnet             # rewrite in place
 git diff                                 # exactly what apply changed
 ```
 
@@ -65,7 +65,7 @@ helpers, `time.sleep` in coroutines, the template's validator base) and puts a
 needs a person, including any `auto` case it could not rewrite safely.
 `import bittensor as bt` goes once nothing uses `bt` any more. Names it
 inserts never shadow your own (a module with its own `class Miner` gets
-`from tensorwire import Miner as TWMiner`). Running it twice changes nothing.
+`from taowire import Miner as TWMiner`). Running it twice changes nothing.
 It reads and writes only `.py` files, never through symlinks, and never
 touches wallets or `.env` files. Exit status 0; 1 when a file could not be
 parsed or rewritten (that file is named, the others are still done); 2 when
@@ -74,7 +74,7 @@ it refuses to run. Afterwards `migrate scan` shows what is left.
 ## The template's validator base: `TemplateValidatorAdapter`
 
 `apply` replaces the template's `BaseValidatorNeuron` import with
-`tensorwire.compat.TemplateValidatorAdapter` when your
+`taowire.compat.TemplateValidatorAdapter` when your
 `template/base/validator.py` is the stock one (TWM024). The kit then runs
 what that base did by hand: the hotkey (never the coldkey), the chain and
 metagraph, `compat.Dendrite` (with the v10 fallback), the score store, weight
@@ -113,9 +113,9 @@ puts those classes on the kit's adapters and keeps every method you wrote:
   stays where it was.
 
 Your kept methods then run against the template surface the adapters
-provide (`tensorwire.compat.neuron`):
+provide (`taowire.compat.neuron`):
 
-| You use | On TensorWire |
+| You use | On TaoWire |
 |---|---|
 | `self.config` | your `add_args` options, `netuid` from `TW_NETUID`, and v10's `wallet.*` / `subtensor.*` / `logging.*` / `axon.*` groups filled from the `TW_*` settings the kit really uses |
 | `self.wallet.hotkey` | the hotkey (`ss58_address`, `public_key`, `sign()`). `self.wallet.coldkey` raises: the kit never loads it |
@@ -142,7 +142,7 @@ For the stock template, the miner side is the example's
 
 `bt.wallet.add_args(parser)` (and `subtensor`, `axon`, `logging`) becomes
 `add_v10_args(parser, "wallet")`, `bt.config(parser)` becomes
-`tensorwire.compat.config(parser)`, and bare `bt.logging.check_config(c)`
+`taowire.compat.config(parser)`, and bare `bt.logging.check_config(c)`
 statements go. The v10 option names stay, so your code that reads
 `config.wallet.name` or `config.logging.logging_dir` keeps working; their
 defaults come from the `TW_*` variables, and the kit itself only ever reads
@@ -151,10 +151,10 @@ defaults come from the `TW_*` variables, and the kit itself only ever reads
 ## The compat layer
 
 ```python
-from tensorwire.compat import Synapse, StreamingSynapse, Axon, Dendrite, AxonInfo, axons_from, Metagraph, weights
+from taowire.compat import Synapse, StreamingSynapse, Axon, Dendrite, AxonInfo, axons_from, Metagraph, weights
 ```
 
-| v10 | TensorWire |
+| v10 | TaoWire |
 |---|---|
 | `class Dummy(bt.Synapse)` | `class Dummy(Synapse)`: same fields, `deserialize()`, `required_hash_fields`, `dendrite`/`axon` `TerminalInfo`, `is_success` / `is_timeout` / ... |
 | `class StreamPrompting(bt.StreamingSynapse)` | `class StreamPrompting(StreamingSynapse)`: same `process_streaming_response` / `extract_response_json` / `deserialize`; the miner's `forward` still returns `create_streaming_response(token_streamer)` (TWM002, auto) |
@@ -197,7 +197,7 @@ What changes in behaviour:
   reads are **not verified yet**; the final item is your filled Synapse only
   when the trailer verified, otherwise a fresh copy of the request with
   `dendrite.status_code` set (408 timeout, 500 bad signature, ...). Score from
-  the final item. Streaming works TensorWire to TensorWire only (D33): a v10
+  the final item. Streaming works TaoWire to TaoWire only (D33): a v10
   Dendrite gets the v10-shaped `tw.invalid_request` from a streaming route
   (TWM034).
 
@@ -205,11 +205,11 @@ What changes in behaviour:
 ### `compat.Subtensor`
 
 Subnets that call `bt.subtensor` directly (data-universe, for one) keep those
-calls on `tensorwire.compat.Subtensor` (spec 10b.2.6, D34). It is
+calls on `taowire.compat.Subtensor` (spec 10b.2.6, D34). It is
 synchronous, like v10's, and every call goes through the kit's chain gateway:
 
 ```python
-from tensorwire.compat import Subtensor
+from taowire.compat import Subtensor
 
 subtensor = Subtensor(config=config)   # or Subtensor("ws://127.0.0.1:9944")
 mg = subtensor.metagraph(netuid)        # a compat Metagraph
@@ -241,10 +241,10 @@ attribute is an `AttributeError`, never a silent `None`. `close()` (or a
 
 ## Old and new nodes together (the legacy bridge)
 
-- **Miners** on TensorWire answer unmodified v10 validators while
+- **Miners** on TaoWire answer unmodified v10 validators while
   `TW_LEGACY_V10_UNTIL=<date>` is set (routes declared through `compat.Axon`
   accept v10 automatically). See `docs/miner-guide.md`.
-- **Validators** on TensorWire reach unmodified v10 miners with
+- **Validators** on TaoWire reach unmodified v10 miners with
   `TW_LEGACY_V10_CLIENT=auto` and `TW_LEGACY_V10_CLIENT_UNTIL=<date>`. See
   `docs/validator-guide.md`.
 - Both dates are mandatory and at most 180 days ahead: the bridge is for a
@@ -256,7 +256,7 @@ attribute is an `AttributeError`, never a silent `None`. `close()` (or a
 `examples/migrations/template-v10-to-v11/` holds the archived template
 (`before/`, unmodified) and its port (`after/` = `migrate apply` output plus
 `hand-fixes.patch`, checked byte for byte by the golden test), whose test runs
-the template's miner and validator together on TensorWire's FakeChain. What
+the template's miner and validator together on TaoWire's FakeChain. What
 changed and what it took: `docs/migrations/template.md`. A real subnet with a
 customised base: `docs/migrations/llm-detection.md`.
 
@@ -265,22 +265,22 @@ customised base: `docs/migrations/llm-detection.md`.
 <a id="twm001"></a>
 ### TWM001: bt.Synapse / bt.TerminalInfo (`auto`)
 
-From tensorwire.compat import Synapse (TerminalInfo likewise).
+From taowire.compat import Synapse (TerminalInfo likewise).
 
 <a id="twm002"></a>
 ### TWM002: bt.StreamingSynapse (`auto`)
 
-From tensorwire.compat import StreamingSynapse (the kit's signed SSE streaming, spec 9.2; same process_streaming_response / extract_response_json / deserialize). The miner's `forward` still returns `synapse.create_streaming_response(token_streamer)`; `compat.Dendrite(..., streaming=True)` still returns one async generator per axon. What changes: the final item is the filled Synapse only when the stream's signed trailer verified, otherwise a fresh copy of the request with the error status (see [streaming.md](streaming.md)).
+From taowire.compat import StreamingSynapse (the kit's signed SSE streaming, spec 9.2; same process_streaming_response / extract_response_json / deserialize). The miner's `forward` still returns `synapse.create_streaming_response(token_streamer)`; `compat.Dendrite(..., streaming=True)` still returns one async generator per axon. What changes: the final item is the filled Synapse only when the stream's signed trailer verified, otherwise a fresh copy of the request with the error status (see [streaming.md](streaming.md)).
 
 <a id="twm003"></a>
 ### TWM003: bt.axon / bt.Axon (`auto`)
 
-Tensorwire.compat.Axon(miner=Miner.from_env()); settings come from TW_*.
+Taowire.compat.Axon(miner=Miner.from_env()); settings come from TW_*.
 
 <a id="twm004"></a>
 ### TWM004: bt.dendrite / bt.Dendrite (`auto`)
 
-Tensorwire.compat.Dendrite(signer=RequestSigner(wallet)).
+Taowire.compat.Dendrite(signer=RequestSigner(wallet)).
 
 <a id="twm005"></a>
 ### TWM005: bt.Tensor (`manual`)
@@ -306,7 +306,7 @@ Standard logging: bt.logging.info(...) -> logging.info(...); trace -> debug, suc
 <a id="twm008"></a>
 ### TWM008: bt.subtensor(...) / bt.Subtensor(config=...) (`auto`)
 
-Tensorwire.compat.Subtensor: the v10 reads and commitments on the kit's gateway (spec 10b.2.6); or the kit's MetagraphCache.
+Taowire.compat.Subtensor: the v10 reads and commitments on the kit's gateway (spec 10b.2.6); or the kit's MetagraphCache.
 
 `apply` rewrites `bt.subtensor(...)`, `bt.Subtensor(config=...)` and
 `bt.Subtensor` annotations to `compat.Subtensor` ([below](#compatsubtensor)).
@@ -336,12 +336,12 @@ Nothing: the kit publishes the axon at startup (TW_EXTERNAL_IP).
 <a id="twm012"></a>
 ### TWM012: weight_utils helpers (`auto`)
 
-Tensorwire.compat.weights.to_mapping(uids, weights); v11 SetWeights normalises itself.
+Taowire.compat.weights.to_mapping(uids, weights); v11 SetWeights normalises itself.
 
 <a id="twm013"></a>
 ### TWM013: [metagraph.axons[uid] for uid in uids] (`auto`)
 
-Tensorwire.compat.axons_from(metagraph, uids).
+Taowire.compat.axons_from(metagraph, uids).
 
 <a id="twm014"></a>
 ### TWM014: bt.wallet (`manual`)
@@ -351,7 +351,7 @@ Load the hotkey only (TW_WALLET_*); the kit never touches the coldkey.
 <a id="twm015"></a>
 ### TWM015: mock chain objects (`manual`)
 
-Tensorwire.testing.FakeChain and the pytest fixtures.
+Taowire.testing.FakeChain and the pytest fixtures.
 
 <a id="twm016"></a>
 ### TWM016: bt.SubnetsAPI (`manual`)
@@ -381,12 +381,12 @@ Remove it: the kit verifies every request; use the caller policy or blacklist_fn
 <a id="twm021"></a>
 ### TWM021: bt.AxonInfo (`auto`)
 
-Tensorwire.compat.AxonInfo (ip, port, hotkey, is_serving).
+Taowire.compat.AxonInfo (ip, port, hotkey, is_serving).
 
 <a id="twm022"></a>
 ### TWM022: v10 chain info types (`manual`)
 
-NeuronInfo / PrometheusInfo are gone: read NeuronView from the kit's metagraph; the SS58 format is 42 (tensorwire.crypto.SS58_FORMAT).
+NeuronInfo / PrometheusInfo are gone: read NeuronView from the kit's metagraph; the SS58 format is 42 (taowire.crypto.SS58_FORMAT).
 
 <a id="twm023"></a>
 ### TWM023: tensor methods on metagraph values (`auto`)
@@ -396,7 +396,7 @@ Compat.Metagraph values are plain ints and lists: .item() / .tolist() are droppe
 <a id="twm024"></a>
 ### TWM024: template BaseValidatorNeuron (`auto`)
 
-From tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron (the kit runs the loop, scores and weights).
+From taowire.compat import TemplateValidatorAdapter as BaseValidatorNeuron (the kit runs the loop, scores and weights).
 
 <a id="twm025"></a>
 ### TWM025: bt.logging configuration (`manual`)
@@ -406,7 +406,7 @@ Remove it: the kit configures logging (TW_LOG_LEVEL); use the standard logging m
 <a id="twm026"></a>
 ### TWM026: customised template bases (`auto`)
 
-BaseMinerNeuron / BaseValidatorNeuron also subclass tensorwire.compat.TemplateMinerAdapter / TemplateValidatorAdapter; the run loops, axon serving, set_weights and wallet/subtensor set-up go, your own methods stay (spec 10b.2.4).
+BaseMinerNeuron / BaseValidatorNeuron also subclass taowire.compat.TemplateMinerAdapter / TemplateValidatorAdapter; the run loops, axon serving, set_weights and wallet/subtensor set-up go, your own methods stay (spec 10b.2.4).
 
 See [A customised copy of the template's bases](#a-customised-copy-of-the-templates-bases-twm026).
 
@@ -433,7 +433,7 @@ Neither a known v10 symbol nor part of the v11 public API: check it by hand (rem
 <a id="twm031"></a>
 ### TWM031: v10 config calls (`auto`)
 
-bt.<group>.add_args(parser) -> add_v10_args(parser, "<group>"), bt.config(parser) -> tensorwire.compat.config(parser), a bt.Config annotation -> Config, bt.logging.check_config(...) removed: defaults come from TW_* settings.
+bt.<group>.add_args(parser) -> add_v10_args(parser, "<group>"), bt.config(parser) -> taowire.compat.config(parser), a bt.Config annotation -> Config, bt.logging.check_config(...) removed: defaults come from TW_* settings.
 
 See [v10 config calls](#v10-config-calls-twm031). Other shapes (extra arguments, `bt.config` used as a value) stay TWM006.
 
@@ -463,7 +463,7 @@ The v11 replacement named in the finding (stake, transfer and registration are c
 
 `scan` names the replacement in each finding (`add_stake` -> `bt.AddStake`,
 `commit_weights` / `reveal_weights` -> the kit's weight scheduler, ...); the
-same table (`tensorwire.compat.subtensor.V10_WRITES`) is what
+same table (`taowire.compat.subtensor.V10_WRITES`) is what
 `compat.Subtensor` raises `NotImplementedError` with, so code that slips
 past the scan fails loudly instead of doing nothing.
 
@@ -500,7 +500,7 @@ Remove it: unregistered callers are refused by the kit's caller policy.
 <a id="twm034"></a>
 ### TWM034: StreamingSynapse route in a mixed fleet (`risk`)
 
-Streaming works TensorWire to TensorWire only: a v10 Dendrite gets tw.invalid_request from it and a v10 miner cannot stream to a TensorWire validator (D33). Move streaming routes after rollout stage 2, or give v10 peers a non-streaming route until then (`docs/migration-rollout.md`). `scan` flags every `StreamingSynapse` subclass, including subclasses of one defined earlier in the same file; a subclass of a streaming class from another file is not followed, so check those by hand.
+Streaming works TaoWire to TaoWire only: a v10 Dendrite gets tw.invalid_request from it and a v10 miner cannot stream to a TaoWire validator (D33). Move streaming routes after rollout stage 2, or give v10 peers a non-streaming route until then (`docs/migration-rollout.md`). `scan` flags every `StreamingSynapse` subclass, including subclasses of one defined earlier in the same file; a subclass of a streaming class from another file is not followed, so check those by hand.
 
 <a id="twm103"></a>
 ### TWM103: force_validator_permit=False (`risk`)
@@ -508,7 +508,7 @@ Streaming works TensorWire to TensorWire only: a v10 Dendrite gets tw.invalid_re
 Require a permit (TW_REQUIRE_PERMIT=1, the kit default).
 
 The template's own `--blacklist.force_validator_permit` defaults to `False`.
-On TensorWire the kit's caller policy requires a permit before
+On TaoWire the kit's caller policy requires a permit before
 `blacklist_fn` runs (`TW_REQUIRE_PERMIT=1`), so the flag no longer opens
 anything; the finding stays until the flag is removed or defaults to `True`.
 

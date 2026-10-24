@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1.7
-# TensorWire validator image (spec 5.5, 16.4).
+# TaoWire validator image (spec 5.5, 16.4).
 #
 # Same build as miner.Dockerfile; runs the subnet's validator module as a
 # non-root user. State (SQLite scores, hotkey lock) lives in the volume at
-# /var/lib/tensorwire. The image holds no wallet: mount the hotkey file
+# /var/lib/taowire. The image holds no wallet: mount the hotkey file
 # read-only at runtime (see deploy/README.md), never the coldkey.
 #
-#   docker build -f deploy/docker/validator.Dockerfile -t tensorwire-validator .
+#   docker build -f deploy/docker/validator.Dockerfile -t taowire-validator .
 #
 # /healthz, /readyz and /metrics are on TW_METRICS_BIND (kit default
 # 127.0.0.1:9100, which is unreachable from outside a bridge-network
@@ -45,24 +45,24 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM ${PYTHON_IMAGE} AS runtime
 ARG APP_UID=10001
-RUN groupadd --system --gid "${APP_UID}" tensorwire \
+RUN groupadd --system --gid "${APP_UID}" taowire \
  && useradd --system --uid "${APP_UID}" --gid "${APP_UID}" --no-create-home \
-      --home-dir /var/lib/tensorwire --shell /usr/sbin/nologin tensorwire \
- && install -d -o tensorwire -g tensorwire -m 0700 /var/lib/tensorwire \
- && install -d -m 0755 /run/tensorwire/wallets
+      --home-dir /var/lib/taowire --shell /usr/sbin/nologin taowire \
+ && install -d -o taowire -g taowire -m 0700 /var/lib/taowire \
+ && install -d -m 0755 /run/taowire/wallets
 COPY --from=build /opt/venv /opt/venv
-COPY deploy/docker/healthcheck.py /usr/local/lib/tensorwire/healthcheck.py
+COPY deploy/docker/healthcheck.py /usr/local/lib/taowire/healthcheck.py
 ENV PATH=/opt/venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    TW_WALLET_PATH=/run/tensorwire/wallets \
-    TW_STATE_DIR=/var/lib/tensorwire
+    TW_WALLET_PATH=/run/taowire/wallets \
+    TW_STATE_DIR=/var/lib/taowire
 USER ${APP_UID}:${APP_UID}
-WORKDIR /var/lib/tensorwire
-VOLUME ["/var/lib/tensorwire"]
+WORKDIR /var/lib/taowire
+VOLUME ["/var/lib/taowire"]
 EXPOSE 9100
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=3 \
-  CMD ["python", "-I", "/usr/local/lib/tensorwire/healthcheck.py", "validator"]
+  CMD ["python", "-I", "/usr/local/lib/taowire/healthcheck.py", "validator"]
 STOPSIGNAL SIGTERM
 ENTRYPOINT ["python", "-m"]
 CMD ["text_ops.validator"]

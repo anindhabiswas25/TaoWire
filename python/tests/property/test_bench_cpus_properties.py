@@ -1,4 +1,4 @@
-"""``tensorwire bench --miner-cpus`` parsing: a CPU list or a clean error, always."""
+"""``taowire bench --miner-cpus`` parsing: a CPU list or a clean error, always."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import typer
 from hypothesis import given
 from hypothesis import strategies as st
 
-from tensorwire.cli.bench_cmd import parse_cpus
+from taowire.cli.bench_cmd import parse_cpus
 
 ranges = st.lists(
     st.tuples(st.integers(0, 64), st.integers(0, 8)), min_size=1, max_size=6

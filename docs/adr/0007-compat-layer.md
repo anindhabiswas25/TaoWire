@@ -14,7 +14,7 @@ those types. If their shapes survive, a migration is mostly an import change.
 
 ## Decision
 
-1. `tensorwire.compat` provides `Synapse` / `TerminalInfo` (v10 fields,
+1. `taowire.compat` provides `Synapse` / `TerminalInfo` (v10 fields,
    order and defaults, `deserialize()`, `required_hash_fields`, status
    properties), `Axon` (over `Miner`), `Dendrite` (over `ValidatorClient`),
    `AxonInfo` / `axons_from`, a read-only v10-shaped `Metagraph` view, and

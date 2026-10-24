@@ -17,8 +17,8 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from tensorwire.compat import Axon
-from tensorwire.miner.app import Miner
+from taowire.compat import Axon
+from taowire.miner.app import Miner
 
 PROTOCOL = (
     Path(__file__).resolve().parents[3]

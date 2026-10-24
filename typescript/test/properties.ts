@@ -15,7 +15,7 @@ import {
     Verifier,
     decodeSS58,
     verifyResponse,
-} from "@tensorwire/btauth";
+} from "@taowire/btauth";
 import { keypair } from "./helpers.js";
 
 const AUTH_CODES = new Set([

@@ -30,7 +30,6 @@ from pathlib import Path
 from typing import Any
 
 import bittensor as bt
-
 from drand_feed import drand_feed
 
 ROOT_STAKE_TAO = 100.0
@@ -216,9 +215,7 @@ async def probe_drand(endpoint: str) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "--state-dir", type=Path, default=Path("~/.tensorwire/localnet")
-    )
+    parser.add_argument("--state-dir", type=Path, default=Path("~/.taowire/localnet"))
     parser.add_argument("--endpoint", default="ws://127.0.0.1:9944")
     parser.add_argument("--out", type=Path)
     parser.add_argument(

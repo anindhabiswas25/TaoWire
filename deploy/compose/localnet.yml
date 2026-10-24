@@ -1,4 +1,4 @@
-# TensorWire localnet stack (spec 14.2-14.5). LOCALNET ONLY: dev wallets, public seeds.
+# TaoWire localnet stack (spec 14.2-14.5). LOCALNET ONLY: dev wallets, public seeds.
 #
 #   docker compose -f deploy/compose/localnet.yml up -d chain redis
 #   LOCALNET_TAG=devnet@sha256:0dd5335b49ed3a20431dc404ddf375f17d2219094457f00e12c12181959f9345 \
@@ -21,7 +21,7 @@
 # 1000) because localnet_setup.py writes the dev hotkeys 0600 for the user who
 # ran it; production images run as 10001 (deploy/README.md).
 
-name: tensorwire-localnet
+name: taowire-localnet
 
 x-node: &node
   network_mode: host
@@ -31,7 +31,7 @@ x-node: &node
   security_opt: ["no-new-privileges:true"]
   tmpfs:
     - /tmp
-    - /var/lib/tensorwire:uid=${LOCALNET_UID:-1000},gid=${LOCALNET_GID:-1000},mode=0700
+    - /var/lib/taowire:uid=${LOCALNET_UID:-1000},gid=${LOCALNET_GID:-1000},mode=0700
   restart: unless-stopped
   profiles: [nodes]
   depends_on:
@@ -87,7 +87,7 @@ services:
     build:
       context: ../..
       dockerfile: deploy/docker/miner.Dockerfile
-    image: tensorwire-miner:localnet
+    image: taowire-miner:localnet
     environment:
       TW_NETWORK: ws://127.0.0.1:9944
       TW_NETUID: "${LOCALNET_NETUID:-2}"
@@ -100,14 +100,14 @@ services:
       # Shared nonce store (spec 8.4.3); required once TW_WORKERS > 1.
       TW_REDIS_URL: "redis://127.0.0.1:${LOCALNET_REDIS_PORT:-6380}/0"
     volumes:
-      - ${LOCALNET_DIR:-~/.tensorwire/localnet}/wallets/miner_py/hotkeys/default:/run/tensorwire/wallets/miner_py/hotkeys/default:ro
+      - ${LOCALNET_DIR:-~/.taowire/localnet}/wallets/miner_py/hotkeys/default:/run/taowire/wallets/miner_py/hotkeys/default:ro
 
   validator:
     <<: *node
     build:
       context: ../..
       dockerfile: deploy/docker/validator.Dockerfile
-    image: tensorwire-validator:localnet
+    image: taowire-validator:localnet
     environment:
       TW_NETWORK: ws://127.0.0.1:9944
       TW_NETUID: "${LOCALNET_NETUID:-2}"
@@ -119,4 +119,4 @@ services:
       TW_ROUND_INTERVAL_S: "3"
       TW_MIN_WEIGHT_INTERVAL_BLOCKS: "10"
     volumes:
-      - ${LOCALNET_DIR:-~/.tensorwire/localnet}/wallets/validator/hotkeys/default:/run/tensorwire/wallets/validator/hotkeys/default:ro
+      - ${LOCALNET_DIR:-~/.taowire/localnet}/wallets/validator/hotkeys/default:/run/taowire/wallets/validator/hotkeys/default:ro

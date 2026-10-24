@@ -1170,7 +1170,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tensorwire-btauth"
+name = "taowire-btauth"
 version = "0.1.0-dev"
 dependencies = [
  "blake2",
@@ -1187,12 +1187,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "tensorwire-btauth-fuzz"
+name = "taowire-btauth-fuzz"
 version = "0.0.0"
 dependencies = [
  "libfuzzer-sys",
  "serde_json",
- "tensorwire-btauth",
+ "taowire-btauth",
 ]
 
 [[package]]

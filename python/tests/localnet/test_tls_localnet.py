@@ -40,13 +40,13 @@ from test_validator_e2e_localnet import (
     _until,
 )
 
-from tensorwire.auth.signer import RequestSigner
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import BittensorGateway, NeuronView
-from tensorwire.observability.metrics import Metrics
-from tensorwire.testing.tls import TestCertificate, make_certificate
-from tensorwire.tls import load_published_certificate, pinned_context
-from tensorwire.validator.client import MinerResult, SchemePolicy, ValidatorClient
+from taowire.auth.signer import RequestSigner
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import BittensorGateway, NeuronView
+from taowire.observability.metrics import Metrics
+from taowire.testing.tls import TestCertificate, make_certificate
+from taowire.tls import load_published_certificate, pinned_context
+from taowire.validator.client import MinerResult, SchemePolicy, ValidatorClient
 
 HERE = Path(__file__).resolve().parent
 DEPLOY = HERE.parents[2] / "deploy" / "proxy"
@@ -92,7 +92,7 @@ def _tls(cert: TestCertificate) -> dict[str, str]:
 
 @pytest.fixture
 def evidence_dir(tmp_path: Path) -> Path:
-    target = os.environ.get("TENSORWIRE_E2E_EVIDENCE_DIR")
+    target = os.environ.get("TAOWIRE_E2E_EVIDENCE_DIR")
     path = Path(target) if target else tmp_path / "evidence"
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -278,7 +278,7 @@ def _start_caddy(name: str, certs: Path, caddyfile: Path) -> subprocess.Popen[by
     return subprocess.Popen(  # noqa: S603
         [  # noqa: S607
             "docker", "run", "--rm", "--name", name, "--network", "host",
-            "-v", f"{certs}:/etc/tensorwire/proxy:ro",
+            "-v", f"{certs}:/etc/taowire/proxy:ro",
             "-v", f"{caddyfile}:/etc/caddy/Caddyfile:ro",
             CADDY_IMAGE, "caddy", "run", "--config", "/etc/caddy/Caddyfile",
             "--adapter", "caddyfile",

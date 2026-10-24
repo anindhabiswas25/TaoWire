@@ -12,9 +12,9 @@ from typing import Any
 import pytest
 import redis
 
-from tensorwire.errors import ReplayStoreUnavailable
-from tensorwire.limits.ratelimit import PreAuthRateLimit, RateDecision, RedisRateLimiter
-from tensorwire.observability.metrics import Metrics
+from taowire.errors import ReplayStoreUnavailable
+from taowire.limits.ratelimit import PreAuthRateLimit, RateDecision, RedisRateLimiter
+from taowire.observability.metrics import Metrics
 
 
 class FakeScript:
@@ -135,7 +135,7 @@ def test_arguments() -> None:
 
 def test_needs_the_redis_extra(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setitem(sys.modules, "redis", None)
-    with pytest.raises(RuntimeError, match=r"tensorwire\[redis\]"):
+    with pytest.raises(RuntimeError, match=r"taowire\[redis\]"):
         RedisRateLimiter("redis://x", rate=1, burst=1)
 
 

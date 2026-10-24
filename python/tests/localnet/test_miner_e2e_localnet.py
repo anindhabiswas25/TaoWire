@@ -7,7 +7,7 @@ itself (lifecycle 8.7.3 step 7); the test finds it through the chain, like a
 validator would, and calls it with a btauth/1 request signed by the localnet
 validator's hotkey.
 
-Skipped until Engineer A's ``tensorwire.Miner`` is in the tree.
+Skipped until Engineer A's ``taowire.Miner`` is in the tree.
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ from bittensor import http_auth
 from bittensor.keyfiles import Keypair
 from localnet_env import ENDPOINT, Localnet
 
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import BittensorGateway
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import BittensorGateway
 
 ROUTE = "/v1/transform"
 MINER_WALLET = "miner_py"
@@ -41,9 +41,9 @@ EXTERNAL_IP = "127.0.0.2"
 PROTOCOL_TAG = 87
 PUBLISH_TIMEOUT_S = 180.0
 
-if not hasattr(importlib.import_module("tensorwire"), "Miner"):
+if not hasattr(importlib.import_module("taowire"), "Miner"):
     pytest.skip(
-        "tensorwire.Miner is not in this tree yet (Engineer A, Phase 1)",
+        "taowire.Miner is not in this tree yet (Engineer A, Phase 1)",
         allow_module_level=True,
     )
 
@@ -94,7 +94,7 @@ def miner_process(localnet: Localnet, tmp_path: Path) -> Iterator[tuple[int, Pat
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.wait()
-            evidence = os.environ.get("TENSORWIRE_E2E_EVIDENCE")
+            evidence = os.environ.get("TAOWIRE_E2E_EVIDENCE")
             if evidence:
                 Path(evidence).write_bytes(log.read_bytes())
 
@@ -177,7 +177,7 @@ async def test_miner_publishes_axon_and_serves_signed_request(
     await _ready(axon.base_url("http"), log)
     url = axon.base_url("http") + ROUTE
 
-    body = json.dumps({"text": "TensorWire", "op": "sha256"}).encode()
+    body = json.dumps({"text": "TaoWire", "op": "sha256"}).encode()
     validator = localnet.hotkey("validator")
     stranger = await _registered_without_permit(chain, localnet)
     results: dict[str, Any] = {"miner_axon": str(axon), "protocol": protocol}
@@ -186,7 +186,7 @@ async def test_miner_publishes_axon_and_serves_signed_request(
             url, content=body, headers=_signed(validator, miner_hotkey, body)
         )
         assert ok.status_code == 200, ok.text
-        assert ok.json() == {"result": hashlib.sha256(b"TensorWire").hexdigest()}
+        assert ok.json() == {"result": hashlib.sha256(b"TaoWire").hexdigest()}
         results["signed_by_validator"] = ok.status_code
 
         unsigned = await http.post(
@@ -211,7 +211,7 @@ async def test_miner_publishes_axon_and_serves_signed_request(
         assert replay.json()["error"]["code"] == "tw.auth_replayed"
         results["replay"] = replay.status_code
 
-    evidence = os.environ.get("TENSORWIRE_E2E_RESULTS")
+    evidence = os.environ.get("TAOWIRE_E2E_RESULTS")
     if evidence:
         text = json.dumps(results, indent=2) + "\n"
         with contextlib.suppress(OSError):

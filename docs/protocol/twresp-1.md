@@ -1,13 +1,13 @@
 # `twresp/1`: signed responses
 
-btauth/1 authenticates requests only. `twresp/1` is the TensorWire extension
+btauth/1 authenticates requests only. `twresp/1` is the TaoWire extension
 that lets a validator check that an answer came from the miner it queried,
 unchanged, and for **this** request (spec 9.1,
 [ADR-0004](../adr/0004-response-signing.md)). It is versioned separately from
 btauth/1 and uses its own `X-TW-Resp-*` headers, never the reserved
 `X-Bittensor-*` names.
 
-Implementation: `tensorwire.extensions.response_sig` (`response_payload`,
+Implementation: `taowire.extensions.response_sig` (`response_payload`,
 `sign_response`, `verify_response`, `body_digest`). Cross-language vectors:
 [`conformance/vectors/twresp.json`](../../conformance/vectors/twresp.json).
 
@@ -137,12 +137,12 @@ Keys are `//Alice` and `//Bob`, sr25519 and ed25519 (`keys` in the file).
 ## Testing
 
 - `tests/unit/test_twresp_vectors.py`: every vector re-derived from this page
-  with only `hashlib` and `tensorwire.crypto`, and `response_sig` checked
+  with only `hashlib` and `taowire.crypto`, and `response_sig` checked
   against all of them.
 - `tests/unit/test_response_sig.py`: unit tests of the module.
 - `tests/integration/test_miner_requests.py`: the miner signs 200s and
   post-authentication errors and leaves pre-authentication errors unsigned.
-- `tests/localnet/test_mixed_fleet_localnet.py`: TensorWire → TensorWire
+- `tests/localnet/test_mixed_fleet_localnet.py`: TaoWire → TaoWire
   traffic on localnet is `response_verified`.
 
 ## Upstream

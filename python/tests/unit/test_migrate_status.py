@@ -1,4 +1,4 @@
-"""``tensorwire migrate status`` (spec 10b.5): numbers from real metrics text."""
+"""``taowire migrate status`` (spec 10b.5): numbers from real metrics text."""
 
 from __future__ import annotations
 
@@ -14,9 +14,9 @@ import pytest
 from prometheus_client import start_http_server
 from typer.testing import CliRunner
 
-from tensorwire.cli.main import app
-from tensorwire.migrate import status as rollout
-from tensorwire.observability.metrics import Metrics
+from taowire.cli.main import app
+from taowire.migrate import status as rollout
+from taowire.observability.metrics import Metrics
 
 TODAY_NS = int(dt.datetime(2026, 10, 23, 12, tzinfo=dt.timezone.utc).timestamp() * 1e9)
 

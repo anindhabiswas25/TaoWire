@@ -1,4 +1,4 @@
-"""cli/sign_request.py: ``tensorwire sign-request`` (spec 8.14)."""
+"""cli/sign_request.py: ``taowire sign-request`` (spec 8.14)."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import respx
 from bittensor import http_auth, sp_core
 from typer.testing import CliRunner
 
-from tensorwire.cli.main import app
-from tensorwire.testing.keys import dev_key
+from taowire.cli.main import app
+from taowire.testing.keys import dev_key
 
 BOB = dev_key("bob").ss58
 URL = "http://44.1.2.3:8091/v1/echo%20x?q=1"

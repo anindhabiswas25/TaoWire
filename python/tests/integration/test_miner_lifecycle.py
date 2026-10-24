@@ -13,23 +13,23 @@ import structlog.testing
 from bittensor import sp_core
 from pydantic import SecretStr
 
-from tensorwire.auth.nonce_store import (
+from taowire.auth.nonce_store import (
     MemoryNonceStore,
     RedisNonceStore,
     StepGuardedNonceStore,
 )
-from tensorwire.auth.sdk_check import SdkReport
-from tensorwire.chain.gateway import ChainUnavailable, MetagraphView
-from tensorwire.config import MinerSettings
-from tensorwire.errors import StartupError
-from tensorwire.limits.ratelimit import RedisRateLimiter
-from tensorwire.miner import lifecycle as lifecycle_mod
-from tensorwire.miner.app import Miner
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
-from tensorwire.testing.pytest_plugin import TEST_NETUID
+from taowire.auth.sdk_check import SdkReport
+from taowire.chain.gateway import ChainUnavailable, MetagraphView
+from taowire.config import MinerSettings
+from taowire.errors import StartupError
+from taowire.limits.ratelimit import RedisRateLimiter
+from taowire.miner import lifecycle as lifecycle_mod
+from taowire.miner.app import Miner
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
+from taowire.testing.pytest_plugin import TEST_NETUID
 
 pytestmark = pytest.mark.asyncio
 
@@ -360,7 +360,7 @@ async def test_redis_url_without_the_extra_refuses_start(
 ) -> None:
     monkeypatch.setitem(sys.modules, "redis", None)
     miner = build(tw_miner_kwargs, settings={"redis_url": SecretStr("redis://x:1")})
-    with pytest.raises(StartupError, match=r"tensorwire\[redis\]"):
+    with pytest.raises(StartupError, match=r"taowire\[redis\]"):
         await miner.lifecycle.start()
     assert not fake_chain.connected
 

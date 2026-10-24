@@ -4,7 +4,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use tensorwire_btauth::sse::{encode_trailer, parse_trailer};
+use taowire_btauth::sse::{encode_trailer, parse_trailer};
 
 fuzz_target!(|data: &[u8]| {
     if let Ok(t) = parse_trailer(data) {

@@ -13,7 +13,7 @@ from types import ModuleType
 
 import pytest
 
-from tensorwire.migrate.apply import plan_repo
+from taowire.migrate.apply import plan_repo
 
 EXAMPLE = (
     Path(__file__).resolve().parents[3]

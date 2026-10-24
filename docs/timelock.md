@@ -2,7 +2,7 @@
 
 Data sealed to a future drand round can be opened by anyone once that round
 is published (every 3 s, worldwide, the same beacon the chain uses for
-commit-reveal weights), and by nobody before (spec 8.10). TensorWire offers
+commit-reveal weights), and by nobody before (spec 8.10). TaoWire offers
 two opt-in patterns on top of it.
 
 - **Sealed challenge.** The validator seals the task to open in `reveal_in`
@@ -17,7 +17,7 @@ two opt-in patterns on top of it.
 
 ```python
 from pydantic import BaseModel
-from tensorwire import SubnetValidator, Task
+from taowire import SubnetValidator, Task
 
 class Question(BaseModel):
     a: int
@@ -54,7 +54,7 @@ earlier round) when the reveal must be longer.
 ## Miner
 
 ```python
-from tensorwire.extensions.timelock import SealedChallenge, SealedResponse
+from taowire.extensions.timelock import SealedChallenge, SealedResponse
 
 @miner.route("/v1/solve", request=SealedChallenge, response=SealedResponse, timeout_s=60)
 async def solve(challenge: SealedChallenge, ctx) -> SealedResponse:

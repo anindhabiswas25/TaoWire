@@ -1,17 +1,17 @@
-# TensorWire quality gates (spec 6.1). There is no CI yet: every check is one command.
+# TaoWire quality gates (spec 6.1). There is no CI yet: every check is one command.
 # Steps for a language whose directory does not exist yet are skipped with a notice.
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 # Go (spec 11.4, D23): go.mod keeps the `go 1.22` directive for users; development,
 # release builds and `just audit` use a supported toolchain, for this project only. The
-# versions live in scripts/go_tools.sh (SDK default ~/sdk/go1.26.10; TENSORWIRE_GO_SDK
+# versions live in scripts/go_tools.sh (SDK default ~/sdk/go1.26.10; TAOWIRE_GO_SDK
 # overrides it) and the tools from `just go-tools` in .tools/go/bin. Nothing outside the
 # repo changes. G5-3: Go recipes depend on `go-sdk` (the SDK is the pinned Go) or
 # `go-ensure` (also builds missing or stale tools), and tools run through
 # `go_tools.sh run`, so nothing falls back to a host `go`, `staticcheck` or `govulncheck`.
-go_sdk := env_var_or_default("TENSORWIRE_GO_SDK", `./scripts/go_tools.sh sdk-path`)
-export TENSORWIRE_GO_SDK := go_sdk
+go_sdk := env_var_or_default("TAOWIRE_GO_SDK", `./scripts/go_tools.sh sdk-path`)
+export TAOWIRE_GO_SDK := go_sdk
 export PATH := go_sdk + "/bin:" + env_var("PATH")
 export GOTOOLCHAIN := "local"
 
@@ -70,7 +70,7 @@ coverage: setup
 
 # Each language's conformance runner lands in Phase 5; until then the step is skipped.
 conformance: setup go-sdk ts-ensure
-    if [ -f python/src/tensorwire/cli/conformance_cmd.py ]; then cd python && uv run tensorwire conformance --vectors ../conformance/vectors; else echo "skip: tensorwire conformance not present yet (Phase 5)"; fi
+    if [ -f python/src/taowire/cli/conformance_cmd.py ]; then cd python && uv run taowire conformance --vectors ../conformance/vectors; else echo "skip: taowire conformance not present yet (Phase 5)"; fi
     if [ -f typescript/package.json ]; then cd typescript && npm run conformance; else echo "skip: typescript/ not present yet"; fi
     if [ -f go/go.mod ]; then cd go && go test ./btauth -run Conformance; else echo "skip: go/ not present yet"; fi
     if [ -f rust/Cargo.toml ]; then cd rust && cargo test --test conformance; else echo "skip: rust/ not present yet"; fi
@@ -95,16 +95,16 @@ migration-test:
 mixed-fleet:
     ./scripts/legacy_venv.sh && cd python && uv run pytest -m "localnet and mixed_fleet" tests/localnet
 
-# spec 13.6 abuse tests against a real 2-worker miner on Redis (TENSORWIRE_TEST_REDIS_URL, default local DB 15)
-test_redis := env_var_or_default("TENSORWIRE_TEST_REDIS_URL", "redis://127.0.0.1:6379/15")
+# spec 13.6 abuse tests against a real 2-worker miner on Redis (TAOWIRE_TEST_REDIS_URL, default local DB 15)
+test_redis := env_var_or_default("TAOWIRE_TEST_REDIS_URL", "redis://127.0.0.1:6379/15")
 
 abuse: setup
-    cd python && TENSORWIRE_TEST_REDIS_URL={{test_redis}} uv run pytest -m abuse tests/abuse
+    cd python && TAOWIRE_TEST_REDIS_URL={{test_redis}} uv run pytest -m abuse tests/abuse
 
 # spec 13.7 targets; 4 workers need Redis. Found automatically and reached directly
-# (container IP / host network, not docker-proxy; D17); TENSORWIRE_BENCH_REDIS_URL overrides
+# (container IP / host network, not docker-proxy; D17); TAOWIRE_BENCH_REDIS_URL overrides
 bench:
-    cd python && uv run tensorwire bench --duration 60
+    cd python && uv run taowire bench --duration 60
 
 audit: setup go-ensure ts-ensure
     cd python && uv run pip-audit

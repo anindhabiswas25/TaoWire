@@ -1,7 +1,7 @@
 """Fixtures for tests against the Docker localnet (``just localnet-up``).
 
 The chain and dev wallets come from ``scripts/localnet_up.sh``; its state
-directory is ``$LOCALNET_DIR`` (default ``~/.tensorwire/localnet``). Every
+directory is ``$LOCALNET_DIR`` (default ``~/.taowire/localnet``). Every
 test here is marked ``localnet`` and is skipped when that state or the chain
 is missing. Only public dev keys are used; never point this at a real network.
 """
@@ -18,7 +18,7 @@ import pytest
 import pytest_asyncio
 from localnet_env import ENDPOINT, ENDPOINT_ADDR, STATE_DIR, Localnet
 
-from tensorwire.chain.gateway import BittensorGateway
+from taowire.chain.gateway import BittensorGateway
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

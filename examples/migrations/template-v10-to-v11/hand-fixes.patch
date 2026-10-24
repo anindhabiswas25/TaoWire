@@ -4,7 +4,7 @@ index e049c37..b8578b4 100644
 +++ b/docs/stream_tutorial/config.py
 @@ -1,10 +1,14 @@
  import bittensor as bt
--from tensorwire.compat import Config, add_v10_args, config as tw_config
+-from taowire.compat import Config, add_v10_args, config as tw_config
  import argparse
  import os
  
@@ -67,9 +67,9 @@ index d97e10a..cdc68b8 100644
 @@ -11,7 +11,7 @@ from starlette.types import Send
  import bittensor as bt
  import logging
- from tensorwire import Miner
--from tensorwire.compat import Axon, Config, Subtensor, config as tw_config
-+from tensorwire.compat import Axon
+ from taowire import Miner
+-from taowire.compat import Axon, Config, Subtensor, config as tw_config
++from taowire.compat import Axon
  from transformers import GPT2Tokenizer
  from typing import List, Dict, Tuple, Union, Callable, Awaitable
  
@@ -177,7 +177,7 @@ index 196e138..dac9619 100644
 --- a/requirements.txt
 +++ b/requirements.txt
 @@ -1,3 +1,4 @@
-+tensorwire>=0.1.0.dev0
++taowire>=0.1.0.dev0
  starlette>=0.30.0
  pydantic>=2
  rich>=13
@@ -220,7 +220,7 @@ index a3dac36..0000000
 -# DEALINGS IN THE SOFTWARE.
 -
 -import bittensor as bt
--from tensorwire.compat import Synapse
+-from taowire.compat import Synapse
 -from typing import List, Optional, Union, Any, Dict
 -from template.protocol import Dummy
 -# TW-MIGRATE: TWM016 call the subnet with compat.Dendrite or ValidatorClient
@@ -275,8 +275,8 @@ index aa3643a..0000000
 -import random
 -import bittensor as bt
 -import logging
--from tensorwire import RequestSigner
--from tensorwire.compat import Dendrite, Synapse, axons_from
+-from taowire import RequestSigner
+-from taowire.compat import Dendrite, Synapse, axons_from
 -
 -
 -async def ping_uids(dendrite, metagraph, uids, timeout=3):
@@ -401,12 +401,12 @@ index 564d794..473cf75 100644
 -import traceback
  
  import logging
--from tensorwire import Miner
--from tensorwire.compat import Axon
+-from taowire import Miner
+-from taowire.compat import Axon
 +import argparse
 +
-+from tensorwire import Miner as KitMiner
-+from tensorwire.compat import Axon, Metagraph
++from taowire import Miner as KitMiner
++from taowire.compat import Axon, Metagraph
  
  from template.base.neuron import BaseNeuron
  from template.utils.config import add_miner_args
@@ -432,7 +432,7 @@ index 564d794..473cf75 100644
 +
          # The axon handles request processing, allowing validators to send this miner requests.
 -        self.axon = Axon(miner=Miner.from_env())
-+        # TensorWire verifies every request and applies its caller policy before blacklist().
++        # TaoWire verifies every request and applies its caller policy before blacklist().
 +        self.axon = Axon(miner=miner or KitMiner.from_env())
 +        self.metagraph = Metagraph.of_miner(self.axon.miner)
  
@@ -469,7 +469,7 @@ index 564d794..473cf75 100644
 -        Raises:
 -            KeyboardInterrupt: If the miner is stopped by a manual interruption.
 -            Exception: For unforeseen errors during the miner's operation, which are logged for diagnosis.
-+        Starts the miner: TensorWire checks registration, publishes the axon
++        Starts the miner: TaoWire checks registration, publishes the axon
 +        (TW_EXTERNAL_IP), keeps the metagraph fresh and serves until SIGTERM.
          """
 -
@@ -584,12 +584,12 @@ index 571401e..a264771 100644
  
 -import bittensor as bt
  import logging
--from tensorwire.compat import Config, Metagraph, Subtensor, Synapse
+-from taowire.compat import Config, Metagraph, Subtensor, Synapse
 -
  from abc import ABC, abstractmethod
  
 -# Sync calls set weights and also resyncs the metagraph.
-+from tensorwire.compat import Synapse
++from taowire.compat import Synapse
 +
  from template.utils.config import check_config, add_args, config
 -from template.utils.misc import ttl_get_block
@@ -602,7 +602,7 @@ index 571401e..a264771 100644
      Base class for Bittensor miners. This class is abstract and should be inherited by a subclass. It contains the core logic for all neurons; validators and miners.
  
 -    In addition to creating a wallet, subtensor, and metagraph, this class also handles the synchronization of the network state via a basic checkpointing mechanism based on epoch length.
-+    On TensorWire the kit loads the hotkey (never the coldkey), connects to the
++    On TaoWire the kit loads the hotkey (never the coldkey), connects to the
 +    chain, keeps the metagraph fresh, checks registration and publishes the
 +    axon; settings come from TW_* variables. This class keeps the template's
 +    own config (neuron.*, blacklist.*).
@@ -649,7 +649,7 @@ index 571401e..a264771 100644
 -
 -        # The wallet holds the cryptographic key pairs for the miner.
 -        if self.config.mock:
--            # TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-            # TW-MIGRATE: TWM015 taowire.testing.FakeChain and the pytest fixtures
 -            self.wallet = bt.MockWallet(config=self.config)
 -            self.subtensor = MockSubtensor(
 -                self.config.netuid, wallet=self.wallet
@@ -750,7 +750,7 @@ index 13ec209..0000000
 -import numpy as np
 -from typing import Tuple, List, Union, Any
 -import logging
--from tensorwire.compat import Metagraph, Subtensor
+-from taowire.compat import Metagraph, Subtensor
 -from numpy import ndarray, dtype, floating, complexfloating
 -
 -U32_MAX = 4294967295
@@ -1006,8 +1006,8 @@ index 2798dc8..0000000
 -import argparse
 -import threading
 -import logging
--from tensorwire import Miner, RequestSigner
--from tensorwire.compat import Axon, Dendrite
+-from taowire import Miner, RequestSigner
+-from taowire.compat import Axon, Dendrite
 -
 -from typing import List, Union
 -from traceback import print_exception
@@ -1371,12 +1371,12 @@ index 1b670ac..0000000
 -import random
 -import bittensor as bt
 -import logging
--from tensorwire.compat import Axon, Synapse
+-from taowire.compat import Axon, Synapse
 -
 -from typing import List
 -
 -
--# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-# TW-MIGRATE: TWM015 taowire.testing.FakeChain and the pytest fixtures
 -class MockSubtensor(bt.MockSubtensor):
 -    def __init__(self, netuid, n=16, wallet=None, network="mock"):
 -        super().__init__(network=network)
@@ -1422,7 +1422,7 @@ index 1b670ac..0000000
 -        logging.info(f"Axons: {self.axons}")
 -
 -
--# TW-MIGRATE: TWM004 tensorwire.compat.Dendrite(signer=RequestSigner(wallet))
+-# TW-MIGRATE: TWM004 taowire.compat.Dendrite(signer=RequestSigner(wallet))
 -# TW-MIGRATE: TWM019 port by hand onto Miner routes / ValidatorClient
 -class MockDendrite(bt.dendrite):
 -    """
@@ -1497,7 +1497,7 @@ diff --git a/template/protocol.py b/template/protocol.py
 index bff15e3..2881a7b 100644
 --- a/template/protocol.py
 +++ b/template/protocol.py
-@@ -40,7 +40,6 @@ from tensorwire.compat import Synapse
+@@ -40,7 +40,6 @@ from taowire.compat import Synapse
  #   assert dummy_output == 2
  
  
@@ -1524,7 +1524,7 @@ index e44d28e..1ba8c0d 100644
  import subprocess
  import argparse
 -import bittensor as bt
--from tensorwire.compat import Config, add_v10_args, config as tw_config
+-from taowire.compat import Config, add_v10_args, config as tw_config
 +from types import SimpleNamespace
  from .logging import setup_events_logger
  
@@ -1543,7 +1543,7 @@ index e44d28e..1ba8c0d 100644
 -            config.wallet.name,
 -            config.wallet.hotkey,
 +        "{}/template/netuid{}/{}".format(
-+            os.environ.get("TW_STATE_DIR", "~/.tensorwire"),
++            os.environ.get("TW_STATE_DIR", "~/.taowire"),
              config.netuid,
              config.neuron.name,
          )
@@ -1626,22 +1626,22 @@ index c400bae..0000000
 -# DEALINGS IN THE SOFTWARE.
 -
 -from typing import Union
--# TW-MIGRATE: TWM022 NeuronInfo / PrometheusInfo are gone: read NeuronView from the kit's metagraph; the SS58 format is 42 (tensorwire.crypto.SS58_FORMAT)
+-# TW-MIGRATE: TWM022 NeuronInfo / PrometheusInfo are gone: read NeuronView from the kit's metagraph; the SS58 format is 42 (taowire.crypto.SS58_FORMAT)
 -from bittensor import (
 -    Balance,
 -    NeuronInfo,
 -    PrometheusInfo,
 -    __ss58_format__)
--from tensorwire.compat import AxonInfo
--# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-from taowire.compat import AxonInfo
+-# TW-MIGRATE: TWM015 taowire.testing.FakeChain and the pytest fixtures
 -from bittensor.mock.wallet_mock import MockWallet as _MockWallet
--# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-# TW-MIGRATE: TWM015 taowire.testing.FakeChain and the pytest fixtures
 -from bittensor.mock.wallet_mock import get_mock_coldkey as _get_mock_coldkey
--# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-# TW-MIGRATE: TWM015 taowire.testing.FakeChain and the pytest fixtures
 -from bittensor.mock.wallet_mock import get_mock_hotkey as _get_mock_hotkey
--# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-# TW-MIGRATE: TWM015 taowire.testing.FakeChain and the pytest fixtures
 -from bittensor.mock.wallet_mock import get_mock_keypair as _get_mock_keypair
--# TW-MIGRATE: TWM015 tensorwire.testing.FakeChain and the pytest fixtures
+-# TW-MIGRATE: TWM015 taowire.testing.FakeChain and the pytest fixtures
 -from bittensor.mock.wallet_mock import get_mock_wallet as _get_mock_wallet
 -
 -from rich.console import Console
@@ -1803,7 +1803,7 @@ index d58645e..0000000
 -import pytest
 -import asyncio
 -import bittensor as bt
--from tensorwire.compat import AxonInfo, TerminalInfo
+-from taowire.compat import AxonInfo, TerminalInfo
 -from prompting.mock import MockDendrite, MockMetagraph, MockSubtensor
 -from prompting.protocol import PromptingSynapse
 -
@@ -1828,7 +1828,7 @@ index d58645e..0000000
 -        )
 -
 -    for neuron in neurons:
--        # TW-MIGRATE: TWM022 NeuronInfo / PrometheusInfo are gone: read NeuronView from the kit's metagraph; the SS58 format is 42 (tensorwire.crypto.SS58_FORMAT)
+-        # TW-MIGRATE: TWM022 NeuronInfo / PrometheusInfo are gone: read NeuronView from the kit's metagraph; the SS58 format is 42 (taowire.crypto.SS58_FORMAT)
 -        assert type(neuron) == bt.NeuronInfo
 -        assert subtensor.is_hotkey_registered(
 -            netuid=netuid, hotkey_ss58=neuron.hotkey
@@ -1909,32 +1909,32 @@ index d58645e..0000000
 -            # check that outputs are not empty for successful responses
 -            assert synapse.dummy_output == synapse.dummy_input * 2
 -        # dont check for responses which take between timeout and max_time because they are not guaranteed to have a status code of 200 or 408
-diff --git a/tests/test_template_on_tensorwire.py b/tests/test_template_on_tensorwire.py
+diff --git a/tests/test_template_on_taowire.py b/tests/test_template_on_taowire.py
 new file mode 100644
 index 0000000..c00f2b4
 --- /dev/null
-+++ b/tests/test_template_on_tensorwire.py
++++ b/tests/test_template_on_taowire.py
 @@ -0,0 +1,70 @@
 +# The MIT License (MIT)
 +# Copyright © 2023 Yuma Rao
-+# TensorWire port: the template's miner and validator, in process on FakeChain.
++# TaoWire port: the template's miner and validator, in process on FakeChain.
 +
 +import sys
 +import types
 +
 +import pytest
 +
-+from tensorwire import Miner as KitMiner, ValidatorSettings
-+from tensorwire.testing.keys import dev_key
-+from tensorwire.testing.metagraph import FakeMetagraphSource
-+from tensorwire.testing.pytest_plugin import TEST_NETUID
-+from tensorwire.testing.transport import AppRouter
++from taowire import Miner as KitMiner, ValidatorSettings
++from taowire.testing.keys import dev_key
++from taowire.testing.metagraph import FakeMetagraphSource
++from taowire.testing.pytest_plugin import TEST_NETUID
++from taowire.testing.transport import AppRouter
 +
 +import template.validator  # noqa: F401 - loads template.validator.forward
 +from neurons.miner import Miner
 +from neurons.validator import Validator
 +
-+MINER_AXON = "44.1.2.3:8091"  # published by the TensorWire miner at startup
++MINER_AXON = "44.1.2.3:8091"  # published by the TaoWire miner at startup
 +
 +
 +async def _no_pause(seconds):
@@ -2013,11 +2013,11 @@ index b48adce..0000000
 -import unittest
 -
 -import bittensor as bt
--from tensorwire.compat import axons_from
+-from taowire.compat import axons_from
 -import torch
 -
 -from neurons.validator import Validator
--from tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron
+-from taowire.compat import TemplateValidatorAdapter as BaseValidatorNeuron
 -from template.protocol import Dummy
 -from template.utils.uids import get_random_uids
 -from template.validator.reward import get_rewards

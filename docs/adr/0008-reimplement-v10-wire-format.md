@@ -7,7 +7,7 @@
 
 ## Context
 
-The two-way legacy bridge (spec 8.11) lets TensorWire miners serve v10 validators and TensorWire validators query v10 miners during a migration. The obvious shortcut would be to import the v10 SDK's `Synapse`/`Axon`/`Dendrite`, but that does not work:
+The two-way legacy bridge (spec 8.11) lets TaoWire miners serve v10 validators and TaoWire validators query v10 miners during a migration. The obvious shortcut would be to import the v10 SDK's `Synapse`/`Axon`/`Dendrite`, but that does not work:
 
 - `bittensor==10.x` and `bittensor==11.x` are the same distribution name, so they cannot be installed together.
 - v10 gets no more releases, so pinning it would freeze its security fixes and its dependency tree inside the kit.
@@ -17,7 +17,7 @@ The two-way legacy bridge (spec 8.11) lets TensorWire miners serve v10 validator
 
 1. `extensions/legacy_v10/wire.py` re-implements the v10 wire format with the kit's `crypto.py` (sr25519 sign/verify, SS58) and the standard library (sha3-256, base64, JSON). No v10 code is imported at runtime, and no v10 package is a dependency of any extra.
 2. **The format is defined by captured bytes, not by memory or docs.**
-   - `scripts/legacy_venv.sh` builds a separate venv (`~/.tensorwire/venvs/bittensor-10.5.0`) from a hash-locked requirements file (`scripts/legacy_v10.requirements.txt`).
+   - `scripts/legacy_venv.sh` builds a separate venv (`~/.taowire/venvs/bittensor-10.5.0`) from a hash-locked requirements file (`scripts/legacy_v10.requirements.txt`).
    - `scripts/capture_v10_vectors.py` runs a real 10.5.0 `Axon` on loopback behind a recording TCP proxy and drives it with a real 10.5.0 `Dendrite`. It writes `conformance/vectors/legacy_v10.json`: 13 vectors, accepted cases V1–V5 and edge/failure cases N1–N8.
    - `python/tests/migration/test_legacy_v10_vectors.py` (64 tests) re-derives every hash, signed message and signature from those bytes with the v11 SDK. It is the reference the Phase 2 implementation must pass.
 3. Spec 8.11.1 was rewritten from the captured bytes (COORDINATION.md, 2026-10-22 19:15). The earlier draft was wrong on several points:

@@ -28,15 +28,15 @@ from typing import Any
 import pytest
 from pydantic import Field
 
-from tensorwire.chain.gateway import MetagraphView
-from tensorwire.compat import Axon, AxonInfo, Dendrite, Metagraph, Synapse, axons_from
-from tensorwire.miner.app import Miner
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.pytest_plugin import TEST_NETUID
-from tensorwire.testing.transport import AppRouter
-from tensorwire.validator.client import ValidatorClient
+from taowire.chain.gateway import MetagraphView
+from taowire.compat import Axon, AxonInfo, Dendrite, Metagraph, Synapse, axons_from
+from taowire.miner.app import Miner
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.pytest_plugin import TEST_NETUID
+from taowire.testing.transport import AppRouter
+from taowire.validator.client import ValidatorClient
 
 MINER_ADDRESS = "44.1.2.3:8091"  # the plugin miner's TW_EXTERNAL_IP:TW_BIND_PORT
 SLOW_ADDRESS = "44.0.0.9:8091"

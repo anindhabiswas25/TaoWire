@@ -16,7 +16,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
-from tensorwire.compat.stream import Frame
+from taowire.compat.stream import Frame
 
 json_value = st.recursive(
     st.one_of(st.none(), st.booleans(), st.integers(), st.text(max_size=12)),

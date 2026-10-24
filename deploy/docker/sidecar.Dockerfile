@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.7
-# tensorwire-sidecar image (spec 11.6, ADR-0003): chain access for non-Python
-# miners. Runs `tensorwire sidecar` as a non-root user with the miner's hotkey
+# taowire-sidecar image (spec 11.6, ADR-0003): chain access for non-Python
+# miners. Runs `taowire sidecar` as a non-root user with the miner's hotkey
 # (mounted read-only at runtime, never the coldkey).
 #
-#   docker build -f deploy/docker/sidecar.Dockerfile -t tensorwire-sidecar .
+#   docker build -f deploy/docker/sidecar.Dockerfile -t taowire-sidecar .
 #
 # The sidecar binds 127.0.0.1 only (spec 11.6), so it must share the miner's
 # network namespace: `network_mode: "service:<miner>"` in compose, or
@@ -32,23 +32,23 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM ${PYTHON_IMAGE} AS runtime
 ARG APP_UID=10001
-RUN groupadd --system --gid "${APP_UID}" tensorwire \
+RUN groupadd --system --gid "${APP_UID}" taowire \
  && useradd --system --uid "${APP_UID}" --gid "${APP_UID}" --no-create-home \
-      --home-dir /var/lib/tensorwire --shell /usr/sbin/nologin tensorwire \
- && install -d -o tensorwire -g tensorwire -m 0700 /var/lib/tensorwire \
- && install -d -m 0755 /run/tensorwire/wallets
+      --home-dir /var/lib/taowire --shell /usr/sbin/nologin taowire \
+ && install -d -o taowire -g taowire -m 0700 /var/lib/taowire \
+ && install -d -m 0755 /run/taowire/wallets
 COPY --from=build /opt/venv /opt/venv
-COPY deploy/docker/healthcheck.py /usr/local/lib/tensorwire/healthcheck.py
+COPY deploy/docker/healthcheck.py /usr/local/lib/taowire/healthcheck.py
 ENV PATH=/opt/venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    TW_WALLET_PATH=/run/tensorwire/wallets \
-    TW_STATE_DIR=/var/lib/tensorwire
+    TW_WALLET_PATH=/run/taowire/wallets \
+    TW_STATE_DIR=/var/lib/taowire
 USER ${APP_UID}:${APP_UID}
-WORKDIR /var/lib/tensorwire
+WORKDIR /var/lib/taowire
 EXPOSE 9910
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=3 \
-  CMD ["python", "-I", "/usr/local/lib/tensorwire/healthcheck.py", "sidecar"]
+  CMD ["python", "-I", "/usr/local/lib/taowire/healthcheck.py", "sidecar"]
 STOPSIGNAL SIGTERM
-ENTRYPOINT ["tensorwire"]
+ENTRYPOINT ["taowire"]
 CMD ["sidecar"]

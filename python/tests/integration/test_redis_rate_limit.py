@@ -1,6 +1,6 @@
 """Shared rate limits through Redis (spec 8.6.2) and the multi-worker rules.
 
-Tests marked ``redis`` need a real Redis at ``TENSORWIRE_TEST_REDIS_URL``
+Tests marked ``redis`` need a real Redis at ``TAOWIRE_TEST_REDIS_URL``
 (Engineer B's ``tw-redis``, e.g. ``redis://127.0.0.1:6379/15``); each test
 uses its own key prefix. The fail-closed tests use a closed port and always run.
 """
@@ -18,20 +18,20 @@ import pytest
 import redis
 from pydantic import BaseModel, SecretStr
 
-from tensorwire.auth.nonce_store import MemoryNonceStore, RedisNonceStore
-from tensorwire.errors import StartupError
-from tensorwire.limits.ratelimit import RedisRateLimiter
-from tensorwire.miner.app import Miner
-from tensorwire.miner.routes import RouteContext
-from tensorwire.testing.client import SignedClient
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.pytest_plugin import MINER_KEY
+from taowire.auth.nonce_store import MemoryNonceStore, RedisNonceStore
+from taowire.errors import StartupError
+from taowire.limits.ratelimit import RedisRateLimiter
+from taowire.miner.app import Miner
+from taowire.miner.routes import RouteContext
+from taowire.testing.client import SignedClient
+from taowire.testing.clock import FakeClock
+from taowire.testing.keys import dev_key
+from taowire.testing.pytest_plugin import MINER_KEY
 
-URL = os.environ.get("TENSORWIRE_TEST_REDIS_URL")
+URL = os.environ.get("TAOWIRE_TEST_REDIS_URL")
 DEAD = "redis://127.0.0.1:1/0"  # nothing listens on port 1
 
-needs_redis = pytest.mark.skipif(not URL, reason="TENSORWIRE_TEST_REDIS_URL not set")
+needs_redis = pytest.mark.skipif(not URL, reason="TAOWIRE_TEST_REDIS_URL not set")
 
 
 class Echo(BaseModel):

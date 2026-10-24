@@ -1,6 +1,6 @@
 // Shared test helpers: the conformance vectors (spec 11.7) and the pinned dev keys.
 import { readFileSync, readdirSync } from "node:fs";
-import { Keypair, MemoryStore, type Scheme, Verifier } from "@tensorwire/btauth";
+import { Keypair, MemoryStore, type Scheme, Verifier } from "@taowire/btauth";
 
 export const VECTORS_DIR = new URL("../../conformance/vectors/", import.meta.url);
 

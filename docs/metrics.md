@@ -41,7 +41,7 @@ the `clock_step_detected` log event), any increase of
 `tw_nonce_store_errors_total`, `tw_unsafe_settings_active` present in
 production.
 
-**The sidecar** (`tensorwire sidecar`, [sidecar.md](sidecar.md)) serves its own metrics on its
+**The sidecar** (`taowire sidecar`, [sidecar.md](sidecar.md)) serves its own metrics on its
 `TW_METRICS_BIND` (give it a port of its own next to a miner): `tw_unsafe_settings_active` (e.g.
 `TW_SIDECAR_UNSAFE_BIND`) and `tw_metagraph_refresh_failures_total`. Its log events: `sidecar_started`,
 `sidecar_token_created` (the path, never the token), `sidecar_request` (method, path, status),

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from tensorwire.chain.metagraph_cache import StalenessStage
-from tensorwire.crypto import CRYPTO_ED25519, CRYPTO_SR25519
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import DEV_NAMES, dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
+from taowire.chain.metagraph_cache import StalenessStage
+from taowire.crypto import CRYPTO_ED25519, CRYPTO_SR25519
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import DEV_NAMES, dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
 
 APPENDIX_C_ALICE = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
 APPENDIX_C_ALICE_ED = "5FA9nQDVg267DEd8m1ZypXLBnvN7SFxYwV7ndqSYGiN9TTpu"

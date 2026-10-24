@@ -17,14 +17,14 @@ from typing import ClassVar
 import httpx
 import pytest
 
-from tensorwire.chain.axon import parse_axon
-from tensorwire.chain.gateway import NeuronView
-from tensorwire.compat import Synapse
-from tensorwire.crypto import HotkeySigner
-from tensorwire.extensions.legacy_v10 import wire
-from tensorwire.extensions.legacy_v10.client import LegacyClient, ProtocolSelector
-from tensorwire.testing.keys import dev_key
-from tensorwire.validator.client import ValidatorClient
+from taowire.chain.axon import parse_axon
+from taowire.chain.gateway import NeuronView
+from taowire.compat import Synapse
+from taowire.crypto import HotkeySigner
+from taowire.extensions.legacy_v10 import wire
+from taowire.extensions.legacy_v10.client import LegacyClient, ProtocolSelector
+from taowire.testing.keys import dev_key
+from taowire.validator.client import ValidatorClient
 
 MINER = dev_key("bob")
 NEURON = NeuronView(

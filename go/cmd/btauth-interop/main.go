@@ -15,7 +15,7 @@
 // prints one JSON summary line: every answer must be 200 with a verified
 // twresp/1 signature. stream reads count streams the same way (conformance/
 // interop/stream_check.py). sidecar runs the sidecar client's calls against a
-// real `tensorwire sidecar` and prints what each returned
+// real `taowire sidecar` and prints what each returned
 // (conformance/interop/sidecar_check.py). Seeds are public dev keys only.
 package main
 
@@ -32,8 +32,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tensorwire/tensorwire/go/btauth"
-	"github.com/tensorwire/tensorwire/go/sidecar"
+	"github.com/anindhabiswas25/TaoWire/go/btauth"
+	"github.com/anindhabiswas25/TaoWire/go/sidecar"
 )
 
 func key(seedHex, scheme string) (*btauth.Keypair, error) {

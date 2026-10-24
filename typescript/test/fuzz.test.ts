@@ -2,7 +2,7 @@
 // Each property runs until its share of the time is up (no run-count cap).
 import fc from "fast-check";
 import { beforeAll, expect, it } from "vitest";
-import { initCrypto } from "@tensorwire/btauth";
+import { initCrypto } from "@taowire/btauth";
 import {
     arbitraryHeaders,
     chunkDecode,

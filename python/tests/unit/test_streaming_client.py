@@ -17,15 +17,15 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import NeuronView
-from tensorwire.crypto import HotkeySigner
-from tensorwire.extensions import streaming as sse
-from tensorwire.extensions.response_sig import HEADER_SIGNATURE, sign_response
-from tensorwire.miner.streaming import start_headers
-from tensorwire.observability.metrics import Metrics
-from tensorwire.testing.keys import dev_key
-from tensorwire.validator.client import ValidatorClient
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import NeuronView
+from taowire.crypto import HotkeySigner
+from taowire.extensions import streaming as sse
+from taowire.extensions.response_sig import HEADER_SIGNATURE, sign_response
+from taowire.miner.streaming import start_headers
+from taowire.observability.metrics import Metrics
+from taowire.testing.keys import dev_key
+from taowire.validator.client import ValidatorClient
 
 pytestmark = pytest.mark.asyncio
 

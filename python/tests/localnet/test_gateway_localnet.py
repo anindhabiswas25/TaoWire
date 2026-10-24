@@ -15,14 +15,14 @@ import bittensor as bt
 import pytest
 from localnet_env import ENDPOINT, Localnet
 
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import (
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import (
     BittensorGateway,
     ChainGateway,
     SubnetNotFound,
     TxOutcome,
 )
-from tensorwire.chain.metagraph_cache import MetagraphCache, StalenessStage
+from taowire.chain.metagraph_cache import MetagraphCache, StalenessStage
 
 GatewayFor = Callable[..., Awaitable[BittensorGateway]]
 

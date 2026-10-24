@@ -1,9 +1,9 @@
 # Miner guide
 
-A TensorWire miner is a FastAPI app whose routes are protected by the kit:
+A TaoWire miner is a FastAPI app whose routes are protected by the kit:
 every request must be signed with btauth/1, addressed to your hotkey, fresh,
 not replayed, and sent by a caller your policy allows. This guide covers the
-Python miner (`tensorwire.Miner`).
+Python miner (`taowire.Miner`).
 
 ## Minimal miner
 
@@ -11,7 +11,7 @@ Python miner (`tensorwire.Miner`).
 from typing import Literal
 
 from pydantic import BaseModel
-from tensorwire import Miner, RouteContext
+from taowire import Miner, RouteContext
 
 
 class TransformRequest(BaseModel):
@@ -57,7 +57,7 @@ validators will reach. All settings are listed in `.env.example`.
 - **`policy`**: a `CallerPolicy`; default is the strict policy from settings.
 - **`legacy_synapse`** / **`legacy_body_hash`**: also accept requests from
   unmodified v10 validators while `TW_LEGACY_V10_UNTIL` is set (see
-  "v10 validators" below). Routes declared with `tensorwire.compat.Axon`
+  "v10 validators" below). Routes declared with `taowire.compat.Axon`
   set this themselves.
 - **`encode`**: turns the handler's result into the response body (default:
   `model_dump_json` of the response model, or the bytes as returned).
@@ -67,7 +67,7 @@ validators will reach. All settings are listed in `.env.example`.
 `None` for an allow-listed unregistered hotkey), `request_id` and `route`.
 
 A handler exception becomes 500 `tw.handler_error`; the exception is logged,
-never sent. Raising a `tensorwire.errors.TWError` sends that error as is.
+never sent. Raising a `taowire.errors.TWError` sends that error as is.
 
 Paths `/healthz`, `/readyz` and `/metrics` are reserved. `miner.app` is a
 normal FastAPI app; routes you add to it directly are **not** protected.
@@ -75,7 +75,7 @@ normal FastAPI app; routes you add to it directly are **not** protected.
 ## Who may call: `CallerPolicy`
 
 ```python
-from tensorwire import CallerPolicy
+from taowire import CallerPolicy
 
 CallerPolicy(
     require_registered=True,        # caller must be in the metagraph
@@ -148,10 +148,10 @@ error raised after the caller was authenticated (403, 422, 429 per-hotkey,
 The signature covers the request's nonce and sender, the miner's hotkey, the
 status and the sha256 of the body, so a validator can prove the answer came
 from this miner, unchanged, for its own request. Errors before
-authentication (401, 413, per-IP 429, 503) are never signed. TensorWire
+authentication (401, 413, per-IP 429, 503) are never signed. TaoWire
 validators reject unsigned or wrongly signed 200s
 (`tw.bad_response_signature`), so turning this off makes your answers count
-as failures there. Format: ADR-0004 and `tensorwire.extensions.response_sig`.
+as failures there. Format: ADR-0004 and `taowire.extensions.response_sig`.
 
 ## v10 validators (legacy bridge)
 
@@ -160,7 +160,7 @@ During a migration some validators still run the v10 SDK. Set
 "forever") and declare the v10 Synapse on the route:
 
 ```python
-from tensorwire.compat import Synapse
+from taowire.compat import Synapse
 
 class Transform(Synapse):                     # the v10 class, now on compat
     text: str
@@ -178,7 +178,7 @@ through the same pipeline with the v10 signature check at step 5, plus the
 kit's own freshness window and replay store, then the same caller policy and
 rate limits; the answer is in v10 shape (Synapse JSON + `bt_header_axon_*`
 headers). A v10 signature covers only `required_hash_fields`, so list every
-field that matters there (`tensorwire migrate scan` warns otherwise). After
+field that matters there (`taowire migrate scan` warns otherwise). After
 the end date v10 requests get 410 `tw.legacy_disabled`. Each one is counted
 in `tw_legacy_v10_requests_total{direction="inbound"}`; the days left are in
 `tw_legacy_v10_days_remaining`. Wire details: `docs/protocol/legacy-v10.md`.
@@ -278,7 +278,7 @@ openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 -nodes -days 365 \
 
 The miner publishes the key and reads it back at startup. To rotate, restart
 with the new certificate (validators refuse the new certificate until its key
-is on chain). `tensorwire doctor` checks the certificate, compares it with the
+is on chain). `taowire doctor` checks the certificate, compares it with the
 key on chain and probes the port over pinned TLS.
 
 ## Health and metrics
@@ -308,12 +308,12 @@ key on chain and probes the port over pinned TLS.
 
 ## Testing your miner
 
-The kit's pytest plugin is active once `tensorwire` is installed. Override
+The kit's pytest plugin is active once `taowire` is installed. Override
 `tw_miner` in your `conftest.py` and use `signed_client`:
 
 ```python
 import pytest
-from tensorwire import Miner
+from taowire import Miner
 
 from my_subnet.miner import register_routes
 
@@ -336,10 +336,10 @@ Fixture world: `bob` is the miner, `alice` a validator with a permit,
 `charlie` registered without a permit, `dave` unregistered, all on netuid 1.
 `tw_clock.advance(seconds)` moves time for freshness and staleness tests.
 
-## Debugging: `tensorwire sign-request`
+## Debugging: `taowire sign-request`
 
 ```bash
-tensorwire sign-request http://1.2.3.4:8091/v1/transform \
+taowire sign-request http://1.2.3.4:8091/v1/transform \
     -r <miner hotkey ss58> -w <wallet> -H <hotkey> \
     -d '{"text": "hi", "op": "upper"}' --send
 ```

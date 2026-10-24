@@ -2,7 +2,7 @@
 
 A streaming route answers token by token over Server-Sent Events, and the
 whole stream is still signed: the last event, `tw-end`, carries a digest of
-every chunk and a `twresp/1` signature over it (spec 9.2). TensorWire miners
+every chunk and a `twresp/1` signature over it (spec 9.2). TaoWire miners
 and validators enforce the same limits on both ends.
 
 ## Miner: a streaming route
@@ -10,7 +10,7 @@ and validators enforce the same limits on both ends.
 ```python
 from collections.abc import AsyncIterator
 from pydantic import BaseModel
-from tensorwire import Miner, RouteContext
+from taowire import Miner, RouteContext
 
 class Prompt(BaseModel):
     text: str
@@ -83,13 +83,13 @@ async def generate(req: Prompt, ctx: RouteContext) -> AsyncIterator[Token]:
   request, so without this cap one permitted validator could fill the
   server's connection limit and lock the others out. The per-hotkey rate
   limit (`TW_RATE_HOTKEY_*`) applies to opening streams as to any request.
-- v10 Dendrites cannot stream to a TensorWire miner (D33): a v10 request to
+- v10 Dendrites cannot stream to a TaoWire miner (D33): a v10 request to
   a streaming route gets the v10-shaped `tw.invalid_request` answer.
 
 ## Validator: reading a stream
 
 ```python
-from tensorwire import ValidatorClient
+from taowire import ValidatorClient
 
 async with ValidatorClient(signer) as client:
     # Everything at once: a MinerResult, data = the tuple of chunks.

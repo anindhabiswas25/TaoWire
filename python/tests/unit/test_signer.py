@@ -11,7 +11,7 @@ from bittensor import http_auth
 from bittensor.keyfiles import Keypair
 from bittensor.wallets import CRYPTO_ED25519
 
-from tensorwire.auth.signer import MonotonicNonce, RequestSigner
+from taowire.auth.signer import MonotonicNonce, RequestSigner
 
 GOLDEN_NONCE = 1752076800000000000
 GOLDEN_BODY = b'{"prompt": "hello"}'

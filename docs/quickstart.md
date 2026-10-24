@@ -1,4 +1,4 @@
-# Quickstart: your first TensorWire subnet on a local chain
+# Quickstart: your first TaoWire subnet on a local chain
 
 You will start a local Bittensor chain, scaffold a subnet project, run a
 miner and a validator, and watch the validator's weights land on chain.
@@ -8,7 +8,7 @@ touches testnet or mainnet, and only public development keys are used.
 | Step | Machine time (measured) |
 |---|---|
 | 0. Prerequisites | — |
-| 1. Get TensorWire | 20 s (empty package cache) |
+| 1. Get TaoWire | 20 s (empty package cache) |
 | 2. Start a local chain | 1–2 min on a fresh machine, plus the image pull |
 | 3. Create your subnet project | 10 s |
 | 4. Configure the miner and the validator | — |
@@ -25,32 +25,32 @@ Add your own reading and typing time.
 - Docker (the local chain runs in a container).
 - `git`, Python 3.12 and [`uv`](https://docs.astral.sh/uv/).
 
-## 1. Get TensorWire
+## 1. Get TaoWire
 
-TensorWire is not on PyPI yet, so install it from the repository:
+TaoWire is not on PyPI yet, so install it from the repository:
 
 ```bash
-git clone <tensorwire repository URL> tensorwire
-cd tensorwire
-export TENSORWIRE_REPO="$PWD"
+git clone <taowire repository URL> taowire
+cd taowire
+export TAOWIRE_REPO="$PWD"
 (cd python && uv sync --all-extras)
-export PATH="$TENSORWIRE_REPO/python/.venv/bin:$PATH"
-tensorwire --version
+export PATH="$TAOWIRE_REPO/python/.venv/bin:$PATH"
+taowire --version
 ```
 
 ## 2. Start a local chain
 
 ```bash
-"$TENSORWIRE_REPO/scripts/localnet_up.sh"
+"$TAOWIRE_REPO/scripts/localnet_up.sh"
 ```
 
 This starts `subtensor-localnet` (fast 0.25 s blocks), creates a subnet,
 development wallets (`owner`, `validator`, `miner_py`, ...), stakes the
 validator so it gets a validator permit, and registers the miners. When it
-finishes it prints the state directory, by default `~/.tensorwire/localnet`:
+finishes it prints the state directory, by default `~/.taowire/localnet`:
 
 ```bash
-export LOCALNET_DIR="${LOCALNET_DIR:-$HOME/.tensorwire/localnet}"
+export LOCALNET_DIR="${LOCALNET_DIR:-$HOME/.taowire/localnet}"
 cat "$LOCALNET_DIR/localnet.env"        # TW_NETWORK, TW_NETUID, TW_WALLET_PATH, ...
 ```
 
@@ -58,17 +58,17 @@ Running it again reuses the chain, the subnet and the wallets: every
 development key comes from a fixed, public seed. On a fresh machine the
 first run takes about two minutes (it also pulls the image).
 
-Shell variables you set yourself must not start with `TW_`: TensorWire
+Shell variables you set yourself must not start with `TW_`: TaoWire
 refuses unknown `TW_*` names at startup (typo protection), which is why the
-repository path above is `TENSORWIRE_REPO`.
+repository path above is `TAOWIRE_REPO`.
 
 ## 3. Create your subnet project
 
 ```bash
-tensorwire init ~/my-subnet
+taowire init ~/my-subnet
 cd ~/my-subnet
 uv venv
-uv pip install -e "$TENSORWIRE_REPO/python" -e '.[dev]'
+uv pip install -e "$TAOWIRE_REPO/python" -e '.[dev]'
 .venv/bin/pytest -q                      # 7 passed: miner, scoring and a validator round, in process
 ```
 
@@ -113,7 +113,7 @@ What these mean:
   `TW_ALLOW_PRIVATE_AXONS=1` (from `localnet.env`) lets validators accept a
   private address; never set it on testnet or mainnet.
 - `TW_REFUSE_IF_COLDKEY_PRESENT=0`: the development wallets keep an
-  unencrypted coldkey next to the hotkey. TensorWire refuses to start in
+  unencrypted coldkey next to the hotkey. TaoWire refuses to start in
   that situation by default, because a server should only ever hold the
   hotkey. Localnet only; the process logs it as an unsafe setting.
 - `TW_QUERY_VALIDATORS=1`: on a tiny local subnet, miners that receive
@@ -123,8 +123,8 @@ What these mean:
 ## 5. Check the setup
 
 ```bash
-(set -a; . ./miner.env; set +a; tensorwire doctor --role miner)
-(set -a; . ./validator.env; set +a; tensorwire doctor --role validator)
+(set -a; . ./miner.env; set +a; taowire doctor --role miner)
+(set -a; . ./validator.env; set +a; taowire doctor --role validator)
 ```
 
 Every line should read `ok`, `WARN` or `skip`, none `FAIL`. Expected warnings
@@ -183,7 +183,7 @@ whole loop: a signed request, a signed answer, a score, a weight on chain.
 ## 9. Stop
 
 Press Ctrl-C in both terminals (the miner drains in-flight requests first).
-`"$TENSORWIRE_REPO/scripts/localnet_down.sh"` stops the chain.
+`"$TAOWIRE_REPO/scripts/localnet_down.sh"` stops the chain.
 
 ## Before testnet or mainnet
 
@@ -206,7 +206,7 @@ The localnet settings above are not for public networks. Change these:
 - `docs/validator-guide.md`: `SubnetValidator`, scores, weights, the client.
 - `docs/security.md`: what the kit defends against and what you still have to do.
 - `docs/benchmarks.md`: throughput, latency and abuse-test numbers.
-- `docs/migration-from-v10.md`: moving an existing v10 subnet onto TensorWire,
+- `docs/migration-from-v10.md`: moving an existing v10 subnet onto TaoWire,
   and `docs/migration-rollout.md` for rolling it out.
 
 ## Measured

@@ -1,5 +1,5 @@
 import random
-from tensorwire.compat import Metagraph
+from taowire.compat import Metagraph
 import numpy as np
 from typing import List
 

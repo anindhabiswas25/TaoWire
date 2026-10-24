@@ -1,4 +1,4 @@
-"""The TensorWire miner of the mixed-fleet test (spec 13.8), run as a subprocess.
+"""The TaoWire miner of the mixed-fleet test (spec 13.8), run as a subprocess.
 
 The archived template's ``Dummy`` Synapse on a ``compat.Synapse`` route, so
 v10 validators reach it too while ``TW_LEGACY_V10_UNTIL`` is set. Configured
@@ -12,8 +12,8 @@ from typing import Any, ClassVar
 
 # Looked up at run time: Engineer A's Miner and compat land on eng-a/core, and
 # this file must type-check in trees that do not have them yet.
-Miner: Any = importlib.import_module("tensorwire").Miner
-Synapse: Any = importlib.import_module("tensorwire.compat.synapse").Synapse
+Miner: Any = importlib.import_module("taowire").Miner
+Synapse: Any = importlib.import_module("taowire.compat.synapse").Synapse
 
 
 class Dummy(Synapse):  # type: ignore[misc]

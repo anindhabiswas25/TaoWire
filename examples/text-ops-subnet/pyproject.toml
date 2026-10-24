@@ -5,9 +5,9 @@ build-backend = "hatchling.build"
 [project]
 name = "text-ops-subnet"
 version = "0.1.0"
-description = "A Bittensor subnet built on TensorWire"
+description = "A Bittensor subnet built on TaoWire"
 requires-python = ">=3.10,<3.15"
-dependencies = ["tensorwire>=0.1.0.dev0"]
+dependencies = ["taowire>=0.1.0.dev0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "pytest-asyncio>=0.23"]

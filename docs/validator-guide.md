@@ -1,13 +1,13 @@
 # Validator guide
 
-A TensorWire validator is a class with two methods, the task and the score.
+A TaoWire validator is a class with two methods, the task and the score.
 The kit runs everything else: miner selection, signed queries, response
 checks, the score store, and setting weights on the chain's schedule.
 
 ## Minimal validator
 
 ```python
-from tensorwire import MinerResult, SubnetValidator, Task, ValidatorRunner, ValidatorSettings
+from taowire import MinerResult, SubnetValidator, Task, ValidatorRunner, ValidatorSettings
 
 class MyValidator(SubnetValidator):
     async def make_task(self, round_id: int) -> Task:
@@ -28,7 +28,7 @@ if __name__ == "__main__":
     ValidatorRunner(MyValidator(), ValidatorSettings.from_env()).run()
 ```
 
-`tensorwire init` scaffolds a complete project around this (the text-ops
+`taowire init` scaffolds a complete project around this (the text-ops
 example, `examples/text-ops-subnet`), with tests that pass out of the box.
 
 ## The round
@@ -110,7 +110,7 @@ never raise for one miner's failure. Rules (spec 8.8):
   plain HTTP for the others). A key mismatch, or a published value the kit
   cannot pin, is `tw.tls_pin_mismatch` (`tw_tls_pin_failures_total`): not
   retried, never over plain HTTP, never through the v10 fallback.
-  `tensorwire doctor --role validator` counts the miners with usable and
+  `taowire doctor --role validator` counts the miners with usable and
   unusable published keys.
 
 Streaming routes: `client.stream(...)` hands out chunks as they arrive,
@@ -123,7 +123,7 @@ time budget covers the whole stream, bounded also by `TW_STREAM_*`. See
 Use it directly when you run your own loop:
 
 ```python
-from tensorwire import RequestSigner, ValidatorClient
+from taowire import RequestSigner, ValidatorClient
 
 async with ValidatorClient(RequestSigner(hotkey_keypair)) as client:
     results = await client.query_many(neurons, "/v1/transform", body,
@@ -150,7 +150,7 @@ gateway runs the SDK preflight first.
   successful submission is a timelocked **commit included in a block**. The
   weights apply when the commit reveals; until then the chain shows the old
   row. The chain accepts a commit even from a hotkey without a permit; it
-  counts only if the hotkey holds one. `tensorwire doctor --role validator`
+  counts only if the hotkey holds one. `taowire doctor --role validator`
   shows the permit.
 - `rate_limited`: waits the blocks named by the chain, or one tempo.
 - `expired` / `too_early` from the timelocked commit itself (the chain's
@@ -214,7 +214,7 @@ can end (`docs/migration-from-v10.md`).
   signatures (`TW_RATE_IP_PER_S` 50/s, burst 100 by default). Several
   validators behind one NAT address share that budget at every miner; give
   each validator its own address, or keep their combined rate well below it.
-- **Check the host** with `tensorwire doctor --role validator`.
+- **Check the host** with `taowire doctor --role validator`.
 
 ## Settings
 
@@ -243,6 +243,6 @@ in spec Section 12.1.
 
 Run rounds in process against real miners on FakeChain: start each miner
 with `miner.running()`, route requests to them with
-`tensorwire.testing.transport.AppRouter`, and pass `gateway=`, `metagraph=`,
+`taowire.testing.transport.AppRouter`, and pass `gateway=`, `metagraph=`,
 `hotkey=`, `transport=` and `clock_ns=` to `ValidatorRunner`. The scaffolded
 project's `tests/` has a complete example (`test_validator_round_scores_the_miner`).

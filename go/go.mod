@@ -1,4 +1,4 @@
-module github.com/tensorwire/tensorwire/go
+module github.com/anindhabiswas25/TaoWire/go
 
 go 1.22
 

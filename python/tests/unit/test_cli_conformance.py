@@ -1,4 +1,4 @@
-"""``tensorwire conformance`` (spec 11.7): the Python run over every vector file."""
+"""``taowire conformance`` (spec 11.7): the Python run over every vector file."""
 
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
-from tensorwire.cli import conformance_cmd
-from tensorwire.cli.conformance_cmd import REQUIRED_FILES, conformance, run_vectors
+from taowire.cli import conformance_cmd
+from taowire.cli.conformance_cmd import REQUIRED_FILES, conformance, run_vectors
 
 VECTORS = Path(__file__).resolve().parents[3] / "conformance" / "vectors"
 app = typer.Typer()

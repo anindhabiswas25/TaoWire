@@ -1,7 +1,7 @@
 # btauth (Go)
 
 btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets: the Go package of
-[TensorWire](../README.md) (spec 11.4). Module `github.com/tensorwire/tensorwire/go` (working name,
+[TaoWire](../README.md) (spec 11.4). Module `github.com/anindhabiswas25/TaoWire/go` (working name,
 not published), package `btauth`. Go ≥ 1.22; build releases with a supported Go toolchain.
 
 ## Quickstart (miner)
@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/tensorwire/tensorwire/go/btauth"
+	"github.com/anindhabiswas25/TaoWire/go/btauth"
 )
 
 func main() {
@@ -76,7 +76,7 @@ repository root, after `./scripts/go_tools.sh ensure`:
 export PATH="$(./scripts/go_tools.sh sdk-path)/bin:$PATH" GOTOOLCHAIN=local
 cd go
 go test ./btauth -run Conformance      # every vector in conformance/vectors (except legacy_v10, Python only)
-go test -race ./...                    # unit tests; TENSORWIRE_TEST_REDIS_URL=redis://... for the Redis store
+go test -race ./...                    # unit tests; TAOWIRE_TEST_REDIS_URL=redis://... for the Redis store
 go vet ./... && ../scripts/go_tools.sh run staticcheck ./...
 go test ./btauth -run '^$' -fuzz FuzzVerify -fuzztime 5m
 ../scripts/go_tools.sh run govulncheck ./...

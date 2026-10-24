@@ -2,7 +2,7 @@
 // crypto.is_weak_public_key (ADR-0010), ported here as the reference.
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { isWeakPublicKey } from "@tensorwire/btauth";
+import { isWeakPublicKey } from "@taowire/btauth";
 
 const P = 2n ** 255n - 19n;
 const mod = (a: bigint): bigint => ((a % P) + P) % P;

@@ -35,20 +35,20 @@ from starlette.responses import Response
 from starlette.routing import Route
 
 from legacy_v10_models import BOB, Dummy
-from tensorwire import crypto
-from tensorwire.auth.nonce_store import MemoryNonceStore
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import NeuronView
-from tensorwire.errors import Forbidden, TWError
-from tensorwire.extensions.legacy_v10.client import LegacyClient, ProtocolSelector
-from tensorwire.extensions.legacy_v10.server import LegacyServer
+from taowire import crypto
+from taowire.auth.nonce_store import MemoryNonceStore
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import NeuronView
+from taowire.errors import Forbidden, TWError
+from taowire.extensions.legacy_v10.client import LegacyClient, ProtocolSelector
+from taowire.extensions.legacy_v10.server import LegacyServer
 
 REPO = Path(__file__).resolve().parents[3]
 PEER = REPO / "scripts" / "v10_peer.py"
 LEGACY_PY = Path(
     os.environ.get(
         "TW_LEGACY_PYTHON",
-        str(Path.home() / ".tensorwire/venvs/bittensor-10.5.0/bin/python"),
+        str(Path.home() / ".taowire/venvs/bittensor-10.5.0/bin/python"),
     )
 )
 CHARLIE = crypto.keypair_from_uri("//Charlie").ss58_address
@@ -281,11 +281,11 @@ def compat_stream_miner(tmp_path_factory: pytest.TempPathFactory) -> Iterator[in
     """A kit miner serving the template's StreamPrompting on compat.Axon, bridge on."""
     import warnings
 
-    from tensorwire.compat import Axon
-    from tensorwire.config import MinerSettings
-    from tensorwire.miner.app import Miner
-    from tensorwire.testing.fake_chain import FakeChain
-    from tensorwire.testing.metagraph import FakeMetagraphSource
+    from taowire.compat import Axon
+    from taowire.config import MinerSettings
+    from taowire.miner.app import Miner
+    from taowire.testing.fake_chain import FakeChain
+    from taowire.testing.metagraph import FakeMetagraphSource
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")  # the template's pydantic v1 Field options
@@ -349,8 +349,8 @@ def compat_stream_miner(tmp_path_factory: pytest.TempPathFactory) -> Iterator[in
 def test_d33_real_v10_streaming_dendrite_gets_invalid_request(
     compat_stream_miner: int,
 ) -> None:
-    """A real v10 StreamingSynapse Dendrite against a TensorWire streaming route."""
-    from tensorwire.errors import InvalidRequest
+    """A real v10 StreamingSynapse Dendrite against a TaoWire streaming route."""
+    from taowire.errors import InvalidRequest
 
     out = subprocess.run(  # noqa: S603 - fixed interpreter and script
         [

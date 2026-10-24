@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 import pytest
 
-from tensorwire import errors as e
+from taowire import errors as e
 
 
 def _appendix_a(spec_text: str) -> str:
@@ -20,7 +20,7 @@ def test_every_appendix_a_code_is_in_the_catalogue(spec_text: str) -> None:
     rows = re.findall(
         r"^\| `(tw\.[a-z0-9_]+)` \| (\d{3}) \|", _appendix_a(spec_text), re.M
     )
-    assert len(rows) == 19
+    assert len(rows) == 20  # D44 added tw.sidecar_unauthorized (spec v1.9)
     for code, status in rows:
         assert code in e.ERROR_CODES, code
         assert e.ERROR_CODES[code].http_status == int(status), code

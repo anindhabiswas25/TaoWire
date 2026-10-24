@@ -45,7 +45,7 @@ def check_config(cls, config: SimpleNamespace):
     r"""Checks/validates the config namespace object."""
     full_path = os.path.expanduser(
         "{}/template/netuid{}/{}".format(
-            os.environ.get("TW_STATE_DIR", "~/.tensorwire"),
+            os.environ.get("TW_STATE_DIR", "~/.taowire"),
             config.netuid,
             config.neuron.name,
         )

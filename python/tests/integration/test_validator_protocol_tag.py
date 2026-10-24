@@ -13,15 +13,15 @@ from typing import Any
 
 import structlog
 
-from tensorwire.config import ValidatorSettings
-from tensorwire.extensions.legacy_v10.client import ProtocolSelector
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
-from tensorwire.testing.pytest_plugin import TEST_NETUID
-from tensorwire.validator.client import MinerResult
-from tensorwire.validator.loop import SubnetValidator, Task, ValidatorRunner
+from taowire.config import ValidatorSettings
+from taowire.extensions.legacy_v10.client import ProtocolSelector
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
+from taowire.testing.pytest_plugin import TEST_NETUID
+from taowire.validator.client import MinerResult
+from taowire.validator.loop import SubnetValidator, Task, ValidatorRunner
 
 V10_MARKER = (500, [("bt_header_axon_status_code", "500")])  # vector N7
 AXON = "44.1.2.3:8091"

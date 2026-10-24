@@ -1,5 +1,5 @@
 //! btauth/1 signed requests and twresp/1 signed responses for Bittensor v11
-//! subnets, the Rust package of TensorWire (spec Sections 4, 9.1 and 11.5).
+//! subnets, the Rust package of TaoWire (spec Sections 4, 9.1 and 11.5).
 //!
 //! A miner protects its routes with the [`axum`] layer (feature `axum`): body
 //! cap, verification in the normative order (shape, receiver, freshness,
@@ -10,7 +10,7 @@
 //! adds a reqwest [`client::Client`] doing both. Feature `redis` adds a shared
 //! [`redis_store::RedisStore`].
 //!
-//! The verifier is stricter than the Bittensor SDK, like every TensorWire
+//! The verifier is stricter than the Bittensor SDK, like every TaoWire
 //! implementation: prefix-42 SS58 senders only, no repeated `X-Bittensor-*`
 //! header, nonces of 1 to 20 ASCII digits, the crypto header exactly
 //! `ed25519` or `sr25519`, hex-only signatures, never a `<Bytes>`-wrapped

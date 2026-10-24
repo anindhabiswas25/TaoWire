@@ -18,9 +18,9 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from tensorwire.crypto import HotkeySigner
-from tensorwire.extensions import response_sig as rs
-from tensorwire.testing.keys import dev_key
+from taowire.crypto import HotkeySigner
+from taowire.extensions import response_sig as rs
+from taowire.testing.keys import dev_key
 
 MINER = {"sr25519": dev_key("bob"), "ed25519": dev_key("bob", "ed25519")}
 SENDER = dev_key("alice").ss58

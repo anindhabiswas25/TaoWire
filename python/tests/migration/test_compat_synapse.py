@@ -2,7 +2,7 @@
 
 The four Synapses below are the ones ``scripts/capture_v10_vectors.py`` ran
 on a real bittensor 10.5.0 Dendrite and Axon, re-declared on
-``tensorwire.compat.Synapse``. Their ``body_hash`` must equal the
+``taowire.compat.Synapse``. Their ``body_hash`` must equal the
 ``computed_body_hash`` header the v10 Dendrite sent, and every captured body
 (request and 200 response) must parse back into the same class.
 """
@@ -17,7 +17,7 @@ from typing import Any, ClassVar
 import pytest
 from pydantic import Field
 
-from tensorwire.compat.synapse import BASE_FIELDS, Synapse, TerminalInfo, hash_values
+from taowire.compat.synapse import BASE_FIELDS, Synapse, TerminalInfo, hash_values
 
 VECTORS_PATH = (
     Path(__file__).resolve().parents[3] / "conformance" / "vectors" / "legacy_v10.json"

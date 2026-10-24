@@ -14,18 +14,18 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from tensorwire.config import MinerSettings, ValidatorSettings
-from tensorwire.extensions.timelock import SealedChallenge, SealedResponse
-from tensorwire.miner.app import Miner
-from tensorwire.miner.routes import RouteContext
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
-from tensorwire.testing.pytest_plugin import TEST_NETUID
-from tensorwire.testing.transport import AppRouter
-from tensorwire.validator.client import MinerResult
-from tensorwire.validator.loop import SubnetValidator, Task, ValidatorRunner
+from taowire.config import MinerSettings, ValidatorSettings
+from taowire.extensions.timelock import SealedChallenge, SealedResponse
+from taowire.miner.app import Miner
+from taowire.miner.routes import RouteContext
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
+from taowire.testing.pytest_plugin import TEST_NETUID
+from taowire.testing.transport import AppRouter
+from taowire.validator.client import MinerResult
+from taowire.validator.loop import SubnetValidator, Task, ValidatorRunner
 
 ROUTE = "/v1/sealed"
 IP = "44.0.0.9"

@@ -1,8 +1,8 @@
 # Mixed-fleet localnet test (spec 13.8, rollout runbook stage 0 in 10b.5).
 #
 # One subnet, four nodes: the archived template's v10 miner and v10 validator
-# (bittensor==10.5.0, scripts/legacy_venv.sh) next to a TensorWire miner and a
-# TensorWire validator. Every validator queries every miner; each cell must
+# (bittensor==10.5.0, scripts/legacy_venv.sh) next to a TaoWire miner and a
+# TaoWire validator. Every validator queries every miner; each cell must
 # answer `requests_per_cell` template `Dummy` requests, all correct.
 #
 #   just localnet-up && just mixed-fleet
@@ -23,7 +23,7 @@ nodes:
     ip: 127.0.0.3
     port: 8093
   tw_miner:
-    kind: tensorwire-miner # tensorwire Miner, Dummy on a compat.Synapse route
+    kind: taowire-miner # taowire Miner, Dummy on a compat.Synapse route
     wallet: miner_py
     ip: 127.0.0.2
     port: 8092
@@ -31,9 +31,9 @@ nodes:
       TW_LEGACY_V10_UNTIL: legacy_days   # v10 validators still served (8.11.2)
   v10_validator:
     kind: v10-dendrite     # scripts/v10_peer.py validator: v10 metagraph + Dendrite
-    wallet: owner          # needs a validator permit for the TensorWire miner
+    wallet: owner          # needs a validator permit for the TaoWire miner
   tw_validator:
-    kind: tensorwire-validator   # ValidatorClient, legacy client + ProtocolSelector
+    kind: taowire-validator   # ValidatorClient, legacy client + ProtocolSelector
     wallet: validator
     env:
       TW_LEGACY_V10_CLIENT: auto

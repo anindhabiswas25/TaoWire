@@ -3,7 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tensorwire"
+name = "taowire"
 dynamic = ["version"]
 description = "Production-grade networking starter kit for Bittensor v11 subnets, and the migration path for v10 subnets"
 readme = "README.md"
@@ -36,8 +36,8 @@ dependencies = [
 [project.optional-dependencies]
 redis = ["redis>=5.0,<6"]
 ntp = ["ntplib>=0.4"]
-migrate = ["libcst>=1.4"]               # `tensorwire migrate` codemods
-all = ["tensorwire[redis,ntp,migrate]"]
+migrate = ["libcst>=1.4"]               # `taowire migrate` codemods
+all = ["taowire[redis,ntp,migrate]"]
 dev = [
   "pytest>=8",
   "pytest-asyncio>=0.23",
@@ -54,22 +54,22 @@ dev = [
 ]
 
 [project.scripts]
-tensorwire = "tensorwire.cli.main:app"
+taowire = "taowire.cli.main:app"
 
 [project.entry-points.pytest11]
-tensorwire = "tensorwire.testing.pytest_plugin"
+taowire = "taowire.testing.pytest_plugin"
 
 [tool.hatch.version]
-path = "src/tensorwire/version.py"
+path = "src/taowire/version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/tensorwire"]
+packages = ["src/taowire"]
 
 # G6-1: the sdist holds exactly these (hatchling would otherwise sweep in any
 # git-ignored virtualenv not named .venv, e.g. the .venv-py310 of the Python 3.10
 # check). tests/unit/test_packaging.py checks the archive against this list.
 [tool.hatch.build.targets.sdist]
-only-include = ["src/tensorwire", "pyproject.toml", "README.md"]
+only-include = ["src/taowire", "pyproject.toml", "README.md"]
 exclude = ["__pycache__", "*.py[cod]"]
 
 # ---------------------------------------------------------------- ruff
@@ -99,7 +99,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["tensorwire"]
+known-first-party = ["taowire"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -107,7 +107,7 @@ ban-relative-imports = "all"
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 # ADR-0001 is enforced by import-linter (below) and tests/unit/test_architecture.py;
 # these catch v10-era imports early with a pointer to the replacement.
-"bittensor.core".msg = "v10 layout; v11 chain access goes through tensorwire.chain.gateway (ADR-0001)"
+"bittensor.core".msg = "v10 layout; v11 chain access goes through taowire.chain.gateway (ADR-0001)"
 "bittensor.utils".msg = "removed in v11 (spec 3.8)"
 
 # ---------------------------------------------------------------- mypy
@@ -139,13 +139,13 @@ markers = [
   "localnet: needs the Docker localnet chain (just localnet-up)",
   "testnet: runs against public testnet; costs test TAO; manual only",
   "mixed_fleet: v10 + v11 fleet on localnet (just mixed-fleet)",
-  "redis: needs a real Redis at TENSORWIRE_TEST_REDIS_URL",
+  "redis: needs a real Redis at TAOWIRE_TEST_REDIS_URL",
   "abuse: attacks a real miner process (spec 13.6); a few seconds each",
   "drand: calls the public drand API (spec 8.10); not in just test, keep runs short",
 ]
 
 [tool.coverage.run]
-source = ["tensorwire"]
+source = ["taowire"]
 branch = true
 
 [tool.coverage.report]
@@ -155,28 +155,28 @@ exclude_also = ["if TYPE_CHECKING:"]
 
 # ---------------------------------------------------------------- import-linter
 [tool.importlinter]
-root_packages = ["tensorwire"]
+root_packages = ["taowire"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "ADR-0001: only chain.gateway, crypto and auth import bittensor"
 type = "forbidden"
-source_modules = ["tensorwire"]
+source_modules = ["taowire"]
 forbidden_modules = ["bittensor", "bittensor_core"]
 ignore_imports = [
-  "tensorwire.chain.gateway -> bittensor",
-  "tensorwire.chain.gateway -> bittensor_core",
-  "tensorwire.crypto -> bittensor",
-  "tensorwire.auth.** -> bittensor",
+  "taowire.chain.gateway -> bittensor",
+  "taowire.chain.gateway -> bittensor_core",
+  "taowire.crypto -> bittensor",
+  "taowire.auth.** -> bittensor",
 ]
 unmatched_ignore_imports_alerting = "none"
 
 [[tool.importlinter.contracts]]
 name = "errors and config are leaf modules"
 type = "forbidden"
-source_modules = ["tensorwire.errors", "tensorwire.config"]
+source_modules = ["taowire.errors", "taowire.config"]
 forbidden_modules = [
-  "tensorwire.auth", "tensorwire.policy", "tensorwire.limits", "tensorwire.miner",
-  "tensorwire.validator", "tensorwire.extensions", "tensorwire.compat", "tensorwire.migrate",
-  "tensorwire.observability", "tensorwire.testing", "tensorwire.cli",
+  "taowire.auth", "taowire.policy", "taowire.limits", "taowire.miner",
+  "taowire.validator", "taowire.extensions", "taowire.compat", "taowire.migrate",
+  "taowire.observability", "taowire.testing", "taowire.cli",
 ]

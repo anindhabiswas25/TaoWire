@@ -1,9 +1,9 @@
 # Multi-language support
 
-TensorWire's Python package is the reference implementation. Miners written in other languages use a
+TaoWire's Python package is the reference implementation. Miners written in other languages use a
 btauth/1 package for their language (spec 11). Every row of spec 11.1 is built (Phase 5):
 
-| Capability (spec 11.1) | Python | Go (`go/btauth`) | Rust (`tensorwire-btauth`) | TypeScript (`@tensorwire/btauth`) |
+| Capability (spec 11.1) | Python | Go (`go/btauth`) | Rust (`taowire-btauth`) | TypeScript (`@taowire/btauth`) |
 |---|---|---|---|---|
 | btauth/1 sign + verify | ✅ | ✅ | ✅ | ✅ (`sr25519Verify` / `ed25519Verify`, WASM) |
 | Monotonic nonce | ✅ | ✅ `NonceSource` (atomic CAS) | ✅ `NonceSource` (`AtomicU64`) | ✅ `NonceSource` (`bigint`) |
@@ -12,7 +12,7 @@ btauth/1 package for their language (spec 11). Every row of spec 11.1 is built (
 | Client | httpx | `Client` (`net/http`) | `client::Client` (reqwest, feature) | `Client` (fetch / undici) |
 | twresp/1 sign + verify | ✅ | ✅ | ✅ | ✅ |
 | SSE streaming with signed trailer | ✅ | ✅ `ServeStream`, `(*Client).Stream` | ✅ `axum::stream_response`, `Client::stream` | ✅ `streamReply` (`/fastify`), `Client.stream` |
-| Caller policy | ✅ native | ✅ via sidecar: `go/sidecar` + `MiddlewareConfig.Policy` | ✅ via sidecar: `sidecar` (feature) + `MinerAuth::with_policy` | ✅ via sidecar: `@tensorwire/btauth/sidecar` + the `policy` hook |
+| Caller policy | ✅ native | ✅ via sidecar: `go/sidecar` + `MiddlewareConfig.Policy` | ✅ via sidecar: `sidecar` (feature) + `MinerAuth::with_policy` | ✅ via sidecar: `@taowire/btauth/sidecar` + the `policy` hook |
 | Chain writes (serve axon, set weights) | ✅ (v11) | ✅ serve axon via sidecar (`ServeAxon`); set weights ❌ by design | ✅ serve axon via sidecar (`serve_axon`); set weights ❌ by design | ✅ serve axon via sidecar (`serveAxon`); set weights ❌ by design |
 | Full validator loop | ✅ | ❌ not in scope (11.1) | ❌ not in scope | ❌ not in scope |
 | Per-IP / per-hotkey rate limits | ✅ | ✅ `TokenBuckets` | ✅ `TokenBuckets` | ✅ `TokenBuckets` |
@@ -54,7 +54,7 @@ and metrics.
 
 ## Streaming (spec 9.2, D29, D35, D36)
 
-Every package has the same four pieces as the Python reference (`tensorwire.extensions.streaming`): an
+Every package has the same four pieces as the Python reference (`taowire.extensions.streaming`): an
 incremental SSE parser (WHATWG rules, linear in the input, never fails), the chunk rule (D35: JSON objects or
 arrays only; nesting deeper than 128 is refused on both sides, see below), the strict `tw-end` parser and the
 running digest. Miner side, in this order: a stream slot for the caller (D36, 16 per process by default, 1–256;
@@ -85,9 +85,9 @@ or adds chunks, tampers with, duplicates or removes the trailer, or adds an even
 
 ## Sidecar API (spec 11.6)
 
-Non-Python miners get their caller policy and their chain writes from the Python sidecar, `tensorwire sidecar`
+Non-Python miners get their caller policy and their chain writes from the Python sidecar, `taowire sidecar`
 (127.0.0.1:`TW_SIDECAR_PORT`, default 9910; it runs with the miner's own hotkey, `TW_WALLET_*`). This table is
-the contract: the server (`python/src/tensorwire/sidecar/`) implements exactly it and the three clients parse
+the contract: the server (`python/src/taowire/sidecar/`) implements exactly it and the three clients parse
 exactly it.
 
 Every request carries `Authorization: Bearer <token>` (the token is in `TW_SIDECAR_TOKEN_FILE`, default
@@ -104,7 +104,7 @@ request bodies are capped at 64 KiB (`413 tw.payload_too_large`); bad parameters
 
 No weight setting through the sidecar (11.6).
 
-**The clients** (`@tensorwire/btauth/sidecar` `SidecarClient`, Go `sidecar.Client`, Rust `sidecar::SidecarClient`)
+**The clients** (`@taowire/btauth/sidecar` `SidecarClient`, Go `sidecar.Client`, Rust `sidecar::SidecarClient`)
 read the token file with the TLS-key rule (regular file, no group/other access, 16–1024 printable ASCII; never
 printed), refuse a non-loopback URL unless told otherwise (`unsafeAllowRemote` / `UnsafeAllowRemote` /
 `unsafe_allow_remote`: the token travels in clear), check at start that the sidecar follows their netuid and,
@@ -175,7 +175,7 @@ the Python verifier does instead and why.
 Runners (`just conformance` runs all of them):
 
 ```bash
-cd python && uv run tensorwire conformance --vectors ../conformance/vectors   # exit 1 on any failure
+cd python && uv run taowire conformance --vectors ../conformance/vectors   # exit 1 on any failure
 cd go && go test ./btauth -run Conformance
 cd rust && cargo test --test conformance
 cd typescript && npm run conformance

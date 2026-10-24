@@ -1,5 +1,5 @@
 //! Sidecar client (feature `sidecar`, spec 11.6): a Rust miner gets its
-//! caller policy and its chain writes from the Python sidecar (`tensorwire
+//! caller policy and its chain writes from the Python sidecar (`taowire
 //! sidecar`, loopback only, bearer token).
 //!
 //! ```ignore

@@ -1,4 +1,4 @@
-"""Shared fixtures for the TensorWire test suite."""
+"""Shared fixtures for the TaoWire test suite."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import pytest
 from bittensor.keyfiles import Keypair
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SPEC_PATH = REPO_ROOT / "TENSORWIRE_BUILD_SPEC.md"
+SPEC_PATH = REPO_ROOT / "TAOWIRE_BUILD_SPEC.md"
 
 
 @pytest.fixture(scope="session")

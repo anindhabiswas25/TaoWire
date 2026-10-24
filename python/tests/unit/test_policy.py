@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import pytest
 
-from tensorwire.chain.gateway import MetagraphView, NeuronView
-from tensorwire.chain.metagraph_cache import StalenessStage
-from tensorwire.config import MinerSettings
-from tensorwire.errors import Forbidden, MetagraphStale
-from tensorwire.policy.caller import CallerGate, CallerPolicy, KnownCallers
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
-from tensorwire.testing.pytest_plugin import TWEnv
+from taowire.chain.gateway import MetagraphView, NeuronView
+from taowire.chain.metagraph_cache import StalenessStage
+from taowire.config import MinerSettings
+from taowire.errors import Forbidden, MetagraphStale
+from taowire.policy.caller import CallerGate, CallerPolicy, KnownCallers
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
+from taowire.testing.pytest_plugin import TWEnv
 
 V = dev_key("alice").ss58  # validator, 1000 stake
 N = dev_key("charlie").ss58  # registered, no permit, 5 stake

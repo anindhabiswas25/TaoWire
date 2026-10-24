@@ -4,7 +4,7 @@
 //! let state = Arc::new(MinerAuth::new(verifier).with_response_key(miner_key));
 //! let app = Router::new()
 //!     .route("/v1/echo", post(echo))
-//!     .layer(axum::middleware::from_fn_with_state(state, tensorwire_btauth::axum::protect));
+//!     .layer(axum::middleware::from_fn_with_state(state, taowire_btauth::axum::protect));
 //! // handler: Extension(caller): Extension<Caller>, body: Bytes
 //! ```
 //!

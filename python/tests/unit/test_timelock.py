@@ -9,21 +9,21 @@ import pytest
 import structlog
 from pydantic import BaseModel
 
-from tensorwire.chain.gateway import (
+from taowire.chain.gateway import (
     TimelockMalformed,
     TimelockNotReady,
     TimelockUnavailable,
 )
-from tensorwire.config import ValidatorSettings
-from tensorwire.extensions.timelock import (
+from taowire.config import ValidatorSettings
+from taowire.extensions.timelock import (
     SealedChallenge,
     SealedResponse,
     Timelock,
     parse_reveal_in,
 )
-from tensorwire.observability.metrics import Metrics
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.validator.client import MinerResult
+from taowire.observability.metrics import Metrics
+from taowire.testing.fake_chain import FakeChain
+from taowire.validator.client import MinerResult
 
 pytestmark = pytest.mark.asyncio
 

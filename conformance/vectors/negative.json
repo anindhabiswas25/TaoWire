@@ -194,7 +194,7 @@
   },
   {
    "id": "N5",
-   "description": "missing X-Bittensor-Receiver (TensorWire always requires it)",
+   "description": "missing X-Bittensor-Receiver (TaoWire always requires it)",
    "kind": "verify_request",
    "inputs": {
     "self_hotkey": "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty",

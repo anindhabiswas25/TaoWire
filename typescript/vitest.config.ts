@@ -41,10 +41,10 @@ export default defineConfig({
     },
     resolve: {
         alias: {
-            "@tensorwire/btauth/fastify": new URL("./src/fastify.ts", import.meta.url).pathname,
-            "@tensorwire/btauth/sidecar": new URL("./src/sidecar.ts", import.meta.url).pathname,
-            "@tensorwire/btauth/redis": new URL("./src/redis.ts", import.meta.url).pathname,
-            "@tensorwire/btauth": new URL("./src/index.ts", import.meta.url).pathname,
+            "@taowire/btauth/fastify": new URL("./src/fastify.ts", import.meta.url).pathname,
+            "@taowire/btauth/sidecar": new URL("./src/sidecar.ts", import.meta.url).pathname,
+            "@taowire/btauth/redis": new URL("./src/redis.ts", import.meta.url).pathname,
+            "@taowire/btauth": new URL("./src/index.ts", import.meta.url).pathname,
         },
     },
 });

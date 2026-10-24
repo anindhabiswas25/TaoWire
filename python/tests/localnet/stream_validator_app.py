@@ -20,11 +20,11 @@ from typing import Any
 
 from stream_miner_app import load_protocol
 
-from tensorwire import RequestSigner, ValidatorSettings
-from tensorwire.auth.keys import load_hotkey
-from tensorwire.chain.gateway import BittensorGateway
-from tensorwire.compat import AxonInfo, Dendrite
-from tensorwire.validator.weights import WeightScheduler
+from taowire import RequestSigner, ValidatorSettings
+from taowire.auth.keys import load_hotkey
+from taowire.chain.gateway import BittensorGateway
+from taowire.compat import AxonInfo, Dendrite
+from taowire.validator.weights import WeightScheduler
 
 PROMPT = "streaming works on the localnet with a signed trailer at the end"
 

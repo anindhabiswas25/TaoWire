@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
-from tensorwire import Miner, RouteContext
+from taowire import Miner, RouteContext
 
 from text_ops.protocol import (
     ROUTE,

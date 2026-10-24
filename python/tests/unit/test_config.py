@@ -10,9 +10,9 @@ from typing import Any
 
 import pytest
 
-from tensorwire import config as c
-from tensorwire.errors import ConfigError
-from tensorwire.testing.pytest_plugin import TWEnv
+from taowire import config as c
+from taowire.errors import ConfigError
+from taowire.testing.pytest_plugin import TWEnv
 
 ALICE = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
 BOB = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
@@ -53,7 +53,7 @@ def test_defaults_match_section_12(env: TWEnv) -> None:
     assert s.wallet_hotkey == "default"
     assert s.wallet_path == Path("~/.bittensor/wallets").expanduser()
     assert s.refuse_if_coldkey_present is True
-    assert s.state_dir == Path("~/.tensorwire").expanduser()
+    assert s.state_dir == Path("~/.taowire").expanduser()
     assert s.log_level == "INFO"
     assert s.metrics_bind == c.HostPort("127.0.0.1", 9100)
     assert s.chain_timeout_s == 30

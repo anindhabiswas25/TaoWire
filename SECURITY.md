@@ -1,12 +1,12 @@
 # Security policy
 
-TensorWire is security software: it decides which requests a miner accepts and whether a
+TaoWire is security software: it decides which requests a miner accepts and whether a
 validator trusts a response. We take reports seriously.
 
 ## Reporting a vulnerability
 
 **Do not open a public issue.** Report privately through GitHub's
-"Report a vulnerability" (private security advisories) on the TensorWire repository.
+"Report a vulnerability" (private security advisories) on the TaoWire repository.
 
 Please include: affected version or commit, a description, steps to reproduce, and the impact you
 see. We will acknowledge the report, agree a disclosure date with you, and credit you unless you

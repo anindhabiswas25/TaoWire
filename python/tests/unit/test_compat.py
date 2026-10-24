@@ -10,15 +10,15 @@ from typing import Any
 import pytest
 import structlog
 
-from tensorwire.chain.axon import parse_axon
-from tensorwire.chain.gateway import MetagraphView, NeuronView
-from tensorwire.compat import Axon, AxonInfo, Dendrite, Metagraph, Synapse, weights
-from tensorwire.compat.axon import PriorityGate
-from tensorwire.compat.dendrite import axons_from, status_code_for
-from tensorwire.errors import RateLimited
-from tensorwire.miner.app import Miner
-from tensorwire.testing.keys import dev_key
-from tensorwire.validator.client import MinerResult, ValidatorClient
+from taowire.chain.axon import parse_axon
+from taowire.chain.gateway import MetagraphView, NeuronView
+from taowire.compat import Axon, AxonInfo, Dendrite, Metagraph, Synapse, weights
+from taowire.compat.axon import PriorityGate
+from taowire.compat.dendrite import axons_from, status_code_for
+from taowire.errors import RateLimited
+from taowire.miner.app import Miner
+from taowire.testing.keys import dev_key
+from taowire.validator.client import MinerResult, ValidatorClient
 
 
 class Ping(Synapse):

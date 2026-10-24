@@ -41,11 +41,11 @@ from legacy_v10_models import (
     TextOps,
     V10Synapse,
 )
-from tensorwire import crypto
-from tensorwire.auth.nonce_store import MemoryNonceStore
-from tensorwire.errors import LegacyAuthFailed, LegacyDisabled, ReplayStoreUnavailable
-from tensorwire.extensions.legacy_v10 import wire
-from tensorwire.extensions.legacy_v10.server import LegacyServer
+from taowire import crypto
+from taowire.auth.nonce_store import MemoryNonceStore
+from taowire.errors import LegacyAuthFailed, LegacyDisabled, ReplayStoreUnavailable
+from taowire.extensions.legacy_v10 import wire
+from taowire.extensions.legacy_v10.server import LegacyServer
 
 TODAY = dt.date(2026, 10, 22)
 NOW = 1_792_672_891_000_000_000

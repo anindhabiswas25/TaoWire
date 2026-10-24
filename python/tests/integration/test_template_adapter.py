@@ -18,17 +18,17 @@ from typing import Any
 import httpx
 import pytest
 
-from tensorwire.compat import Axon, Synapse, TemplateValidatorAdapter
-from tensorwire.compat.template import _scaled, _TemplateRounds
-from tensorwire.config import ValidatorSettings
-from tensorwire.miner.app import Miner
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
-from tensorwire.testing.pytest_plugin import TEST_NETUID
-from tensorwire.testing.transport import AppRouter
-from tensorwire.validator.loop import Task
+from taowire.compat import Axon, Synapse, TemplateValidatorAdapter
+from taowire.compat.template import _scaled, _TemplateRounds
+from taowire.config import ValidatorSettings
+from taowire.miner.app import Miner
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
+from taowire.testing.pytest_plugin import TEST_NETUID
+from taowire.testing.transport import AppRouter
+from taowire.validator.loop import Task
 
 MINER_AXON = "44.1.2.3:8091"  # the plugin miner's TW_EXTERNAL_IP:TW_BIND_PORT
 

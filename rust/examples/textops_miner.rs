@@ -1,7 +1,7 @@
 //! The text-ops example subnet's miner in Rust (spec 10, 11.1): the same routes
 //! and byte-identical answers as the Python miner in `examples/text-ops-subnet`,
 //! on the axum `protect` layer, with caller policy and serve-axon from the
-//! TensorWire sidecar (`tensorwire sidecar`, spec 11.6).
+//! TaoWire sidecar (`taowire sidecar`, spec 11.6).
 //!
 //! ```text
 //! POST /v1/transform         {"text": s, "op": "upper"|"reverse"|"sha256"} -> {"result": ...}
@@ -33,15 +33,15 @@ use axum::routing::{get, post};
 use axum::{Extension, Json, Router};
 use serde_json::{json, Value};
 use sha2::{Digest as _, Sha256};
-use tensorwire_btauth::axum::{
+use taowire_btauth::axum::{
     error_response, protect, stream_response, BoxError, MinerAuth, StreamConfig, StreamContext,
 };
-use tensorwire_btauth::redis_store::RedisStore;
-use tensorwire_btauth::sidecar::{
+use taowire_btauth::redis_store::RedisStore;
+use taowire_btauth::sidecar::{
     CallerPolicy, Config as SidecarConfig, ServeAxonError, SidecarClient, Stage,
 };
-use tensorwire_btauth::sse::{StreamLimits, StreamSlots};
-use tensorwire_btauth::{
+use taowire_btauth::sse::{StreamLimits, StreamSlots};
+use taowire_btauth::{
     codes, Caller, Config, Error, Keypair, MemoryStore, NonceStore, RateLimit, Scheme,
     TokenBuckets, Verifier,
 };
@@ -175,7 +175,7 @@ fn load() -> Result<Settings, String> {
     let external_ip = e.required("TW_EXTERNAL_IP");
     let external_port = e.num("TW_EXTERNAL_PORT", f64::from(port)) as u16;
     let auto_serve = e.flag("TW_AUTO_SERVE_AXON", true);
-    let state = e.str("TW_STATE_DIR", "~/.tensorwire");
+    let state = e.str("TW_STATE_DIR", "~/.taowire");
     let token = e.str("TW_SIDECAR_TOKEN_FILE", &format!("{state}/sidecar.token"));
     let policy = CallerPolicy::new(
         e.flag("TW_REQUIRE_PERMIT", true),

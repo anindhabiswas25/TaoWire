@@ -53,7 +53,7 @@ otherwise (the 0..63 test key came back as control characters).
 
 ## Decision
 
-1. **TensorWire's algorithm bytes.** Only these two are published or accepted:
+1. **TaoWire's algorithm bytes.** Only these two are published or accepted:
 
    | Byte | Key | `public_key` (bytes) | TLS certificate key type |
    |---|---|---|---|
@@ -102,8 +102,8 @@ otherwise (the 0..63 test key came back as control characters).
 
 - Pinning works without any CA and without hostnames (axons are IPs).
 - Two key types only; RSA certificates must be replaced by EC (P-256) or Ed25519 ones for pinning.
-- A publisher that sends a malformed certificate keeps its old key on chain; TensorWire miners detect it at
-  startup. Non-TensorWire miners that publish other formats are reached in the HTTPS modes only if they publish
+- A publisher that sends a malformed certificate keeps its old key on chain; TaoWire miners detect it at
+  startup. Non-TaoWire miners that publish other formats are reached in the HTTPS modes only if they publish
   nothing (CA mode / HTTP), never pinned against a format this ADR does not define.
 - If the ecosystem later standardises algorithm bytes, this table is amended in a new ADR; `0x01`/`0x02` stay
   readable.

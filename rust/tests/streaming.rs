@@ -11,12 +11,12 @@ use ::axum::http::HeaderMap;
 use ::axum::response::Response;
 use ::axum::{Extension, Router};
 use futures_util::stream;
-use tensorwire_btauth::axum::{
+use taowire_btauth::axum::{
     protect, stream_response, BoxError, MinerAuth, StreamConfig, StreamContext,
 };
-use tensorwire_btauth::client::Client;
-use tensorwire_btauth::sse::*;
-use tensorwire_btauth::*;
+use taowire_btauth::client::Client;
+use taowire_btauth::sse::*;
+use taowire_btauth::*;
 
 fn seed(h: &str) -> [u8; 32] {
     hex::decode(h).unwrap().try_into().unwrap()
@@ -315,7 +315,7 @@ async fn open(
     url: &str,
     limits: StreamLimits,
     budget: Duration,
-) -> Result<tensorwire_btauth::client::Stream, Error> {
+) -> Result<taowire_btauth::client::Stream, Error> {
     c.stream(reqwest::Method::POST, url, b"{}".to_vec(), bob().ss58(), limits, budget).await
 }
 

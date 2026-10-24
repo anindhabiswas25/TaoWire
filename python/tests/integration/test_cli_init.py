@@ -1,4 +1,4 @@
-"""``tensorwire init`` (spec 8.14; Phase 2 exit: the project passes its own tests)."""
+"""``taowire init`` (spec 8.14; Phase 2 exit: the project passes its own tests)."""
 
 from __future__ import annotations
 
@@ -9,14 +9,14 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from tensorwire.cli.init_cmd import package_name, render_project
-from tensorwire.cli.main import app
+from taowire.cli.init_cmd import package_name, render_project
+from taowire.cli.main import app
 
 EXAMPLE = Path(__file__).resolve().parents[3] / "examples" / "text-ops-subnet"
 
 
 def test_example_is_the_scaffold() -> None:
-    # examples/text-ops-subnet is `tensorwire init` output plus its own README.
+    # examples/text-ops-subnet is `taowire init` output plus its own README.
     files = render_project("text-ops-subnet", package="text_ops")
     for rel, content in files.items():
         if rel == "README.md":
@@ -39,9 +39,7 @@ def test_rendering_renames_project_and_package() -> None:
     assert not any("text_ops" in c or "text-ops-subnet" in c for c in files.values())
 
 
-@pytest.mark.parametrize(
-    "bad", ["1abc", "a b", "", "x" * 65, "tensorwire", "class", "-a"]
-)
+@pytest.mark.parametrize("bad", ["1abc", "a b", "", "x" * 65, "taowire", "class", "-a"])
 def test_bad_names(bad: str) -> None:
     with pytest.raises(ValueError):  # noqa: PT011 - several messages
         package_name(bad)

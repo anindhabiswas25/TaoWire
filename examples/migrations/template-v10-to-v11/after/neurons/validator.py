@@ -24,7 +24,7 @@ import time
 import logging
 
 # import base validator class which takes care of most of the boilerplate
-from tensorwire.compat import TemplateValidatorAdapter as BaseValidatorNeuron
+from taowire.compat import TemplateValidatorAdapter as BaseValidatorNeuron
 
 # Bittensor Validator Template:
 from template.validator import forward

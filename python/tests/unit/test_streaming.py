@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from tensorwire.extensions import streaming as sse
+from taowire.extensions import streaming as sse
 
 VECTORS = Path(__file__).resolve().parents[3] / "conformance" / "vectors"
 DIGEST = "ab" * 32

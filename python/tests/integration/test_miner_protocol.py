@@ -14,8 +14,8 @@ import pytest
 import uvicorn
 from uvicorn.server import ServerState
 
-from tensorwire.miner.app import NoSignalServer
-from tensorwire.miner.protocol import (
+from taowire.miner.app import NoSignalServer
+from taowire.miner.protocol import (
     MAX_HEADER_BYTES,
     MAX_HEADERS,
     GuardedHttpToolsProtocol,

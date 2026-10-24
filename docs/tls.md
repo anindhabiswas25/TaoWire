@@ -1,4 +1,4 @@
-# TLS: the `tensorwire.tls` API
+# TLS: the `taowire.tls` API
 
 Behaviour, modes and deployment are in [security.md](security.md#tls-spec-163-d31-adr-0011); the key format is
 [ADR-0011](adr/0011-serve-axon-tls-key-format.md). This page lists the public functions for code that works with
@@ -6,7 +6,7 @@ published TLS keys directly (the miner and `ValidatorClient` already use them).
 
 | Name | What it does |
 |---|---|
-| `ALG_ED25519` (`0x01`), `ALG_P256` (`0x02`), `MAX_PUBLISHED_BYTES` (65) | The algorithm bytes TensorWire publishes and accepts, and the chain's size limit |
+| `ALG_ED25519` (`0x01`), `ALG_P256` (`0x02`), `MAX_PUBLISHED_BYTES` (65) | The algorithm bytes TaoWire publishes and accepts, and the chain's size limit |
 | `published_key_from_der(der) -> bytes` | The compact key (algorithm byte + key) of a DER certificate; `UnsupportedKey` for anything that is not an Ed25519 or P-256 certificate |
 | `parse_published(raw) -> bytes \| None` | `raw` (what the chain stores, untrusted) if it can be pinned, else `None` ("published but unusable": refuse the miner, never use plain HTTP) |
 | `pinned_context(expected) -> ssl.SSLContext` | A client context (TLS ≥ 1.2, no renegotiation) that accepts only a leaf certificate whose key is `expected`. The check runs when the handshake completes, before any request byte, for asyncio/anyio streams and blocking sockets alike. Works with `httpx.AsyncHTTPTransport(verify=...)` |
@@ -18,7 +18,7 @@ published TLS keys directly (the miner and `ValidatorClient` already use them).
 
 ```python
 import httpx
-from tensorwire.tls import parse_published, pinned_context
+from taowire.tls import parse_published, pinned_context
 
 key = parse_published(neuron.tls_key or b"")
 if key is not None:

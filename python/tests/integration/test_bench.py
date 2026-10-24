@@ -1,4 +1,4 @@
-"""``tensorwire bench`` (spec 13.7): its pieces in process, and one short real run."""
+"""``taowire bench`` (spec 13.7): its pieces in process, and one short real run."""
 
 from __future__ import annotations
 
@@ -10,11 +10,11 @@ import httpx
 import pytest
 from typer.testing import CliRunner
 
-from tensorwire.cli import bench_cmd
-from tensorwire.cli.main import app
-from tensorwire.config import MinerSettings
-from tensorwire.testing import bench as tb
-from tensorwire.testing.keys import dev_key
+from taowire.cli import bench_cmd
+from taowire.cli.main import app
+from taowire.config import MinerSettings
+from taowire.testing import bench as tb
+from taowire.testing.keys import dev_key
 
 
 def settings() -> MinerSettings:
@@ -85,7 +85,7 @@ async def test_load_and_auth_overhead_in_process() -> None:
 
 
 async def test_auth_overhead_needs_the_bench_route() -> None:
-    from tensorwire.miner.app import Miner
+    from taowire.miner.app import Miner
 
     plain = tb.bench_miner(settings())
     other = Miner(
@@ -307,7 +307,7 @@ def test_no_docker_means_no_containers() -> None:
 def test_render_prints_the_redis_path() -> None:
     proxy = resolve("redis://127.0.0.1:6379/14", [TW_REDIS], set())
     report = bench_cmd.BenchReport(
-        environment={"tensorwire": "x", "redis_path": dataclasses.asdict(proxy)}
+        environment={"taowire": "x", "redis_path": dataclasses.asdict(proxy)}
     )
     report.verdict = bench_cmd._verdict(report, bench_cmd.Targets())
     text = bench_cmd.render(report, bench_cmd.Targets())
@@ -321,7 +321,7 @@ def test_cli_rejects_unknown_skip() -> None:
 
 def test_render_marks_skipped_and_misses() -> None:
     report = bench_cmd.BenchReport(
-        environment={"tensorwire": "x"},
+        environment={"taowire": "x"},
         auth={"p50_ms": 3.0, "p99_ms": 9.0, "requests": 1, "backend": "memory"},
     )
     report.verdict = bench_cmd._verdict(report, bench_cmd.Targets())

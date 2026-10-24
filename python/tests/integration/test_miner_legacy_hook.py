@@ -21,15 +21,15 @@ import pytest
 import structlog.testing
 from pydantic import BaseModel, Field
 
-from tensorwire.auth.verifier import Caller
-from tensorwire.compat.synapse import Synapse
-from tensorwire.crypto import CRYPTO_SR25519
-from tensorwire.errors import HandlerError, LegacyAuthFailed, StartupError, TWError
-from tensorwire.miner.app import Miner
-from tensorwire.miner.routes import RouteContext
-from tensorwire.testing.client import BASE_URL, SignedClient
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.keys import dev_key
+from taowire.auth.verifier import Caller
+from taowire.compat.synapse import Synapse
+from taowire.crypto import CRYPTO_SR25519
+from taowire.errors import HandlerError, LegacyAuthFailed, StartupError, TWError
+from taowire.miner.app import Miner
+from taowire.miner.routes import RouteContext
+from taowire.testing.client import BASE_URL, SignedClient
+from taowire.testing.clock import FakeClock
+from taowire.testing.keys import dev_key
 
 UNTIL = dt.datetime.now(dt.timezone.utc).date() + dt.timedelta(days=30)
 
@@ -369,7 +369,7 @@ def _with_until(tw_miner_kwargs: dict[str, Any]) -> dict[str, Any]:
 async def test_until_builds_the_real_bridge_by_default(
     tw_miner_kwargs: dict[str, Any],
 ) -> None:
-    from tensorwire.extensions.legacy_v10.server import LegacyServer
+    from taowire.extensions.legacy_v10.server import LegacyServer
 
     miner = Miner(**_with_until(tw_miner_kwargs))  # no legacy_server=
     async with miner.running():
@@ -382,7 +382,7 @@ async def test_until_without_the_bridge_refuses_to_start(
     tw_miner_kwargs: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # A build without extensions/legacy_v10 (the import fails).
-    monkeypatch.setitem(sys.modules, "tensorwire.extensions.legacy_v10.server", None)
+    monkeypatch.setitem(sys.modules, "taowire.extensions.legacy_v10.server", None)
     miner = Miner(**_with_until(tw_miner_kwargs))
     with pytest.raises(StartupError, match="not in this build"):
         async with miner.running():

@@ -1,10 +1,10 @@
 [package]
-name = "tensorwire-btauth"
+name = "taowire-btauth"
 version = "0.1.0-dev"
 edition = "2021"
 rust-version = "1.80"
 license = "Apache-2.0"
-description = "btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets (TensorWire)"
+description = "btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets (TaoWire)"
 readme = "README.md"
 keywords = ["bittensor", "sr25519", "ed25519", "authentication"]
 categories = ["authentication", "cryptography"]

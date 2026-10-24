@@ -7,9 +7,9 @@ from typing import Any
 import pytest
 from bittensor import sp_core
 
-from tensorwire.crypto import HotkeySigner, signature_to_hex
-from tensorwire.extensions import response_sig as rs
-from tensorwire.testing.keys import dev_key
+from taowire.crypto import HotkeySigner, signature_to_hex
+from taowire.extensions import response_sig as rs
+from taowire.testing.keys import dev_key
 
 MINER = dev_key("bob")
 VALIDATOR = dev_key("alice")

@@ -21,13 +21,13 @@ from typing import Any
 
 import pytest
 
-from tensorwire.compat import Axon, AxonInfo, Dendrite
-from tensorwire.miner.app import Miner
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.pytest_plugin import MINER_KEY, TEST_NETUID
-from tensorwire.testing.transport import AppRouter
+from taowire.compat import Axon, AxonInfo, Dendrite
+from taowire.miner.app import Miner
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.pytest_plugin import MINER_KEY, TEST_NETUID
+from taowire.testing.transport import AppRouter
 
 # The template's protocol uses pydantic v1's Field(allow_mutation=False): pydantic 2
 # warns about it (under bittensor 10.5.0 too). Not a kit warning, so ignored here.
@@ -337,7 +337,7 @@ async def test_a_failing_extract_response_json_is_a_status_not_a_crash(
 async def test_v10_timeout_never_loosens_tw_stream_max_s(
     axon: tuple[AppRouter, AxonInfo, Any], tw_clock: FakeClock, protocol: Any
 ) -> None:
-    from tensorwire.extensions.streaming import StreamLimits
+    from taowire.extensions.streaming import StreamLimits
 
     router, info, _ = axon
     d = Dendrite(

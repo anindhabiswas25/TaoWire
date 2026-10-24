@@ -21,8 +21,8 @@ from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from tensorwire.chain.gateway import SdkSurfaceError, neuron_certificates
-from tensorwire.tls import (
+from taowire.chain.gateway import SdkSurfaceError, neuron_certificates
+from taowire.tls import (
     ALG_ED25519,
     ALG_P256,
     MAX_PUBLISHED_BYTES,

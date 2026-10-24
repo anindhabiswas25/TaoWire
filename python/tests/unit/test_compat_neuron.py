@@ -6,17 +6,17 @@ from pathlib import Path
 
 import pytest
 
-from tensorwire.chain.gateway import MetagraphView, NeuronView
-from tensorwire.compat import Metagraph
-from tensorwire.compat.neuron import (
+from taowire.chain.gateway import MetagraphView, NeuronView
+from taowire.compat import Metagraph
+from taowire.compat.neuron import (
     HotkeyWallet,
     SubtensorView,
     TemplateNeuronSurface,
     interrupt,
 )
-from tensorwire.config import ValidatorSettings
-from tensorwire.crypto import verify
-from tensorwire.testing.keys import dev_key
+from taowire.config import ValidatorSettings
+from taowire.crypto import verify
+from taowire.testing.keys import dev_key
 
 ALICE = dev_key("alice")
 BOB = dev_key("bob")

@@ -22,10 +22,10 @@
     "declaration": true,
     "sourceMap": true,
     "paths": {
-      "@tensorwire/btauth": ["./src/index.ts"],
-      "@tensorwire/btauth/fastify": ["./src/fastify.ts"],
-      "@tensorwire/btauth/redis": ["./src/redis.ts"],
-      "@tensorwire/btauth/sidecar": ["./src/sidecar.ts"]
+      "@taowire/btauth": ["./src/index.ts"],
+      "@taowire/btauth/fastify": ["./src/fastify.ts"],
+      "@taowire/btauth/redis": ["./src/redis.ts"],
+      "@taowire/btauth/sidecar": ["./src/sidecar.ts"]
     }
   },
   "include": ["src", "test", "bench", "examples", "vitest.config.ts"]

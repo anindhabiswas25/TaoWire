@@ -13,13 +13,13 @@ from typing import Any
 import pytest
 import structlog
 
-from tensorwire.observability.logging import (
+from taowire.observability.logging import (
     configure_logging,
     new_request_id,
     short_hotkey,
 )
-from tensorwire.observability.metrics import Metrics
-from tensorwire.observability.middleware import RequestContext, state_of
+from taowire.observability.metrics import Metrics
+from taowire.observability.middleware import RequestContext, state_of
 
 ULID_RE = re.compile(r"[0-9A-HJKMNP-TV-Z]{26}")
 
@@ -39,15 +39,15 @@ def test_configure_logging_emits_json_for_structlog_and_stdlib() -> None:
     stream = io.StringIO()
     configure_logging("INFO", stream=stream)
     configure_logging("INFO", stream=stream)  # idempotent: one handler
-    structlog.stdlib.get_logger("tensorwire.x").info("hello", route="/v1/a")
+    structlog.stdlib.get_logger("taowire.x").info("hello", route="/v1/a")
     logging.getLogger("uvicorn.error").warning("from stdlib")
-    structlog.stdlib.get_logger("tensorwire.x").debug("hidden")
+    structlog.stdlib.get_logger("taowire.x").debug("hidden")
     lines = [json.loads(line) for line in stream.getvalue().splitlines()]
     assert [line["event"] for line in lines] == ["hello", "from stdlib"]
     first = lines[0]
     assert first["level"] == "info"
     assert first["route"] == "/v1/a"
-    assert first["logger"] == "tensorwire.x"
+    assert first["logger"] == "taowire.x"
     assert first["ts"].endswith("Z")
     assert lines[1]["level"] == "warning"
 

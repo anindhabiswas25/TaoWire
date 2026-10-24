@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from tensorwire.extensions.timelock import SealedChallenge, SealedResponse
-from tensorwire.miner.app import Miner
-from tensorwire.miner.routes import RouteContext
+from taowire.extensions.timelock import SealedChallenge, SealedResponse
+from taowire.miner.app import Miner
+from taowire.miner.routes import RouteContext
 
 
 class Question(BaseModel):

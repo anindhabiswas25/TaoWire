@@ -13,7 +13,7 @@ import bittensor as bt
 from bittensor.keyfiles import Keypair
 
 #: ``$LOCALNET_DIR`` (``localnet_up.sh``); a second chain has its own.
-STATE_DIR = Path(os.environ.get("LOCALNET_DIR", "~/.tensorwire/localnet")).expanduser()
+STATE_DIR = Path(os.environ.get("LOCALNET_DIR", "~/.taowire/localnet")).expanduser()
 
 
 def _endpoint() -> str:

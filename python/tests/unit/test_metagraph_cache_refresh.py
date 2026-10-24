@@ -14,15 +14,15 @@ from typing import Any
 
 import pytest
 
-from tensorwire.chain.gateway import ChainUnavailable, MetagraphView, SubnetNotFound
-from tensorwire.chain.metagraph_cache import (
+from taowire.chain.gateway import ChainUnavailable, MetagraphView, SubnetNotFound
+from taowire.chain.metagraph_cache import (
     DEFAULT_TEMPO,
     MetagraphCache,
     MetagraphSource,
     StalenessStage,
     StalenessThresholds,
 )
-from tensorwire.testing.fake_chain import FakeChain
+from taowire.testing.fake_chain import FakeChain
 
 NETUID = 2
 VALIDATOR = "5Validator"
@@ -260,7 +260,7 @@ async def test_failing_listener_does_not_stop_others(
 
     cache.add_refresh_listener(bad)
     cache.add_refresh_listener(lambda _: calls.append("ok"))
-    with caplog.at_level(logging.ERROR, logger="tensorwire.chain"):
+    with caplog.at_level(logging.ERROR, logger="taowire.chain"):
         await cache.refresh_now()
     assert calls == ["ok"]
     assert cache.snapshot() is not None
@@ -275,7 +275,7 @@ async def test_staleness_stages_during_an_outage(
     cache.add_failure_listener(failures.append)
     chain.fail_next("metagraph", times=1000)
     try:
-        with caplog.at_level(logging.WARNING, logger="tensorwire.chain"):
+        with caplog.at_level(logging.WARNING, logger="taowire.chain"):
             assert await clock.release() == 100.0  # refresh fails at t=100
             assert cache.stage() is StalenessStage.FRESH
             assert await clock.release() == 5.0
@@ -327,7 +327,7 @@ async def test_stale_warning_repeats_every_five_minutes(
     cache = await _started(chain, clock, refresh_s=200.0)
     chain.fail_next("metagraph", times=1000)
     try:
-        with caplog.at_level(logging.WARNING, logger="tensorwire.chain"):
+        with caplog.at_level(logging.WARNING, logger="taowire.chain"):
             for _ in range(8):
                 await clock.release()
     finally:

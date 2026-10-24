@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Count subnets running TensorWire: product metric M1 (spec 1.6).
+"""Count subnets running TaoWire: product metric M1 (spec 1.6).
 
 Reads every subnet's metagraph and counts the served axons whose on-chain
-``protocol`` byte equals the TensorWire tag (spec 8.7.2). A subnet counts
+``protocol`` byte equals the TaoWire tag (spec 8.7.2). A subnet counts
 toward M1 when at least ``--min-axons`` of its axons advertise the tag. The
 tag is advisory and any team can publish the same byte, so cross-check the
-result against public repositories that depend on ``tensorwire``.
+result against public repositories that depend on ``taowire``.
 
 Read-only: it never signs or submits anything and needs no wallet. Public
 endpoints are rate-limited (about 1 request per second), so it pauses

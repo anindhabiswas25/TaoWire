@@ -14,7 +14,7 @@
 Needs Engineer A's ``compat`` and ``validator`` packages; skipped without them.
 """
 
-# (ruff files the tensorwire modules that exist only on eng-a/core as third-party
+# (ruff files the taowire modules that exist only on eng-a/core as third-party
 # on eng-b/chain; known-first-party is requested in COORDINATION.md.)
 from __future__ import annotations
 
@@ -32,36 +32,36 @@ import structlog
 
 from legacy_v10_models import BY_ID, body_bytes, nonce_of, request_headers
 
-pytest.importorskip("tensorwire.compat.synapse", reason="needs Engineer A's compat")
-pytest.importorskip("tensorwire.validator.client", reason="needs A's validator")
+pytest.importorskip("taowire.compat.synapse", reason="needs Engineer A's compat")
+pytest.importorskip("taowire.validator.client", reason="needs A's validator")
 
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
-from tensorwire import crypto
-from tensorwire.auth.nonce_store import MemoryNonceStore
-from tensorwire.chain.gateway import NeuronView
-from tensorwire.compat.synapse import Synapse
-from tensorwire.config import MinerSettings, ValidatorSettings
-from tensorwire.errors import ConfigError, Forbidden, HandlerError
-from tensorwire.extensions.legacy_v10 import wire
-from tensorwire.extensions.legacy_v10.client import (
+from taowire import crypto
+from taowire.auth.nonce_store import MemoryNonceStore
+from taowire.chain.gateway import NeuronView
+from taowire.compat.synapse import Synapse
+from taowire.config import MinerSettings, ValidatorSettings
+from taowire.errors import ConfigError, Forbidden, HandlerError
+from taowire.extensions.legacy_v10 import wire
+from taowire.extensions.legacy_v10.client import (
     LegacyClient,
     ProtocolSelector,
 )
-from tensorwire.extensions.legacy_v10.server import LegacyServer
-from tensorwire.miner.app import Miner
-from tensorwire.miner.routes import RouteContext
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
-from tensorwire.testing.pytest_plugin import TEST_NETUID
-from tensorwire.testing.transport import AppRouter
-from tensorwire.validator.client import MinerResult, ValidatorClient
-from tensorwire.validator.loop import SubnetValidator, Task, ValidatorRunner
+from taowire.extensions.legacy_v10.server import LegacyServer
+from taowire.miner.app import Miner
+from taowire.miner.routes import RouteContext
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
+from taowire.testing.pytest_plugin import TEST_NETUID
+from taowire.testing.transport import AppRouter
+from taowire.validator.client import MinerResult, ValidatorClient
+from taowire.validator.loop import SubnetValidator, Task, ValidatorRunner
 
 TODAY = dt.datetime.now(dt.timezone.utc).date()
 UNTIL = TODAY + dt.timedelta(days=30)

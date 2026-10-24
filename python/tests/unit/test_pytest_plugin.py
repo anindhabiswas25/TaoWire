@@ -6,7 +6,7 @@ import os
 
 import pytest
 
-from tensorwire.testing.pytest_plugin import TWEnv
+from taowire.testing.pytest_plugin import TWEnv
 
 
 @pytest.fixture
@@ -28,4 +28,4 @@ def test_tw_env_clears_inherited_variables(request: pytest.FixtureRequest) -> No
 
 
 def test_plugin_is_registered(pytestconfig: pytest.Config) -> None:
-    assert pytestconfig.pluginmanager.has_plugin("tensorwire")
+    assert pytestconfig.pluginmanager.has_plugin("taowire")

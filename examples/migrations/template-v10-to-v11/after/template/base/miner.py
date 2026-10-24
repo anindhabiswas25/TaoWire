@@ -19,8 +19,8 @@
 import logging
 import argparse
 
-from tensorwire import Miner as KitMiner
-from tensorwire.compat import Axon, Metagraph
+from taowire import Miner as KitMiner
+from taowire.compat import Axon, Metagraph
 
 from template.base.neuron import BaseNeuron
 from template.utils.config import add_miner_args
@@ -52,7 +52,7 @@ class BaseMinerNeuron(BaseNeuron):
             )
 
         # The axon handles request processing, allowing validators to send this miner requests.
-        # TensorWire verifies every request and applies its caller policy before blacklist().
+        # TaoWire verifies every request and applies its caller policy before blacklist().
         self.axon = Axon(miner=miner or KitMiner.from_env())
         self.metagraph = Metagraph.of_miner(self.axon.miner)
 
@@ -67,7 +67,7 @@ class BaseMinerNeuron(BaseNeuron):
 
     def run(self):
         """
-        Starts the miner: TensorWire checks registration, publishes the axon
+        Starts the miner: TaoWire checks registration, publishes the axon
         (TW_EXTERNAL_IP), keeps the metagraph fresh and serves until SIGTERM.
         """
         self.axon.serve(netuid=self.config.netuid)

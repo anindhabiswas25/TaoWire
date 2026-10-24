@@ -41,8 +41,8 @@ from test_validator_e2e_localnet import (
     _until,
 )
 
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import BittensorGateway
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import BittensorGateway
 
 HERE = Path(__file__).resolve().parent
 
@@ -61,7 +61,7 @@ def _start_script(script: str, env: dict[str, str], log: Path, *args: str) -> Pr
 
 @pytest.fixture
 def evidence_dir(tmp_path: Path) -> Path:
-    target = os.environ.get("TENSORWIRE_E2E_EVIDENCE_DIR")
+    target = os.environ.get("TAOWIRE_E2E_EVIDENCE_DIR")
     path = Path(target) if target else tmp_path / "evidence"
     path.mkdir(parents=True, exist_ok=True)
     return path

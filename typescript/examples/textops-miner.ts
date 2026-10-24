@@ -1,6 +1,6 @@
 // The text-ops example subnet's miner in TypeScript (spec 10, 11.1): the same routes and
 // byte-identical answers as the Python miner in examples/text-ops-subnet, on the Fastify
-// adapter, with caller policy and serve-axon from the TensorWire sidecar (`tensorwire
+// adapter, with caller policy and serve-axon from the TaoWire sidecar (`taowire
 // sidecar`, spec 11.6).
 //
 //   POST /v1/transform         {"text": s, "op": "upper"|"reverse"|"sha256"} -> {"result": ...}
@@ -29,10 +29,10 @@ import {
     Verifier,
     errorBody,
     initCrypto,
-} from "@tensorwire/btauth";
-import { btauth, rawBody, streamReply } from "@tensorwire/btauth/fastify";
-import { RedisNonceStore } from "@tensorwire/btauth/redis";
-import { CallerPolicy, SidecarChainError, SidecarClient } from "@tensorwire/btauth/sidecar";
+} from "@taowire/btauth";
+import { btauth, rawBody, streamReply } from "@taowire/btauth/fastify";
+import { RedisNonceStore } from "@taowire/btauth/redis";
+import { CallerPolicy, SidecarChainError, SidecarClient } from "@taowire/btauth/sidecar";
 
 const ROUTE = "/v1/transform";
 const STREAM_ROUTE = "/v1/transform/stream";
@@ -120,7 +120,7 @@ async function main(): Promise<void> {
     const externalIp = required("TW_EXTERNAL_IP");
     const externalPort = num("TW_EXTERNAL_PORT", port);
     const autoServe = flag("TW_AUTO_SERVE_AXON", true);
-    const state = str("TW_STATE_DIR", "~/.tensorwire");
+    const state = str("TW_STATE_DIR", "~/.taowire");
     const tokenFile = home(str("TW_SIDECAR_TOKEN_FILE", `${state}/sidecar.token`));
     const sidecarUrl = `http://127.0.0.1:${String(num("TW_SIDECAR_PORT", 9910))}`;
     const retention = num("TW_NONCE_RETENTION_S", 60);

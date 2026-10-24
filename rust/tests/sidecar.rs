@@ -9,12 +9,12 @@ use ::axum::http::{HeaderMap, Request, StatusCode, Uri};
 use ::axum::response::Response;
 use ::axum::Router;
 use serde_json::{json, Value};
-use tensorwire_btauth::axum::{protect, MinerAuth};
-use tensorwire_btauth::sidecar::{
+use taowire_btauth::axum::{protect, MinerAuth};
+use taowire_btauth::sidecar::{
     is_loopback, parse_decision, parse_health, parse_snapshot, read_token_file, CallerPolicy,
     Config as SidecarConfig, Decision, ServeAxonError, SidecarClient, Stage, MAX_ANSWER_BYTES,
 };
-use tensorwire_btauth::*;
+use taowire_btauth::*;
 use tower::ServiceExt;
 
 const ALICE: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
@@ -529,7 +529,7 @@ async fn protect_runs_the_policy() {
         let verifier = Verifier::new(Config::new(key.ss58(), store)).unwrap();
         let seen_path = Arc::new(Mutex::new(String::new()));
         let p = Arc::clone(&seen_path);
-        let policy: tensorwire_btauth::axum::PolicyFn = Arc::new(move |_c: &Caller, path: &str| {
+        let policy: taowire_btauth::axum::PolicyFn = Arc::new(move |_c: &Caller, path: &str| {
             *p.lock().unwrap() = path.to_owned();
             Err(err.clone())
         });

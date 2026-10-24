@@ -1,4 +1,4 @@
-"""``tensorwire doctor`` (spec 8.14), on FakeChain with injected network parts."""
+"""``taowire doctor`` (spec 8.14), on FakeChain with injected network parts."""
 
 from __future__ import annotations
 
@@ -11,15 +11,15 @@ import pytest
 from bittensor import sp_core
 from typer.testing import CliRunner
 
-from tensorwire.cli import doctor as doctor_cmd
-from tensorwire.cli.doctor import Doctor
-from tensorwire.cli.main import app
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.pytest_plugin import TWEnv
-from tensorwire.testing.tls import make_certificate
-from tensorwire.tls import TlsPinMismatch, load_published_certificate
-from tensorwire.validator.lock import HotkeyLock
+from taowire.cli import doctor as doctor_cmd
+from taowire.cli.doctor import Doctor
+from taowire.cli.main import app
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.pytest_plugin import TWEnv
+from taowire.testing.tls import make_certificate
+from taowire.tls import TlsPinMismatch, load_published_certificate
+from taowire.validator.lock import HotkeyLock
 
 NETUID = 3
 BOB = dev_key("bob")

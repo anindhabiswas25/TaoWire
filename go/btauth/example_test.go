@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/tensorwire/tensorwire/go/btauth"
+	"github.com/anindhabiswas25/TaoWire/go/btauth"
 )
 
 // The README quickstart: a protected miner route and a validator calling it.

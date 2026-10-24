@@ -24,25 +24,25 @@ import pytest
 import uvicorn
 from pydantic import BaseModel
 
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import NeuronView
-from tensorwire.extensions.streaming import StreamingReply
-from tensorwire.miner.app import Miner, NoSignalServer
-from tensorwire.miner.routes import RouteContext
-from tensorwire.observability.metrics import Metrics
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.pytest_plugin import MINER_KEY, TEST_NETUID
-from tensorwire.testing.tls import (
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import NeuronView
+from taowire.extensions.streaming import StreamingReply
+from taowire.miner.app import Miner, NoSignalServer
+from taowire.miner.routes import RouteContext
+from taowire.observability.metrics import Metrics
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.pytest_plugin import MINER_KEY, TEST_NETUID
+from taowire.testing.tls import (
     KeyKind,
     TestCertificate,
     make_ca,
     make_certificate,
 )
-from tensorwire.tls import load_published_certificate
-from tensorwire.validator import client as client_mod
-from tensorwire.validator.client import SchemePolicy, ValidatorClient
+from taowire.tls import load_published_certificate
+from taowire.validator import client as client_mod
+from taowire.validator.client import SchemePolicy, ValidatorClient
 
 pytestmark = pytest.mark.asyncio
 

@@ -1,19 +1,19 @@
-# The sidecar (`tensorwire sidecar`)
+# The sidecar (`taowire sidecar`)
 
 A miner written in TypeScript, Go or Rust verifies btauth/1 and signs twresp/1 itself (its language package),
 but it does not talk to the chain. The **sidecar** does that part for it: a small Python service, on the same
 host, that holds the miner's hotkey, follows the metagraph and publishes the miner's axon (spec 11.6).
 
 ```
-validator ──btauth/1──▶ Go / Rust / TS miner ──loopback, bearer token──▶ tensorwire sidecar ──▶ chain
+validator ──btauth/1──▶ Go / Rust / TS miner ──loopback, bearer token──▶ taowire sidecar ──▶ chain
 ```
 
 ## Run it
 
 ```bash
-pip install tensorwire            # the Python package (it brings the CLI)
+pip install taowire            # the Python package (it brings the CLI)
 export TW_NETWORK=finney TW_NETUID=42 TW_WALLET_NAME=miner TW_WALLET_HOTKEY=default
-tensorwire sidecar                # 127.0.0.1:9910; writes the token on first run
+taowire sidecar                # 127.0.0.1:9910; writes the token on first run
 ```
 
 The first run creates `$TW_STATE_DIR/sidecar.token` (mode 0600) and logs its path, never the token. Point the
@@ -37,7 +37,7 @@ Exit codes: 2 for invalid settings, 1 for a refused startup.
 | `TW_SIDECAR_PORT` | `9910` | `--port` overrides it |
 | `TW_SIDECAR_TOKEN_FILE` | `$TW_STATE_DIR/sidecar.token` | generated with mode 0600 when missing |
 | `TW_SIDECAR_UNSAFE_BIND` | `0` | `1` allows a `--host` other than loopback (unsafe) |
-| `TW_NETUID`, `TW_WALLET_*`, `TW_NETWORK`, `TW_CHAIN_*`, `TW_METAGRAPH_*`, `TW_STARTUP_TIMEOUT_S`, `TW_METRICS_BIND`, `TW_PROTOCOL_TAG`, `TW_ALLOW_PRIVATE_AXONS` | spec 12.1 | the chain side, as for every TensorWire process |
+| `TW_NETUID`, `TW_WALLET_*`, `TW_NETWORK`, `TW_CHAIN_*`, `TW_METAGRAPH_*`, `TW_STARTUP_TIMEOUT_S`, `TW_METRICS_BIND`, `TW_PROTOCOL_TAG`, `TW_ALLOW_PRIVATE_AXONS` | spec 12.1 | the chain side, as for every TaoWire process |
 | `TW_REQUIRE_PERMIT`, `TW_MIN_CALLER_STAKE_TAO`, `TW_ALLOW_HOTKEYS`, `TW_DENY_HOTKEYS`, `TW_METAGRAPH_STRICT` | spec 12.2 | the policy of `GET /v1/caller` |
 
 Metrics (`TW_METRICS_BIND`, default `127.0.0.1:9100`; give the miner and the sidecar different ports on one
@@ -62,9 +62,9 @@ weight setting through the sidecar.
 
 | Language | Package | Start |
 |---|---|---|
-| TypeScript | `@tensorwire/btauth/sidecar` | `new SidecarClient({ netuid, tokenFile, expectedHotkey })`, `await start()`, `policy: sidecar.policyHook()` |
-| Go | `github.com/tensorwire/tensorwire/go/sidecar` | `sidecar.New(sidecar.Config{...})`, `Start(ctx)`, `MiddlewareConfig{Policy: sc.Policy()}` |
-| Rust | `tensorwire-btauth`, feature `sidecar` | `SidecarClient::new(Config {...})`, `start().await`, `MinerAuth::with_policy(sc.policy())` |
+| TypeScript | `@taowire/btauth/sidecar` | `new SidecarClient({ netuid, tokenFile, expectedHotkey })`, `await start()`, `policy: sidecar.policyHook()` |
+| Go | `github.com/anindhabiswas25/TaoWire/go/sidecar` | `sidecar.New(sidecar.Config{...})`, `Start(ctx)`, `MiddlewareConfig{Policy: sc.Policy()}` |
+| Rust | `taowire-btauth`, feature `sidecar` | `SidecarClient::new(Config {...})`, `start().await`, `MinerAuth::with_policy(sc.policy())` |
 
 Without a chain, `conformance/interop/sidecar_check.py` runs all three against a FakeChain-backed sidecar
 (evidence in `reports/phase-5/sidecar-interop/`).

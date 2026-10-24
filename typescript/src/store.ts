@@ -40,7 +40,7 @@ export function secondsToNs(seconds: number): bigint {
 
 /**
  * A {@link NonceStore} for one process. Several processes or hosts serving
- * one hotkey need a shared store (`@tensorwire/btauth/redis`).
+ * one hotkey need a shared store (`@taowire/btauth/redis`).
  *
  * A pair is forgotten only when the retention has passed on the monotonic
  * clock **and** its nonce is older than the retention on the wall clock, so a

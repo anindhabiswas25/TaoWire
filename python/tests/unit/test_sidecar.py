@@ -18,22 +18,22 @@ import structlog.testing
 import uvicorn
 from typer.testing import CliRunner
 
-from tensorwire.cli import sidecar_cmd
-from tensorwire.cli.main import app as cli_app
-from tensorwire.config import SidecarSettings
-from tensorwire.errors import StartupError
-from tensorwire.sidecar import (
+from taowire.cli import sidecar_cmd
+from taowire.cli.main import app as cli_app
+from taowire.config import SidecarSettings
+from taowire.errors import StartupError
+from taowire.sidecar import (
     MAX_BODY_BYTES,
     Sidecar,
     load_or_create_token,
     parse_serve_axon,
     token_matches,
 )
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
-from tensorwire.testing.pytest_plugin import TWEnv
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
+from taowire.testing.pytest_plugin import TWEnv
 
 NETUID = 1
 ALICE = dev_key("alice").ss58  # validator permit, 1000 TAO

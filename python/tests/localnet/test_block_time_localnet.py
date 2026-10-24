@@ -5,8 +5,8 @@ than wall-clock, so the tests elsewhere cannot tell a schedule that counts
 blocks from one that counts seconds. These run only on a 12 s chain:
 
     LOCALNET_FAST_BLOCKS=0 LOCALNET_RPC_PORT=9954 LOCALNET_CONTAINER=local_chain_12s \\
-      LOCALNET_DIR=~/.tensorwire/localnet-12s scripts/localnet_up.sh
-    LOCALNET_DIR=~/.tensorwire/localnet-12s uv run pytest -m localnet tests/localnet
+      LOCALNET_DIR=~/.taowire/localnet-12s scripts/localnet_up.sh
+    LOCALNET_DIR=~/.taowire/localnet-12s uv run pytest -m localnet tests/localnet
 
 They use the chain's default limits (ServingRateLimit 50, WeightsSetRateLimit
 100), so they take about 10 and 25 minutes. Dev wallets only: ``miner_rs``
@@ -44,8 +44,8 @@ from test_validator_e2e_localnet import (
     miner,
 )
 
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import BittensorGateway
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import BittensorGateway
 
 __all__ = ["evidence_dir", "miner"]  # pytest fixtures used below
 

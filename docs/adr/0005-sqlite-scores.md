@@ -13,7 +13,7 @@ is small (one row per UID), written by one process, and must survive crashes.
 
 ## Decision
 
-1. `tensorwire.validator.scores.ScoreStore` keeps the state in
+1. `taowire.validator.scores.ScoreStore` keeps the state in
    `TW_STATE_DIR/scores.db` (directory mode 0700), SQLite in WAL mode with
    `synchronous=NORMAL`, the schema of spec 8.9 (`scores`, `rounds`,
    `weight_submissions`).

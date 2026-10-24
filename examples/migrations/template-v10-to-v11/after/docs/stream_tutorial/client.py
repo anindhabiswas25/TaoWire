@@ -1,8 +1,8 @@
 import argparse
 import asyncio
 import bittensor as bt
-from tensorwire import RequestSigner
-from tensorwire.compat import Dendrite
+from taowire import RequestSigner
+from taowire.compat import Dendrite
 
 from protocol import StreamPrompting
 

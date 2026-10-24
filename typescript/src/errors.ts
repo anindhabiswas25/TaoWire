@@ -1,6 +1,6 @@
 /**
  * Error codes and HTTP statuses of spec Appendix A, with the fixed public
- * messages of the Python kit (`tensorwire.errors`).
+ * messages of the Python kit (`taowire.errors`).
  *
  * @module
  */

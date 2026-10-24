@@ -1,4 +1,4 @@
-"""The archived v10 template, ported to ``tensorwire.compat`` (10b.6).
+"""The archived v10 template, ported to ``taowire.compat`` (10b.6).
 
 ``examples/migrations/template-v10-to-v11/after/`` must run: its own test
 starts the template's miner and validator in process on FakeChain, queries,
@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tensorwire.migrate.scan import scan_repo
+from taowire.migrate.scan import scan_repo
 
 PORT = (
     Path(__file__).resolve().parents[3]

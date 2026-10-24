@@ -11,15 +11,15 @@ import pytest
 from bittensor import http_auth, sp_core
 from pydantic import BaseModel
 
-from tensorwire.errors import Forbidden, ReplayStoreUnavailable
-from tensorwire.miner.app import Miner
-from tensorwire.miner.routes import RouteContext
-from tensorwire.policy.caller import CallerPolicy
-from tensorwire.testing.client import BASE_URL, SignedClient
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.pytest_plugin import TEST_NETUID
+from taowire.errors import Forbidden, ReplayStoreUnavailable
+from taowire.miner.app import Miner
+from taowire.miner.routes import RouteContext
+from taowire.policy.caller import CallerPolicy
+from taowire.testing.client import BASE_URL, SignedClient
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.pytest_plugin import TEST_NETUID
 
 pytestmark = pytest.mark.asyncio
 

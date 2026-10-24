@@ -1,4 +1,4 @@
-"""``tensorwire migrate apply`` (spec 10b.4.2, 13.8).
+"""``taowire migrate apply`` (spec 10b.4.2, 13.8).
 
 Every ``auto`` rule has a positive fixture (the exact rewrite) and a
 negative one (similar code ``apply`` must leave alone); everything else
@@ -18,15 +18,15 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from typer.testing import CliRunner
 
-from tensorwire.cli.main import app
-from tensorwire.migrate.apply import (
+from taowire.cli.main import app
+from taowire.migrate.apply import (
     MARKER,
     apply_source,
     git_state,
     plan_repo,
     write_changes,
 )
-from tensorwire.migrate.rules import RULES
+from taowire.migrate.rules import RULES
 
 
 def run(source: str) -> str:
@@ -38,17 +38,17 @@ REWRITES: dict[str, tuple[str, str]] = {
     "TWM001": (
         "import typing\nimport bittensor as bt\nclass A(bt.Synapse):\n    x: int = 0\n"
         "    required_hash_fields = ('x',)\n",
-        "import typing\nfrom tensorwire.compat import Synapse\n"
+        "import typing\nfrom taowire.compat import Synapse\n"
         "class A(Synapse):\n    x: int = 0\n    required_hash_fields = ('x',)\n",
     ),
     "TWM003": (
         "import bittensor as bt\naxon = bt.axon(wallet=w, config=c, port=9)\n",
-        "from tensorwire import Miner\nfrom tensorwire.compat import Axon\n"
+        "from taowire import Miner\nfrom taowire.compat import Axon\n"
         "axon = Axon(miner=Miner.from_env())\n",
     ),
     "TWM004": (
         "import bittensor as bt\nd = bt.dendrite(wallet=self.wallet)\n",
-        "from tensorwire import RequestSigner\nfrom tensorwire.compat import Dendrite\n"
+        "from taowire import RequestSigner\nfrom taowire.compat import Dendrite\n"
         "d = Dendrite(signer=RequestSigner(self.wallet))\n",
     ),
     "TWM007": (
@@ -61,7 +61,7 @@ REWRITES: dict[str, tuple[str, str]] = {
         "import bittensor as bt\ns = bt.subtensor(config=c)\n"
         "t = bt.Subtensor(config=c)\ndef f(x: bt.Subtensor): ...\n"
         "u = bt.subtensor('finney')\n",
-        "from tensorwire.compat import Subtensor\ns = Subtensor(config=c)\n"
+        "from taowire.compat import Subtensor\ns = Subtensor(config=c)\n"
         "t = Subtensor(config=c)\ndef f(x: Subtensor): ...\n"
         "u = Subtensor('finney')\n",
     ),
@@ -75,12 +75,12 @@ REWRITES: dict[str, tuple[str, str]] = {
     ),
     "TWM013": (
         "import x\nresponses = d(axons=[self.metagraph.axons[uid] for uid in uids])\n",
-        "import x\nfrom tensorwire.compat import axons_from\n"
+        "import x\nfrom taowire.compat import axons_from\n"
         "responses = d(axons=axons_from(self.metagraph, uids))\n",
     ),
     "TWM021": (
         "from bittensor import AxonInfo, Subtensor\ninfo = AxonInfo(ip='1.2.3.4')\n",
-        "from bittensor import Subtensor\nfrom tensorwire.compat import AxonInfo\n"
+        "from bittensor import Subtensor\nfrom taowire.compat import AxonInfo\n"
         "info = AxonInfo(ip='1.2.3.4')\n",
     ),
     "TWM023": (
@@ -97,7 +97,7 @@ REWRITES: dict[str, tuple[str, str]] = {
     "TWM028": (
         'import bittensor as bt\ndef f(s: "bt.Synapse") -> None: ...\n'
         'def g(t: "bt.subtensor") -> None: ...\n',
-        "from tensorwire.compat import Subtensor, Synapse\n"
+        "from taowire.compat import Subtensor, Synapse\n"
         'def f(s: "Synapse") -> None: ...\ndef g(t: "Subtensor") -> None: ...\n',
     ),
     "TWM031": (
@@ -108,7 +108,7 @@ REWRITES: dict[str, tuple[str, str]] = {
         "def only(config: bt.Config) -> bt.config:\n"
         "    bt.logging.check_config(config)\n",
         "import argparse\n"
-        "from tensorwire.compat import Config, add_v10_args, config as tw_config\n"
+        "from taowire.compat import Config, add_v10_args, config as tw_config\n"
         "def config(cls):\n    parser = argparse.ArgumentParser()\n"
         '    add_v10_args(parser, "wallet")\n    add_v10_args(parser, "subtensor")\n'
         '    add_v10_args(parser, "logging")\n    add_v10_args(parser, "axon")\n'
@@ -124,7 +124,7 @@ REWRITES: dict[str, tuple[str, str]] = {
         "        self.dendrite = bt.dendrite(wallet=self.wallet)\n"
         "    def run(self):\n        while True:\n            self.sync()\n"
         "    def log_step(self):\n        pass\n",
-        "import copy\nfrom tensorwire.compat import TemplateValidatorAdapter\n"
+        "import copy\nfrom taowire.compat import TemplateValidatorAdapter\n"
         "from sub.base.neuron import BaseNeuron\n"
         "# TW-MIGRATE: TWM026 TemplateValidatorAdapter runs run() now (removed "
         "here); move any custom code they held into sync() / resync_metagraph()\n"
@@ -146,12 +146,12 @@ REWRITES: dict[str, tuple[str, str]] = {
     ),
     "TWM002": (
         "import bittensor as bt\ndef f(s: bt.StreamingSynapse) -> None:\n    pass\n",
-        "from tensorwire.compat import StreamingSynapse\n"
+        "from taowire.compat import StreamingSynapse\n"
         "def f(s: StreamingSynapse) -> None:\n    pass\n",
     ),
     "TWM024": (
         "# base\nfrom template.base.validator import BaseValidatorNeuron\n",
-        "# base\nfrom tensorwire.compat import TemplateValidatorAdapter as "
+        "# base\nfrom taowire.compat import TemplateValidatorAdapter as "
         "BaseValidatorNeuron\n",
     ),
 }
@@ -163,7 +163,7 @@ UNCHANGED = [
     "a = self.metagraph.axons[uid]\n",
     "a = [self.metagraph.axons[u] for u in uids if u]\n",
     "from template.base.miner import BaseMinerNeuron\n",
-    "from tensorwire.compat import Synapse\nclass A(Synapse): pass\n",
+    "from taowire.compat import Synapse\nclass A(Synapse): pass\n",
     "def f(metagraph: 'Metagraph') -> None: ...\n",
     "import time\ndef f():\n    time.sleep(1)\n",
     "import time\nasync def f():\n    t = time.time()\n",
@@ -195,7 +195,7 @@ def test_subtensor_with_v10_methods_is_rewritten() -> None:
     )
     result = apply_source(source, "x.py")
     assert result.after == (
-        "from tensorwire.compat import Subtensor\ns = Subtensor(network=n)\n"
+        "from taowire.compat import Subtensor\ns = Subtensor(network=n)\n"
         "uid = s.get_uid_for_hotkey_on_subnet(hotkey_ss58=h, netuid=1)\n"
     )
     assert result.rewrites == {"TWM008": 1}
@@ -311,7 +311,7 @@ def test_string_annotations_and_existing_imports() -> None:
     out = run(
         """\
         import bittensor as bt
-        from tensorwire.compat import Synapse
+        from taowire.compat import Synapse
         def f(m: "bt.metagraph.Metagraph", s: "bt.Synapse") -> "bt.Unknown": ...
         x: bt.Synapse
         """
@@ -319,8 +319,8 @@ def test_string_annotations_and_existing_imports() -> None:
     assert out == textwrap.dedent(
         f"""\
         import bittensor as bt
-        from tensorwire.compat import Metagraph
-        from tensorwire.compat import Synapse
+        from taowire.compat import Metagraph
+        from taowire.compat import Synapse
         {MARKER} TWM030 {RULES["TWM030"].replacement}
         def f(m: "Metagraph", s: "Synapse") -> "bt.Unknown": ...
         x: Synapse
@@ -332,7 +332,7 @@ def test_template_swap_keeps_other_names() -> None:
     out = run("from template.base.validator import helper, BaseValidatorNeuron as B\n")
     assert out == (
         "from template.base.validator import helper\n"
-        "from tensorwire.compat import TemplateValidatorAdapter as B\n"
+        "from taowire.compat import TemplateValidatorAdapter as B\n"
     )
 
 
@@ -363,8 +363,8 @@ def test_inserted_names_never_shadow_the_teams_own() -> None:
             return [self.metagraph.axons[uid] for uid in x]
         """
     )
-    assert "from tensorwire import Miner as TWMiner" in out
-    assert "from tensorwire.compat import Axon, axons_from as tw_axons_from" in out
+    assert "from taowire import Miner as TWMiner" in out
+    assert "from taowire.compat import Axon, axons_from as tw_axons_from" in out
     assert "self.axon = Axon(miner=TWMiner.from_env())" in out
     assert "return tw_axons_from(self.metagraph, x)" in out
     assert run(out) == out
@@ -391,7 +391,7 @@ def test_match_statements() -> None:
 def test_one_failing_file_does_not_stop_the_others(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from tensorwire.migrate import apply as codemod
+    from taowire.migrate import apply as codemod
 
     (tmp_path / "a.py").write_text("import bittensor as bt\nbt.logging.info('a')\n")
     (tmp_path / "boom.py").write_text("x = 1\n")
@@ -666,7 +666,7 @@ def test_a_customised_template_package_is_swapped_onto_the_adapters(
                  "bt.logging(", 'wallet: "bt.wallet"', "import bittensor"):  # fmt: skip
         assert gone not in neuron, gone
     assert "class BaseMinerNeuron(BaseNeuron, TemplateMinerAdapter):" in miner
-    assert "from tensorwire.compat import TemplateMinerAdapter" in miner
+    assert "from taowire.compat import TemplateMinerAdapter" in miner
     assert "self.axon.attach(forward_fn=self.forward)" in miner
     assert "self.axon = " not in miner
     assert f"{MARKER} TWM026 TemplateMinerAdapter runs run(), __enter__() now" in miner

@@ -12,7 +12,7 @@ sidecar.token
 *.db
 *.db-wal
 *.db-shm
-.tensorwire/
+.taowire/
 
 # Python
 __pycache__/

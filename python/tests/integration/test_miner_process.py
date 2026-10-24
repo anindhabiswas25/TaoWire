@@ -1,7 +1,7 @@
 """``Miner.run()`` as a real process: uvicorn, metrics listener, signals, exit codes.
 
 The chain is a FakeChain inside the miner process; everything else is real:
-TCP, uvicorn, ``tensorwire sign-request --send``, SIGTERM.
+TCP, uvicorn, ``taowire sign-request --send``, SIGTERM.
 """
 
 from __future__ import annotations
@@ -20,16 +20,16 @@ import httpx
 import pytest
 from bittensor import sp_core
 
-from tensorwire.testing.keys import dev_key
+from taowire.testing.keys import dev_key
 
 MINER_SCRIPT = """
 import sys
 from pydantic import BaseModel
-from tensorwire import Miner, RouteContext
-from tensorwire.config import MinerSettings
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
+from taowire import Miner, RouteContext
+from taowire.config import MinerSettings
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
 
 bob, alice = dev_key("bob"), dev_key("alice")
 chain = FakeChain(signer_hotkey=bob.ss58)
@@ -126,7 +126,7 @@ def test_run_serves_signed_requests_and_stops_cleanly(setup: dict[str, object]) 
         wait_ready(setup["port"], proc)  # type: ignore[arg-type]
         url = f"http://127.0.0.1:{setup['port']}/v1/upper"
         cli = [
-            str(Path(sys.executable).with_name("tensorwire")), "sign-request", url,
+            str(Path(sys.executable).with_name("taowire")), "sign-request", url,
             "-r", dev_key("bob").ss58, "-w", "validator",
             "--wallet-path", str(Path(setup["dir"]) / "wallets"),  # type: ignore[arg-type]
             "-d", '{"text":"hello"}', "--send",
@@ -271,7 +271,7 @@ def test_workers_share_one_metrics_endpoint(setup: dict[str, object]) -> None:
     Path(setup["dir"], "miner.py").write_text(WORKERS_SCRIPT)  # type: ignore[arg-type]
     env: dict[str, str] = setup["env"]  # type: ignore[assignment]
     env["TW_WORKERS"] = "2"
-    redis_url = os.environ.get("TENSORWIRE_TEST_REDIS_URL")
+    redis_url = os.environ.get("TAOWIRE_TEST_REDIS_URL")
     if redis_url:
         env["TW_REDIS_URL"] = redis_url
     else:

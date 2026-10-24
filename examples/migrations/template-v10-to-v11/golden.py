@@ -1,6 +1,6 @@
 """The template port's golden data (spec 13.8) and its S6 count (spec 1.5).
 
-``after/`` is exactly: ``tensorwire migrate apply`` run on ``before/``, then
+``after/`` is exactly: ``taowire migrate apply`` run on ``before/``, then
 ``hand-fixes.patch`` (the changes a person made by hand). This script:
 
 - ``python golden.py write``: rebuild ``hand-fixes.patch`` from the current
@@ -11,7 +11,7 @@
 
 ``python/tests/migration/test_template_golden.py`` checks that ``before/``
 + ``apply`` + ``hand-fixes.patch`` == ``after/`` and that S6 holds.
-Needs ``git`` on PATH and ``tensorwire[migrate]``.
+Needs ``git`` on PATH and ``taowire[migrate]``.
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def applied_copy(dest: Path) -> Path:
     _git(dest, "add", "-A")
     _git(dest, "-c", "user.name=golden", "-c", "user.email=golden@localhost",
          "commit", "-qm", "before")  # fmt: skip
-    from tensorwire.migrate.apply import plan_repo, write_changes  # noqa: PLC0415
+    from taowire.migrate.apply import plan_repo, write_changes  # noqa: PLC0415
 
     write_changes(plan_repo(dest))
     _git(dest, "add", "-A")

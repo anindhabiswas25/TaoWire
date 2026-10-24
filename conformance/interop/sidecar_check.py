@@ -5,7 +5,7 @@
     uv run python ../conformance/interop/sidecar_check.py \\
         --out ../reports/phase-5/sidecar-interop
 
-Starts ``tensorwire.sidecar.Sidecar`` (uvicorn on 127.0.0.1, the token file
+Starts ``taowire.sidecar.Sidecar`` (uvicorn on 127.0.0.1, the token file
 generated on disk, a FakeChain inside the process: //Bob is the miner and the
 sidecar's hotkey, //Alice a validator with a permit, //Charlie registered
 without one, //Dave not registered) and runs the ``sidecar`` mode of the Go,
@@ -30,7 +30,7 @@ from typing import Any
 
 from live_check import build, free_port, spawn
 
-from tensorwire.testing.keys import dev_key
+from taowire.testing.keys import dev_key
 
 ALICE, BOB, CHARLIE, DAVE = (
     dev_key(n).ss58 for n in ("alice", "bob", "charlie", "dave")
@@ -39,11 +39,11 @@ PROBES = [ALICE, CHARLIE, DAVE]
 
 SIDECAR_SCRIPT = """
 import sys
-from tensorwire.config import SidecarSettings
-from tensorwire.sidecar import Sidecar
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
+from taowire.config import SidecarSettings
+from taowire.sidecar import Sidecar
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
 
 bob = dev_key("bob")
 chain = FakeChain(signer_hotkey=bob.ss58)

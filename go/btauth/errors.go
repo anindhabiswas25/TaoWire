@@ -34,7 +34,7 @@ type errorSpec struct {
 }
 
 // catalogue holds the server-side rows of Appendix A with the fixed public
-// messages of the Python kit (tensorwire.errors).
+// messages of the Python kit (taowire.errors).
 var catalogue = map[string]errorSpec{
 	"tw.internal":                 {500, "internal error"},
 	"tw.rate_limited":             {429, "rate limit exceeded"},

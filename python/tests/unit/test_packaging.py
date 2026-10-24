@@ -30,7 +30,7 @@ def _uv() -> str:
 def test_include_list_is_the_documented_one() -> None:
     text = (PYTHON_DIR / "pyproject.toml").read_text()
     section = text.split("[tool.hatch.build.targets.sdist]", 1)[1].split("\n[", 1)[0]
-    assert 'only-include = ["src/tensorwire", "pyproject.toml", "README.md"]' in section
+    assert 'only-include = ["src/taowire", "pyproject.toml", "README.md"]' in section
 
 
 def test_sdist_holds_only_the_include_list(tmp_path: Path) -> None:
@@ -49,7 +49,7 @@ def test_sdist_holds_only_the_include_list(tmp_path: Path) -> None:
     (project / ".venv-py310" / ".gitignore").write_text("*\n")
     (project / "tests").mkdir()
     (project / "tests" / "test_x.py").write_text("")
-    cache = project / "src" / "tensorwire" / "__pycache__"
+    cache = project / "src" / "taowire" / "__pycache__"
     cache.mkdir(exist_ok=True)
     (cache / "x.cpython-312.pyc").write_bytes(b"")
     out = tmp_path / "dist"
@@ -71,8 +71,8 @@ def test_sdist_holds_only_the_include_list(tmp_path: Path) -> None:
         rel = name.removeprefix(root + "/")
         if rel in {root, ""} or rel in allowed_files:
             continue
-        assert rel.startswith("src/tensorwire"), rel
+        assert rel.startswith("src/taowire"), rel
         assert "__pycache__" not in rel, rel
         assert not rel.endswith(".pyc"), rel
-    assert any(n.endswith("src/tensorwire/py.typed") for n in names)
+    assert any(n.endswith("src/taowire/py.typed") for n in names)
     assert any("cli/templates" in n for n in names)

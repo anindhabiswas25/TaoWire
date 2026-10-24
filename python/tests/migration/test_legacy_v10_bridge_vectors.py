@@ -28,11 +28,11 @@ from legacy_v10_models import (
     nonce_of,
     request_headers,
 )
-from tensorwire import crypto
-from tensorwire.auth.nonce_store import MemoryNonceStore
-from tensorwire.errors import LegacyAuthFailed
-from tensorwire.extensions.legacy_v10 import wire
-from tensorwire.extensions.legacy_v10.server import LegacyServer
+from taowire import crypto
+from taowire.auth.nonce_store import MemoryNonceStore
+from taowire.errors import LegacyAuthFailed
+from taowire.extensions.legacy_v10 import wire
+from taowire.extensions.legacy_v10.server import LegacyServer
 
 CAPTURE_DAY = dt.date(2026, 10, 22)
 ACCEPTED = ["V1", "V2", "V3", "V4", "V5"]
@@ -315,7 +315,7 @@ def test_success_answer_has_the_captured_v10_shape() -> None:
 
 
 def test_signed_rejection_has_the_captured_v10_shape() -> None:
-    from tensorwire.errors import Forbidden
+    from taowire.errors import Forbidden
 
     n1 = BY_ID["N1"]
     server, _ = make_server(nonce_of(n1) + 1_000_000)

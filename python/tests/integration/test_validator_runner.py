@@ -15,16 +15,16 @@ import pytest
 import structlog
 from bittensor import sp_core
 
-from tensorwire.chain.gateway import ChainUnavailable
-from tensorwire.config import ValidatorSettings
-from tensorwire.errors import ConfigError, StartupError
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
-from tensorwire.testing.pytest_plugin import TEST_NETUID, TWEnv
-from tensorwire.validator.client import MinerResult
-from tensorwire.validator.loop import SubnetValidator, Task, ValidatorRunner
+from taowire.chain.gateway import ChainUnavailable
+from taowire.config import ValidatorSettings
+from taowire.errors import ConfigError, StartupError
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
+from taowire.testing.pytest_plugin import TEST_NETUID, TWEnv
+from taowire.validator.client import MinerResult
+from taowire.validator.loop import SubnetValidator, Task, ValidatorRunner
 
 
 class Echo(SubnetValidator):
@@ -112,7 +112,7 @@ async def test_builds_real_chain_parts_and_loads_the_hotkey_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from tensorwire.validator import loop
+    from taowire.validator import loop
 
     key = tmp_path / "wallets" / "validator" / "hotkeys" / "default"
     key.parent.mkdir(parents=True)

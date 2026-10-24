@@ -18,18 +18,18 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from tensorwire.config import MinerSettings, ValidatorSettings
-from tensorwire.errors import StartupError
-from tensorwire.miner.app import Miner
-from tensorwire.miner.routes import RouteContext
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
-from tensorwire.testing.pytest_plugin import TEST_NETUID
-from tensorwire.testing.transport import AppRouter
-from tensorwire.validator.client import MinerResult
-from tensorwire.validator.loop import SubnetValidator, Task, ValidatorRunner
+from taowire.config import MinerSettings, ValidatorSettings
+from taowire.errors import StartupError
+from taowire.miner.app import Miner
+from taowire.miner.routes import RouteContext
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
+from taowire.testing.pytest_plugin import TEST_NETUID
+from taowire.testing.transport import AppRouter
+from taowire.validator.client import MinerResult
+from taowire.validator.loop import SubnetValidator, Task, ValidatorRunner
 
 ROUTE = "/v1/upper"
 MINERS = {"bob": "44.0.0.1", "charlie": "44.0.0.2"}
@@ -285,7 +285,7 @@ def _auto(r: ValidatorRunner) -> None:
 async def test_legacy_auto_builds_the_real_bridge_by_default(
     router: AppRouter, fake_chain: FakeChain, tw_clock: FakeClock, tmp_path: Path
 ) -> None:
-    from tensorwire.extensions.legacy_v10.client import LegacyClient, ProtocolSelector
+    from taowire.extensions.legacy_v10.client import LegacyClient, ProtocolSelector
 
     r = runner(fake_chain, tw_clock, tmp_path, router)  # no legacy=
     _auto(r)
@@ -296,7 +296,7 @@ async def test_legacy_auto_builds_the_real_bridge_by_default(
         assert isinstance(r.client._selector, ProtocolSelector)
         report = await r.run_round()
     assert report is not None
-    assert report.n_btauth == 2  # TensorWire miners advertise tag 87: btauth/1
+    assert report.n_btauth == 2  # TaoWire miners advertise tag 87: btauth/1
 
 
 async def test_legacy_auto_refuses_an_ed25519_hotkey(
@@ -361,7 +361,7 @@ async def test_legacy_auto_without_the_bridge(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # A build without extensions/legacy_v10 (the import fails).
-    monkeypatch.setitem(sys.modules, "tensorwire.extensions.legacy_v10.client", None)
+    monkeypatch.setitem(sys.modules, "taowire.extensions.legacy_v10.client", None)
     r = runner(fake_chain, tw_clock, tmp_path, router)
     _auto(r)
     with pytest.raises(StartupError, match="not in this build"):

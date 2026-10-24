@@ -1,7 +1,7 @@
 /**
  * Streaming responses over SSE with a signed trailer (spec 9.2, D29): what the
  * miner and the client share. The same rules as the Python reference
- * (`tensorwire.extensions.streaming`):
+ * (`taowire.extensions.streaming`):
  *
  * ```
  * event: chunk

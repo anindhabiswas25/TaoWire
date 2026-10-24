@@ -8,10 +8,10 @@ use ::axum::body::{Body, Bytes};
 use ::axum::http::{Request, StatusCode};
 use ::axum::routing::post;
 use ::axum::{Extension, Router};
-use tensorwire_btauth::axum::{error_response, protect, MinerAuth};
-use tensorwire_btauth::client::Client;
-use tensorwire_btauth::redis_store::RedisStore;
-use tensorwire_btauth::*;
+use taowire_btauth::axum::{error_response, protect, MinerAuth};
+use taowire_btauth::client::Client;
+use taowire_btauth::redis_store::RedisStore;
+use taowire_btauth::*;
 use tower::ServiceExt;
 
 fn seed(h: &str) -> [u8; 32] {
@@ -357,7 +357,7 @@ fn response_key_must_match() {
 async fn redis_store() {
     assert!(RedisStore::connect("redis://127.0.0.1:6379", Duration::ZERO, None).await.is_err());
     assert!(RedisStore::connect("not a url", Duration::from_secs(1), None).await.is_err());
-    let Ok(url) = std::env::var("TENSORWIRE_TEST_REDIS_URL") else {
+    let Ok(url) = std::env::var("TAOWIRE_TEST_REDIS_URL") else {
         return; // real Redis only when the Python suite's variable is set
     };
     let prefix = format!("tw:test:rust:{}:", NonceSource::new().next());

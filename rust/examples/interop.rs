@@ -13,7 +13,7 @@
 //! (fresh signature each) and prints a JSON summary: every answer must be 200
 //! with a verified signature. `stream` reads `count` streams the same way
 //! (`conformance/interop/stream_check.py`). `sidecar` runs the sidecar client's
-//! calls against a real `tensorwire sidecar` and prints what each returned
+//! calls against a real `taowire sidecar` and prints what each returned
 //! (`conformance/interop/sidecar_check.py`). Public dev seeds only.
 
 use std::collections::BTreeMap;
@@ -25,12 +25,12 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Extension, Json, Router};
 use serde_json::{json, Value};
-use tensorwire_btauth::axum::{
+use taowire_btauth::axum::{
     error_response, protect, stream_response, BoxError, MinerAuth, StreamConfig, StreamContext,
 };
-use tensorwire_btauth::client::Client;
-use tensorwire_btauth::sse::StreamLimits;
-use tensorwire_btauth::{Config, Error, Keypair, MemoryStore, Signer, Verifier};
+use taowire_btauth::client::Client;
+use taowire_btauth::sse::StreamLimits;
+use taowire_btauth::{Config, Error, Keypair, MemoryStore, Signer, Verifier};
 
 fn key(seed_hex: &str, scheme: &str) -> Keypair {
     let seed: [u8; 32] = hex::decode(seed_hex.trim_start_matches("0x"))
@@ -128,7 +128,7 @@ async fn stream(url: &str, k: Keypair, receiver: &str, count: usize) -> bool {
 }
 
 async fn sidecar_check(url: &str, token_file: &str, netuid: u16, miner: &str, probes: &str) {
-    use tensorwire_btauth::sidecar::{
+    use taowire_btauth::sidecar::{
         Config as SidecarConfig, Decision, ServeAxonError, SidecarClient, POLICY_SCOPE,
     };
     let cfg = SidecarConfig {

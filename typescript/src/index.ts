@@ -1,10 +1,10 @@
 /**
- * `@tensorwire/btauth`: btauth/1 signed requests and twresp/1 signed
- * responses for Bittensor v11 subnets (TensorWire, spec 11.3).
+ * `@taowire/btauth`: btauth/1 signed requests and twresp/1 signed
+ * responses for Bittensor v11 subnets (TaoWire, spec 11.3).
  *
  * Call `await initCrypto()` once before signing or verifying. The Fastify
- * adapter is `@tensorwire/btauth/fastify`, the Redis replay store
- * `@tensorwire/btauth/redis`.
+ * adapter is `@taowire/btauth/fastify`, the Redis replay store
+ * `@taowire/btauth/redis`.
  *
  * @module
  */

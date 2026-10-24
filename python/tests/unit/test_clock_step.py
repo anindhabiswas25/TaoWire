@@ -12,15 +12,15 @@ import fakeredis
 import pytest
 import structlog.testing
 
-from tensorwire.auth.clock import ClockStepGuard
-from tensorwire.auth.nonce_store import (
+from taowire.auth.clock import ClockStepGuard
+from taowire.auth.nonce_store import (
     MemoryNonceStore,
     NonceStore,
     RedisNonceStore,
     StepGuardedNonceStore,
     check_retention_margin,
 )
-from tensorwire.errors import ReplayStoreUnavailable
+from taowire.errors import ReplayStoreUnavailable
 
 S = 10**9
 RETENTION = 60.0

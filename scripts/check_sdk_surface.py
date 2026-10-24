@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that the installed ``bittensor`` provides the SDK surface TensorWire uses.
+"""Check that the installed ``bittensor`` provides the SDK surface TaoWire uses.
 
 Every item of spec Section 3 is checked against the SDK installed in the
 interpreter running this script: names, signatures, constants, and the
@@ -325,7 +325,7 @@ def _http_auth_constants() -> None:
 
 @check(
     "3.2",
-    "scheme names are exactly sr25519 and ed25519 (A7; mirrored in tensorwire.crypto)",
+    "scheme names are exactly sr25519 and ed25519 (A7; mirrored in taowire.crypto)",
 )
 def _scheme_names() -> None:
     ha = _http_auth()

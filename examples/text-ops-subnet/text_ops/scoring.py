@@ -7,7 +7,7 @@ that failed its signature check, or a wrong result scores ``0``.
 
 from __future__ import annotations
 
-from tensorwire import MinerResult
+from taowire import MinerResult
 
 from text_ops.protocol import TransformRequest, TransformResponse, expected
 

@@ -1,1 +1,1 @@
-"""text-ops-subnet: a deterministic example subnet built on TensorWire (spec 10)."""
+"""text-ops-subnet: a deterministic example subnet built on TaoWire (spec 10)."""

@@ -9,7 +9,7 @@ use std::task::{Context, Poll, Waker};
 use std::time::Duration;
 
 use libfuzzer_sys::fuzz_target;
-use tensorwire_btauth::{Config, MemoryStore, Verifier};
+use taowire_btauth::{Config, MemoryStore, Verifier};
 
 const BOB: &str = "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty";
 const ALICE: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";

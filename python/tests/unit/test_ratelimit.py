@@ -8,15 +8,15 @@ from typing import Any
 import pytest
 import structlog
 
-from tensorwire.errors import RateLimited
-from tensorwire.limits.ratelimit import (
+from taowire.errors import RateLimited
+from taowire.limits.ratelimit import (
     MemoryRateLimiter,
     PreAuthRateLimit,
     RateDecision,
     TokenBucket,
     client_ip,
 )
-from tensorwire.observability.metrics import Metrics
+from taowire.observability.metrics import Metrics
 
 
 class FakeClock:

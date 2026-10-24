@@ -1,4 +1,4 @@
-"""``tensorwire migrate scan`` (spec 10b.4.1, 13.8).
+"""``taowire migrate scan`` (spec 10b.4.1, 13.8).
 
 Every rule in ``migrate/rules.py`` has at least one positive and one
 negative fixture here, and the scanner is run on the pinned v10 template
@@ -14,9 +14,9 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from tensorwire.cli.main import app
-from tensorwire.migrate.rules import RULES
-from tensorwire.migrate.scan import render, scan_repo, scan_source
+from taowire.cli.main import app
+from taowire.migrate.rules import RULES
+from taowire.migrate.scan import render, scan_repo, scan_source
 
 REPO = Path(__file__).resolve().parents[3]
 BEFORE = REPO / "examples" / "migrations" / "template-v10-to-v11" / "before"
@@ -26,15 +26,15 @@ FIXTURES: dict[str, tuple[str, str]] = {
     "TWM001": (
         "import bittensor as bt\nclass A(bt.Synapse):\n    x: int = 0\n"
         "    required_hash_fields: ClassVar[tuple[str, ...]] = ('x',)\n",
-        "from tensorwire.compat import Synapse\nclass A(Synapse):\n    x: int = 0\n",
+        "from taowire.compat import Synapse\nclass A(Synapse):\n    x: int = 0\n",
     ),
     "TWM002": (
         "from bittensor import StreamingSynapse\n",
-        "from tensorwire.compat import Synapse\n",
+        "from taowire.compat import Synapse\n",
     ),
     "TWM003": (
         "import bittensor\naxon = bittensor.axon(wallet=w)\n",
-        "from tensorwire.compat import Axon\naxon = Axon(miner=m)\n",
+        "from taowire.compat import Axon\naxon = Axon(miner=m)\n",
     ),
     "TWM004": (
         "import bittensor as bt\nd = bt.dendrite(wallet=w)\n",
@@ -70,7 +70,7 @@ FIXTURES: dict[str, tuple[str, str]] = {
     ),
     "TWM012": (
         "from bittensor.utils.weight_utils import process_weights_for_netuid\n",
-        "from tensorwire.compat import weights\n",
+        "from taowire.compat import weights\n",
     ),
     "TWM013": (
         "axons = [self.metagraph.axons[uid] for uid in uids]\n",
@@ -78,11 +78,11 @@ FIXTURES: dict[str, tuple[str, str]] = {
     ),
     "TWM014": (
         "import bittensor as bt\nw = bt.wallet()\n",
-        "from tensorwire.auth.keys import load_hotkey\nk = load_hotkey(p, n, h)\n",
+        "from taowire.auth.keys import load_hotkey\nk = load_hotkey(p, n, h)\n",
     ),
     "TWM015": (
         "import bittensor as bt\nw = bt.MockWallet()\n",
-        "from tensorwire.testing.fake_chain import FakeChain\n",
+        "from taowire.testing.fake_chain import FakeChain\n",
     ),
     "TWM016": (
         "import bittensor as bt\nclass Api(bt.SubnetsAPI): pass\n",
@@ -106,11 +106,11 @@ FIXTURES: dict[str, tuple[str, str]] = {
     ),
     "TWM021": (
         "import bittensor as bt\ninfo = bt.AxonInfo(ip='1.2.3.4', port=1)\n",
-        "from tensorwire.compat import AxonInfo\n",
+        "from taowire.compat import AxonInfo\n",
     ),
     "TWM022": (
         "from bittensor import NeuronInfo, __ss58_format__\n",
-        "from tensorwire.crypto import SS58_FORMAT\n",
+        "from taowire.crypto import SS58_FORMAT\n",
     ),
     "TWM023": (
         "for uid in range(self.metagraph.n.item()):\n    pass\n",
@@ -130,7 +130,7 @@ FIXTURES: dict[str, tuple[str, str]] = {
     ),
     "TWM028": (
         "import bittensor as bt\ndef f(s: 'bt.Synapse') -> None: ...\n",
-        "from tensorwire.compat import Synapse\ndef f(s: 'Synapse') -> None: ...\n",
+        "from taowire.compat import Synapse\ndef f(s: 'Synapse') -> None: ...\n",
     ),
     "TWM029": (
         "patch('vali_utils.miner_evaluator.bt.logging.info')\n",
@@ -143,7 +143,7 @@ FIXTURES: dict[str, tuple[str, str]] = {
     "TWM031": (
         "import bittensor as bt\nbt.Wallet.add_args(parser)\nc = bt.config(parser)\n"
         "def check(c):\n    bt.logging.check_config(c)\n",
-        "from tensorwire.compat import add_v10_args, config\n"
+        "from taowire.compat import add_v10_args, config\n"
         "add_v10_args(parser, 'wallet')\nc = config(parser)\n",
     ),
     "TWM032": (
@@ -155,10 +155,10 @@ FIXTURES: dict[str, tuple[str, str]] = {
         "import bittensor as bt\nw = bt.Wallet(name='a', hotkey='b', path='/p')\n",
     ),
     "TWM034": (
-        "from tensorwire.compat import StreamingSynapse\n"
+        "from taowire.compat import StreamingSynapse\n"
         "class Ask(StreamingSynapse):\n    question: str\n"
         "    required_hash_fields: ClassVar[tuple[str, ...]] = ('question',)\n",
-        "from tensorwire.compat import Synapse\n"
+        "from taowire.compat import Synapse\n"
         "class Ask(Synapse):\n    question: str\n"
         "    required_hash_fields: ClassVar[tuple[str, ...]] = ('question',)\n",
     ),
@@ -237,7 +237,7 @@ def test_customised_template_base(tmp_path: Path) -> None:
     ported = tmp_path / "done" / "base"
     ported.mkdir(parents=True)
     (ported / "validator.py").write_text(
-        "from tensorwire.compat import TemplateValidatorAdapter\n"
+        "from taowire.compat import TemplateValidatorAdapter\n"
         "class BaseValidatorNeuron(TemplateValidatorAdapter):\n"
         "    def log_step(self): ...\n"
     )
@@ -415,7 +415,7 @@ def test_formats() -> None:
     assert data["counts"]["risk"] >= 2
     assert data["findings"][0]["doc"].startswith("docs/migration-from-v10.md#twm")
     md = render(report, "md")
-    assert md.startswith("# TensorWire migration scan")
+    assert md.startswith("# TaoWire migration scan")
     assert "| `template/protocol.py` |" in md
 
 

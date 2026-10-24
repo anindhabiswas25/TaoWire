@@ -12,8 +12,8 @@ import {
     initCrypto,
     requestTarget,
     verifyResponse,
-} from "@tensorwire/btauth";
-import { type BtauthOptions, btauth, rawBody } from "@tensorwire/btauth/fastify";
+} from "@taowire/btauth";
+import { type BtauthOptions, btauth, rawBody } from "@taowire/btauth/fastify";
 import { keypair } from "./helpers.js";
 
 beforeAll(initCrypto);

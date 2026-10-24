@@ -17,7 +17,7 @@ import (
 
 // Streaming responses over SSE with a signed trailer (spec 9.2, D29, D35):
 // what the miner (ServeStream) and the client (Client.Stream) share. The same
-// rules as the Python reference (tensorwire.extensions.streaming):
+// rules as the Python reference (taowire.extensions.streaming):
 //
 //	event: chunk
 //	data: {"token": "Hel"}

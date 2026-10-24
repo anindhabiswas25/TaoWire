@@ -4,8 +4,8 @@ import dataclasses
 
 import pytest
 
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import (
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import (
     ChainGateway,
     ChainUnavailable,
     GatewayError,
@@ -14,7 +14,7 @@ from tensorwire.chain.gateway import (
     SubnetNotFound,
     TxOutcome,
 )
-from tensorwire.testing.fake_chain import FakeChain
+from taowire.testing.fake_chain import FakeChain
 
 
 def _neuron(uid: int, hotkey: str, *, permit: bool = False) -> NeuronView:

@@ -12,7 +12,7 @@ its own registered hotkey:
 - Python: ``python -m text_ops.miner`` (wallet ``miner_py``), publishing its
   axon itself;
 - TypeScript, Go, Rust: the example miners (wallets ``miner_ts``,
-  ``miner_go``, ``miner_rs``), each with its own ``tensorwire sidecar``
+  ``miner_go``, ``miner_rs``), each with its own ``taowire sidecar``
   through which it publishes its axon and gets its caller policy.
 
 Then:
@@ -51,10 +51,10 @@ import bittensor as bt
 import httpx
 from live_check import REPO, free_port, spawn, wait_http
 
-from tensorwire.auth.signer import RequestSigner
-from tensorwire.chain.gateway import BittensorGateway, NeuronView
-from tensorwire.validator.client import ValidatorClient
-from tensorwire.validator.weights import WeightScheduler
+from taowire.auth.signer import RequestSigner
+from taowire.chain.gateway import BittensorGateway, NeuronView
+from taowire.validator.client import ValidatorClient
+from taowire.validator.weights import WeightScheduler
 
 sys.path.insert(0, str(REPO / "examples" / "text-ops-subnet"))
 sys.path.insert(0, str(REPO / "python" / "tests" / "localnet"))
@@ -211,7 +211,7 @@ def start_miners(fleet: Fleet, programs: dict[str, list[str]]) -> dict[str, int]
             wallet,
             {"TW_SIDECAR_PORT": str(sc_port), "TW_SIDECAR_TOKEN_FILE": str(token)},
         )
-        cli = str(Path(sys.executable).parent / "tensorwire")
+        cli = str(Path(sys.executable).parent / "taowire")
         fleet.start(f"{lang}-sidecar", [cli, "sidecar"], sc_env)
         deadline = time.monotonic() + 120
         while not token.exists() and time.monotonic() < deadline:

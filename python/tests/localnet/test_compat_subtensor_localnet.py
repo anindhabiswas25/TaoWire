@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 from localnet_env import ENDPOINT, Localnet
 
-from tensorwire.compat import Metagraph, Subtensor
+from taowire.compat import Metagraph, Subtensor
 
 
 @pytest.fixture

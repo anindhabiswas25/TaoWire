@@ -1,8 +1,8 @@
 /**
- * Sidecar client (spec 11.6): `@tensorwire/btauth/sidecar`.
+ * Sidecar client (spec 11.6): `@taowire/btauth/sidecar`.
  *
  * A TypeScript miner gets its caller policy and its chain writes from the
- * Python sidecar (`tensorwire sidecar`, loopback only, bearer token):
+ * Python sidecar (`taowire sidecar`, loopback only, bearer token):
  *
  * ```ts
  * const sidecar = new SidecarClient({ netuid: 2, expectedHotkey: key.ss58 });

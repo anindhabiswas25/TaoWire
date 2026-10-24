@@ -3,7 +3,7 @@
 // each (shape → receiver → freshness → signature → replay store), single thread.
 import { readFileSync } from "node:fs";
 import { cpus } from "node:os";
-import { Keypair, MemoryStore, Signer, Verifier, initCrypto } from "@tensorwire/btauth";
+import { Keypair, MemoryStore, Signer, Verifier, initCrypto } from "@taowire/btauth";
 
 const N = Number(process.env.TW_BENCH_N ?? "5000");
 const keys = JSON.parse(

@@ -14,7 +14,7 @@
 // {"i": n, "text": upper(s)} and a signed tw-end (spec 9.2). sign sends count requests
 // with a fresh signature each and prints one JSON summary line; stream reads count
 // streams the same way (conformance/interop/stream_check.py); sidecar runs the sidecar
-// client's calls against a real `tensorwire sidecar` (conformance/interop/sidecar_check.py).
+// client's calls against a real `taowire sidecar` (conformance/interop/sidecar_check.py).
 // Seeds are public dev keys only.
 import { parseArgs } from "node:util";
 import Fastify from "fastify";
@@ -28,9 +28,9 @@ import {
     TWError,
     Verifier,
     initCrypto,
-} from "@tensorwire/btauth";
-import { btauth, rawBody, streamReply } from "@tensorwire/btauth/fastify";
-import { SidecarChainError, SidecarClient } from "@tensorwire/btauth/sidecar";
+} from "@taowire/btauth";
+import { btauth, rawBody, streamReply } from "@taowire/btauth/fastify";
+import { SidecarChainError, SidecarClient } from "@taowire/btauth/sidecar";
 
 function codeOf(err: unknown): string {
     if (err instanceof TWError) return err.code;

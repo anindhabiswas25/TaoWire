@@ -14,7 +14,7 @@ from pydantic import BaseModel
 
 # Looked up at run time: Engineer A's Miner lands on eng-a/core in Phase 1,
 # and this file must type-check in trees that do not have it yet.
-_kit: Any = importlib.import_module("tensorwire")
+_kit: Any = importlib.import_module("taowire")
 Miner: Any = _kit.Miner
 
 

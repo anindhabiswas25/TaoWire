@@ -11,11 +11,11 @@ import fakeredis
 import pytest
 from bittensor import http_auth, sp_core
 
-from tensorwire.auth.nonce_store import MemoryNonceStore, RedisNonceStore
-from tensorwire.auth.verifier import RequestVerifier
-from tensorwire.errors import AuthFailed, ReplayStoreUnavailable
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.keys import dev_key
+from taowire.auth.nonce_store import MemoryNonceStore, RedisNonceStore
+from taowire.auth.verifier import RequestVerifier
+from taowire.errors import AuthFailed, ReplayStoreUnavailable
+from taowire.testing.clock import FakeClock
+from taowire.testing.keys import dev_key
 
 ALICE = dev_key("alice")
 BOB = dev_key("bob")

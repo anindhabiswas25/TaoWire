@@ -6,7 +6,7 @@
         --out ../reports/phase-5/miners-smoke [--only go]
 
 For each example miner (spec 10, 11.1, P4): a FakeChain-backed
-``tensorwire sidecar`` (//Bob is the miner and the sidecar's hotkey, //Alice a
+``taowire sidecar`` (//Bob is the miner and the sidecar's hotkey, //Alice a
 validator with a permit, //Charlie registered without one), the miner with a
 hotkey file of //Bob and the sidecar's token, then the Python side checks:
 
@@ -39,11 +39,11 @@ from typing import Any
 import httpx
 from live_check import REPO, free_port, spawn, wait_http
 
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import NeuronView
-from tensorwire.extensions.response_sig import ResponseSignatureError, verify_response
-from tensorwire.testing.keys import dev_key
-from tensorwire.validator.client import ValidatorClient
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import NeuronView
+from taowire.extensions.response_sig import ResponseSignatureError, verify_response
+from taowire.testing.keys import dev_key
+from taowire.validator.client import ValidatorClient
 
 sys.path.insert(0, str(REPO / "examples" / "text-ops-subnet"))
 from text_ops.protocol import (
@@ -64,11 +64,11 @@ SEEDS = json.loads((REPO / "conformance" / "vectors" / "payload.json").read_text
 
 SIDECAR_SCRIPT = """
 import sys
-from tensorwire.config import SidecarSettings
-from tensorwire.sidecar import Sidecar
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.metagraph import FakeMetagraphSource
+from taowire.config import SidecarSettings
+from taowire.sidecar import Sidecar
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.metagraph import FakeMetagraphSource
 
 bob = dev_key("bob")
 chain = FakeChain(signer_hotkey=bob.ss58)

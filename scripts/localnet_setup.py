@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a running localnet for TensorWire development (spec Section 14).
+"""Prepare a running localnet for TaoWire development (spec Section 14).
 
 Creates dev wallets, funds them from Alice, registers and starts a subnet,
 registers a validator and four miners, stakes the validator and waits until
@@ -55,7 +55,7 @@ ALICE_SEED = "0xe5be9a5092b81bca64be81d212e7f2f9eba183bb7a90954f7b76361f6edb5c0a
 
 ALICE_SS58 = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"
 
-MARKER = ".tensorwire-localnet"
+MARKER = ".taowire-localnet"
 """Marks a state directory created by this script (localnet_down.sh checks it)."""
 
 LOCAL_ENDPOINTS = ("ws://127.0.0.1:", "ws://localhost:", "ws://[::1]:")
@@ -117,7 +117,7 @@ class TransientFailure(Exception):
 
 def dev_seed(wallet: str, role: str) -> str:
     """The public, deterministic seed of a localnet key."""
-    digest = hashlib.sha256(f"tensorwire-localnet:{wallet}:{role}".encode()).hexdigest()
+    digest = hashlib.sha256(f"taowire-localnet:{wallet}:{role}".encode()).hexdigest()
     return "0x" + digest
 
 

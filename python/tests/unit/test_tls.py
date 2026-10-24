@@ -1,4 +1,4 @@
-"""tensorwire.tls: compact keys, certificate checks, pinning (16.3, ADR-0011)."""
+"""taowire.tls: compact keys, certificate checks, pinning (16.3, ADR-0011)."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 
-from tensorwire.errors import StartupError
-from tensorwire.testing.tls import KeyKind, make_certificate
-from tensorwire.tls import (
+from taowire.errors import StartupError
+from taowire.testing.tls import KeyKind, make_certificate
+from taowire.tls import (
     ALG_ED25519,
     ALG_P256,
     TlsPinMismatch,

@@ -1,13 +1,13 @@
 # Legacy v10 bridge
 
-`tensorwire.extensions.legacy_v10` lets old and new nodes work together while a
+`taowire.extensions.legacy_v10` lets old and new nodes work together while a
 subnet migrates from bittensor v10 (spec 8.11). It is **opt-in and time-boxed**
 in both directions, and it never imports bittensor v10 ([ADR-0008](../adr/0008-reimplement-v10-wire-format.md)).
 
-| | v10 miner (old Axon) | TensorWire miner |
+| | v10 miner (old Axon) | TaoWire miner |
 |---|---|---|
 | **v10 validator (old Dendrite)** | unchanged | server side: `TW_LEGACY_V10_UNTIL` |
-| **TensorWire validator** | client side: `TW_LEGACY_V10_CLIENT=auto` | btauth/1 |
+| **TaoWire validator** | client side: `TW_LEGACY_V10_CLIENT=auto` | btauth/1 |
 
 Both directions take an end date `<date>` (`TW_LEGACY_V10_UNTIL`,
 `TW_LEGACY_V10_CLIENT_UNTIL`). v10 is used **through the day before `<date>`
@@ -54,7 +54,7 @@ short:
 | `request_message`, `response_message` | the signed strings |
 | `is_legacy_request(headers)`, `is_v10_response(status, headers)` | detection |
 
-## Server side: v10 validators → TensorWire miner (`server.py`)
+## Server side: v10 validators → TaoWire miner (`server.py`)
 
 `LegacyServer` is built by the miner at startup when `TW_LEGACY_V10_UNTIL` is
 set. The miner pipeline calls it at step [6] for requests that
@@ -114,7 +114,7 @@ Every inbound and outbound v10 call is counted in
 `tw_legacy_v10_requests_total{direction}`; `tw_legacy_v10_days_remaining{direction}`
 is computed from the end date at every scrape (alert below 14 days).
 
-## Client side: TensorWire validator → v10 miners (`client.py`)
+## Client side: TaoWire validator → v10 miners (`client.py`)
 
 `LegacyClient(signer)` sends one v10 request per call:
 `query(http, neuron, synapse, timeout_s=..., max_response_bytes=...) -> LegacyResult`.
@@ -146,7 +146,7 @@ v10 answers are reported as `MinerResult(protocol="v10", response_verified=False
 ### Rollback through the signed protocol tag (spec 8.11.3 step 5, decision D16)
 
 "No downgrade" would otherwise leave a miner that rolls back to its v10 release
-unreachable from every running TensorWire validator until that validator
+unreachable from every running TaoWire validator until that validator
 restarts: the validator remembers the hotkey as btauth/1-only, keeps sending
 btauth/1, and the v10 Axon answers 500. The kit lifts that memory on one signal
 an on-path attacker cannot forge, the hotkey's on-chain axon `protocol` tag. It
@@ -191,7 +191,7 @@ running validator reaches the rolled-back miner over v10, `n_v10=1`, logs
 The v10 signature covers the sender, receiver, nonce and the hash fields only.
 It does not cover the HTTP method, the path, fields outside
 `required_hash_fields` (vector N8), or any response. Fields that matter for
-scoring must be listed in `required_hash_fields`. `tensorwire migrate scan`
+scoring must be listed in `required_hash_fields`. `taowire migrate scan`
 flags Synapses with an empty or partial list.
 
 ## Testing

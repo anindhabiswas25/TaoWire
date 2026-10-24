@@ -35,12 +35,12 @@ from test_validator_e2e_localnet import (
     _until,
 )
 
-from tensorwire.auth.signer import RequestSigner
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import BittensorGateway
-from tensorwire.extensions.timelock import SealedResponse, Timelock
-from tensorwire.observability.metrics import Metrics
-from tensorwire.validator.client import ValidatorClient
+from taowire.auth.signer import RequestSigner
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import BittensorGateway
+from taowire.extensions.timelock import SealedResponse, Timelock
+from taowire.observability.metrics import Metrics
+from taowire.validator.client import ValidatorClient
 
 HERE = Path(__file__).resolve().parent
 
@@ -59,7 +59,7 @@ def _start(env: dict[str, str], log: Path) -> Process:
 
 @pytest.fixture
 def evidence_dir(tmp_path: Path) -> Path:
-    target = os.environ.get("TENSORWIRE_E2E_EVIDENCE_DIR")
+    target = os.environ.get("TAOWIRE_E2E_EVIDENCE_DIR")
     path = Path(target) if target else tmp_path / "evidence"
     path.mkdir(parents=True, exist_ok=True)
     return path

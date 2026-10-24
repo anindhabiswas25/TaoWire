@@ -5,7 +5,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use tensorwire_btauth::sse::{decode_chunk, Parser};
+use taowire_btauth::sse::{decode_chunk, Parser};
 
 fuzz_target!(|input: (u16, &[u8])| {
     let (cut, data) = input;

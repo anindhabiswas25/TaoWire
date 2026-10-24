@@ -9,7 +9,7 @@ import {
     Verifier,
     initCrypto,
     verifyRequest,
-} from "@tensorwire/btauth";
+} from "@taowire/btauth";
 import { keypair } from "./helpers.js";
 
 beforeAll(initCrypto);

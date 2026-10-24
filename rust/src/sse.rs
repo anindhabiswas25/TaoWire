@@ -1,7 +1,7 @@
 //! Streaming responses over SSE with a signed trailer (spec 9.2, D29, D35):
 //! what the miner ([`crate::axum::stream_response`]) and the client
 //! ([`crate::client::Client::stream`]) share. The same rules as the Python
-//! reference (`tensorwire.extensions.streaming`):
+//! reference (`taowire.extensions.streaming`):
 //!
 //! ```text
 //! event: chunk

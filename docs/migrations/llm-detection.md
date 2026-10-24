@@ -3,7 +3,7 @@
 Source: <https://github.com/It-s-AI/llm-detection> at `37dcb27` (2026-07-23),
 MIT licence, `bittensor==10.5.0`. A public open-source subnet standing in for a
 design partner (S7); nobody from the team was involved. The port lives outside
-this repository (`~/Project/tensorwire/.ports/llm-detection`, git-ignored): none
+this repository (`~/Project/taowire/.ports/llm-detection`, git-ignored): none
 of the subnet's code is committed here, only these counts, the launcher and
 fleet driver, and the evidence in `reports/phase-3/gate-fix/port-llm-detection/`.
 
@@ -43,7 +43,7 @@ count"):
 counted by `reports/phase-4/wp7/recount.py`). `apply` rewrites no `subtensor`
 here (the TWM026 base swap already removes it). The port's one kept TWM100
 marker takes `apply`'s current text, which now carries the D28 warning (branch
-`tensorwire-port-5`, a comment-only commit on top of the Phase 3 port).
+`taowire-port-5`, a comment-only commit on top of the Phase 3 port).
 
 ## What `migrate scan` and `migrate apply` did
 
@@ -68,7 +68,7 @@ removed `# TW-MIGRATE:` markers.
 | File | +/- | Counted | Why |
 |---|---|---|---|
 | `detection/base/validator.py` | +4 / −4 | 5 | their stake filter on v11: `bt.SyncClient(...).staking.stake_for_coldkeys(...)` instead of v10's `subtensor.get_stake_info_for_coldkey(...)`, and `.stake.alpha` instead of `.stake.tao` (v11 raises on `.tao` for alpha). SDK change, not networking |
-| `requirements.txt` | +2 / −1 | 3 | `tensorwire`; `bittensor>=11.3.0,<12` instead of `==10.5.0` |
+| `requirements.txt` | +2 / −1 | 3 | `taowire`; `bittensor>=11.3.0,<12` instead of `==10.5.0` |
 | `detection/base/miner.py` | markers only | 0 | |
 | **Total** | | **8** | |
 
@@ -79,7 +79,7 @@ filter logic, per-miner counters, version checks, wandb logging and both
 **Not changed on purpose: TWM100.** `TextSynapse` has no
 `required_hash_fields`, so a v10 signature covers none of its fields. Adding them
 in the port broke the mixed fleet in both directions (`tw.legacy_auth_failed`
-on the TensorWire miner, "Hash mismatch between header body hash and parsed body
+on the TaoWire miner, "Hash mismatch between header body hash and parsed body
 hash" on the v10 Axon): the hash fields are part of the v10 wire format, which
 old and new nodes must share. Fix it in a release both sides take, or drop it:
 after the rollout btauth/1 signs the whole body and the v10 wire is gone. This
@@ -91,18 +91,18 @@ Localnet netuid 2, dev wallets only. `fleet.py` starts four processes through
 `launch.py` and checks every cell from the nodes' own metrics and logs, and the
 weights from the chain:
 
-| Validator ↓ / Miner → | v10 miner (37dcb27, bittensor 10.5.0, `miner_go`, 127.0.0.3:8093) | TensorWire miner (the port, `miner_py`, 127.0.0.2:8092) |
+| Validator ↓ / Miner → | v10 miner (37dcb27, bittensor 10.5.0, `miner_go`, 127.0.0.3:8093) | TaoWire miner (the port, `miner_py`, 127.0.0.2:8092) |
 |---|---|---|
 | v10 validator (37dcb27, `owner`) | their v10 Axon admits the v10 validator (their `priority` trace line per request) | v10 bridge, inbound (`tw_legacy_v10_requests_total{direction="inbound",result="ok"}`) |
-| TensorWire validator (the port, `validator`) | v10 bridge, outbound (`...{direction="outbound",result="ok"}`) | btauth/1 with twresp/1 verified (`round ok` `n_btauth`) |
+| TaoWire validator (the port, `validator`) | v10 bridge, outbound (`...{direction="outbound",result="ok"}`) | btauth/1 with twresp/1 verified (`round ok` `n_btauth`) |
 
 **Result (run 6, 12 s-block localnet, blocks 80-154, `fleet-run6-12s-PASS/`):
-PASS.** Answered requests per cell when the driver stopped: TensorWire
-validator → TensorWire miner 164 btauth/1 rounds; TensorWire validator → v10
-miner 319 v10 requests; v10 validator → TensorWire miner 355; v10 validator →
+PASS.** Answered requests per cell when the driver stopped: TaoWire
+validator → TaoWire miner 164 btauth/1 rounds; TaoWire validator → v10
+miner 319 v10 requests; v10 validator → TaoWire miner 355; v10 validator →
 v10 miner 335. Weights revealed (`TimelockedWeightsRevealed`, commit-reveal on)
 for both validators, each over both miners: the v10 validator (`owner`) at
-block 144, `[[2, 64266], [4, 65535]]`; the TensorWire validator at block 154,
+block 144, `[[2, 64266], [4, 65535]]`; the TaoWire validator at block 154,
 `[[2, 65535], [4, 65535]]`. All four nodes were alive until the driver
 stopped them (exit −2 = SIGINT).
 
@@ -123,14 +123,14 @@ that one URL with the checkout's own file (a DNS hiccup stopped one run). CLI
 flags: `--neuron.vpermit_tao_limit 1000000000` (localnet validators hold far
 more stake than 4096, and their uid filter would otherwise skip every miner),
 `--blacklist.minimum_stake_requirement 0` on the miners, `--neuron.axon_off` and
-`--neuron.epoch_length 10` on the v10 validator. The TensorWire nodes take their
+`--neuron.epoch_length 10` on the v10 validator. The TaoWire nodes take their
 settings from `TW_*` (`fleet.py` lists them).
 
 **Fast blocks vs the unported validator.** On the 0.25 s-block localnet the v10
 validator's commits were accepted but never revealed: v10's `set_weights`
 computes the reveal round for 12 s blocks unless it is given `block_time`, and
 their code does not pass it (finding 14.2 from the template fleet). The
-TensorWire validator's weights were revealed on fast blocks
+TaoWire validator's weights were revealed on fast blocks
 (`fleet-run5-fast-blocks/`). The final run used the 12 s-block localnet, where
 v10's assumption holds.
 

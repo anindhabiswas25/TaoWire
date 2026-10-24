@@ -49,10 +49,10 @@ from live_check import (
     wait_http,
 )
 
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import NeuronView
-from tensorwire.testing.keys import dev_key
-from tensorwire.validator.client import ValidatorClient
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import NeuronView
+from taowire.testing.keys import dev_key
+from taowire.validator.client import ValidatorClient
 
 STREAM_MINER = (
     MINER_SCRIPT.replace("miner.run()", "")

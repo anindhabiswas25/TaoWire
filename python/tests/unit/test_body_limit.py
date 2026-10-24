@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
-from tensorwire.errors import PayloadTooLarge, RateLimited
-from tensorwire.limits.body import (
+from taowire.errors import PayloadTooLarge, RateLimited
+from taowire.limits.body import (
     BodySizeLimit,
     Message,
     Receive,

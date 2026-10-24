@@ -17,20 +17,20 @@ import structlog
 from pydantic import BaseModel
 
 from legacy_v10_models import BOB, Dummy, LegacyFieldHash, NoHash, PlainDummy, TextOps
-from tensorwire import crypto
-from tensorwire.auth.nonce_store import MemoryNonceStore
-from tensorwire.chain.axon import Endpoint
-from tensorwire.chain.gateway import NeuronView
-from tensorwire.errors import (
+from taowire import crypto
+from taowire.auth.nonce_store import MemoryNonceStore
+from taowire.chain.axon import Endpoint
+from taowire.chain.gateway import NeuronView
+from taowire.errors import (
     HandlerError,
     LegacyAuthFailed,
     LegacyDisabled,
     RateLimited,
     ReplayStoreUnavailable,
 )
-from tensorwire.extensions.legacy_v10 import wire
-from tensorwire.extensions.legacy_v10.client import LegacyClient, ProtocolSelector
-from tensorwire.extensions.legacy_v10.server import REPLAY_NAMESPACE, LegacyServer
+from taowire.extensions.legacy_v10 import wire
+from taowire.extensions.legacy_v10.client import LegacyClient, ProtocolSelector
+from taowire.extensions.legacy_v10.server import REPLAY_NAMESPACE, LegacyServer
 
 TODAY = dt.date(2026, 10, 22)
 NOW = 1_792_672_891_000_000_000
@@ -491,7 +491,7 @@ def test_native_body_hash_route_and_plain_model() -> None:
 
 
 async def test_async_verify_and_lru_bound(monkeypatch: pytest.MonkeyPatch) -> None:
-    import tensorwire.extensions.legacy_v10.server as mod
+    import taowire.extensions.legacy_v10.server as mod
 
     monkeypatch.setattr(mod, "_MAX_TRACKED_KEYS", 2)
     srv = server()

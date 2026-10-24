@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tensorwire.chain.metagraph_cache import (
+from taowire.chain.metagraph_cache import (
     DEFAULT_SOFT_AGE_S,
     StalenessStage,
     StalenessThresholds,

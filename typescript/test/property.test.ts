@@ -1,7 +1,7 @@
 // Property tests (fast-check) of the verifier and parsers, fixed run counts.
 import fc from "fast-check";
 import { beforeAll, it } from "vitest";
-import { initCrypto } from "@tensorwire/btauth";
+import { initCrypto } from "@taowire/btauth";
 import {
     arbitraryHeaders,
     chunkDecode,

@@ -1,0 +1,458 @@
+"""The miner request path, in the exact order of spec 5.3.
+
+Steps 1-3 run as ASGI middleware in front of every request (installed by
+``miner.app``): pre-auth per-IP rate limit, then the body-size cap over the
+largest route limit. Step 4 is the router. :class:`RouteEndpoint` runs the
+rest for one route:
+
+[2/3] the route's own body limit (declared length, then a running count)
+[5]   metagraph usable? (strict mode past the max age: 503 for everyone)
+[6]   btauth/1 verification in a worker thread (401 ``tw.auth_*``)
+[7]   caller policy, or known callers only past the max age (403 / 503)
+[8]   per-hotkey, per-route rate limit (429)
+[9]   parse the verified raw body into the request model (422)
+[10]  the handler, with a timeout (504 / 500)
+[11]  serialize, sign the response (``twresp/1``, spec 9.1) and send; a
+      streaming route (spec 9.2) fetches its first chunk and answers with
+      SSE and a signed ``tw-end`` instead (``miner.streaming``)
+
+Cheap rejects come first; the signature check runs only after the size and
+IP limits, and the replay store is written only after the signature
+verifies (fact A4). Handlers never see bytes that were not verified.
+
+Responses are signed when ``TW_SIGN_RESPONSES=1`` (the default): every 200,
+and every error raised after the caller was authenticated (Appendix A,
+"Response signed?"). Errors before that are never signed.
+
+Legacy v10 requests (spec 8.11.2) take the same path with the bridge's
+verifier at step [6] and are answered in v10 shape; they are not signed
+with ``twresp/1`` (v10 Dendrites do not read it).
+"""
+
+from __future__ import annotations
+
+import functools
+import json
+import time
+from collections.abc import MutableMapping
+from typing import Any
+from urllib.parse import quote
+
+import anyio
+import anyio.to_thread
+import structlog
+from pydantic import BaseModel, ValidationError
+from starlette.requests import Request
+from starlette.responses import Response
+
+from taowire.auth.verifier import Caller
+from taowire.errors import (
+    HandlerError,
+    HandlerTimeout,
+    InvalidRequest,
+    LegacyAuthFailed,
+    PayloadTooLarge,
+    RateLimited,
+    ReplayStoreUnavailable,
+    TWError,
+)
+from taowire.extensions.legacy_v10 import wire
+from taowire.extensions.response_sig import sign_response
+from taowire.extensions.streaming import StreamLimits
+from taowire.miner.legacy import LegacyRequestLike, LegacyServerLike
+from taowire.miner.lifecycle import Lifecycle, Runtime
+from taowire.miner.routes import Route, RouteContext
+from taowire.miner.streaming import StreamSlots, open_stream
+from taowire.observability.metrics import Metrics
+from taowire.observability.middleware import state_of
+
+__all__ = ["RouteEndpoint", "raw_target"]
+
+_log = structlog.stdlib.get_logger("taowire.miner")
+
+
+def raw_target(scope: MutableMapping[str, Any]) -> str:
+    """The request target exactly as received: percent-encoded path + ``?query``.
+
+    Uses the ASGI ``raw_path``. A server that does not provide it gets the
+    decoded path re-encoded, which can differ from what the client signed;
+    such requests then fail as ``tw.auth_bad_signature`` (fail closed).
+    """
+    raw = scope.get("raw_path")
+    path = (
+        raw.decode("latin-1")
+        if raw
+        else quote(scope["path"], safe="/:@!$&'()*+,;=-._~")
+    )
+    query = scope.get("query_string", b"")
+    return f"{path}?{query.decode('latin-1')}" if query else path
+
+
+async def _read_body(request: Request, limit: int) -> bytes:
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.strip().isdigit() and int(declared) > limit:
+        raise PayloadTooLarge()
+    chunks: list[bytes] = []
+    received = 0
+    async for chunk in request.stream():
+        received += len(chunk)
+        if received > limit:
+            raise PayloadTooLarge()
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _serialize(route: Route, result: Any) -> tuple[bytes, str]:
+    if route.encode is not None and not isinstance(result, (bytes, bytearray)):
+        return route.encode(result), "application/json"
+    if isinstance(result, (bytes, bytearray, memoryview)):
+        return bytes(result), "application/octet-stream"
+    model = route.response_model
+    if isinstance(result, BaseModel) and (model is None or isinstance(result, model)):
+        return result.model_dump_json().encode(), "application/json"
+    expected = "bytes" if model is None else f"{model.__name__} or bytes"
+    _log.error(
+        "handler_bad_return",
+        route=route.path,
+        returned=type(result).__name__,
+        expected=expected,
+    )
+    raise HandlerError()
+
+
+class RouteEndpoint:
+    """Runs steps 2-11 of the request path for one route.
+
+    ``legacy_only`` marks the extra ``/<SynapseName>`` path mounted for a
+    native route that also accepts v10 requests: btauth/1 requests there are
+    answered 404.
+    """
+
+    def __init__(
+        self,
+        route: Route,
+        lifecycle: Lifecycle,
+        metrics: Metrics,
+        *,
+        legacy_only: bool = False,
+        stream_slots: StreamSlots | None = None,
+    ) -> None:
+        self.route = route
+        self._lifecycle = lifecycle
+        self._metrics = metrics
+        self._legacy_only = legacy_only
+        self._stream_slots = StreamSlots() if stream_slots is None else stream_slots
+
+    async def endpoint(self, request: Request) -> Response:
+        """The Starlette endpoint (a bound method: Starlette passes a ``Request``)."""
+        state = state_of(request.scope)
+        state["tw_route"] = self.route.path
+        request_id: str | None = state.get("request_id")
+        started = time.perf_counter()
+        legacy = self._legacy_server(request)
+        if legacy is None and self._legacy_only:
+            return Response(status_code=404)
+        try:
+            if legacy is not None:
+                return await self._handle_legacy(request, state, request_id, legacy)
+            return await self._handle(request, state, request_id)
+        except TWError as err:
+            state["tw_code"] = err.code
+            if legacy is not None:
+                self._lifecycle.legacy_traffic.record(state.get("tw_caller"), err.code)
+                return _legacy_response(
+                    legacy,
+                    request,
+                    verified=state.get("tw_legacy_request"),
+                    status=err.http_status,
+                    error=err,
+                    started=started,
+                )
+            headers = err.response_headers()
+            content = err.response_body(request_id)
+            caller: Caller | None = state.get("tw_caller_obj")
+            if err.signed and caller is not None:
+                headers.update(self._sign(caller, err.http_status, content))
+            return Response(
+                content=content,
+                status_code=err.http_status,
+                headers=headers,
+                media_type="application/json",
+            )
+
+    def _legacy_server(self, request: Request) -> LegacyServerLike | None:
+        """The bridge when this is a v10 request and the bridge is on, else ``None``."""
+        if not self._lifecycle.ready:
+            return None
+        legacy = self._lifecycle.runtime.legacy
+        if legacy is None or not legacy.is_legacy(request.headers):
+            return None
+        return legacy
+
+    def _sign(self, caller: Caller, status: int, content: bytes) -> dict[str, str]:
+        rt = self._lifecycle.runtime
+        if not self._lifecycle.settings.sign_responses:
+            return {}
+        return sign_response(
+            rt.signer,
+            request_nonce=caller.nonce_ns,
+            sender_ss58=caller.hotkey_ss58,
+            status=status,
+            body=content,
+        )
+
+    async def _handle(
+        self, request: Request, state: MutableMapping[str, Any], request_id: str | None
+    ) -> Response:
+        route = self.route
+        body = await _read_body(request, route.max_body_bytes)  # [2/3]
+        rt = self._lifecycle.runtime
+        rt.gate.precheck()  # [5]
+        started = time.perf_counter()
+        try:  # [6]
+            caller = await rt.verifier.verify(
+                request.headers.items(),
+                body,
+                method=request.method,
+                target=raw_target(request.scope),
+            )
+        except ReplayStoreUnavailable:
+            state["tw_store_backend"] = rt.store_backend
+            raise
+        finally:
+            self._metrics.auth_verify_duration.observe(time.perf_counter() - started)
+        ctx = await self._admit(rt, state, caller, request_id)  # [7] [8]
+        argument = route.parse(body)  # [9]
+        if route.stream_limits is not None:
+            return await self._stream(
+                rt, state, caller, ctx, argument, limits=route.stream_limits
+            )
+        result = await self._invoke(argument, ctx)  # [10]
+        content, media_type = _serialize(route, result)  # [11]
+        return Response(
+            content=content,
+            status_code=200,
+            media_type=media_type,
+            headers=self._sign(caller, 200, content),
+        )
+
+    async def _stream(
+        self,
+        rt: Runtime,
+        state: MutableMapping[str, Any],
+        caller: Caller,
+        ctx: RouteContext,
+        argument: Any,
+        *,
+        limits: StreamLimits,
+    ) -> Response:
+        """Steps [10]-[11] of a streaming route (spec 9.2)."""
+        route = self.route
+        try:
+            release = self._stream_slots.acquire(caller.hotkey_ss58)
+        except RateLimited:
+            state["tw_rate_layer"] = "hotkey"
+            raise
+        try:
+            invoked = time.perf_counter()
+            result = await self._invoke(argument, ctx)  # [10]
+        except BaseException:
+            release()
+            raise
+        # [11] SSE. One deadline: the handler call and its first chunk share
+        # timeout_s.
+        spent = time.perf_counter() - invoked
+        return await open_stream(
+            result,
+            route=route.path,
+            request_id=ctx.request_id,
+            timeout_s=max(route.timeout_s - spent, 0.001),
+            limits=limits,
+            chunk_model=route.response_model,
+            signer=rt.signer if self._lifecycle.settings.sign_responses else None,
+            caller=caller,
+            metrics=self._metrics,
+            state=state,
+            release=release,
+        )
+
+    async def _admit(
+        self,
+        rt: Runtime,
+        state: MutableMapping[str, Any],
+        caller: Caller,
+        request_id: str | None,
+    ) -> RouteContext:
+        route = self.route
+        state["tw_caller"] = caller.hotkey_ss58
+        state["tw_caller_obj"] = caller
+        neuron = rt.gate.admit(route.path, route.policy, caller.hotkey_ss58)  # [7]
+        decision = await rt.hotkey_limiter.acquire(f"{route.path} {caller.hotkey_ss58}")
+        if not decision.allowed:  # [8]
+            state["tw_rate_layer"] = "hotkey"
+            raise RateLimited(retry_after_s=decision.retry_after_s, layer="hotkey")
+        return RouteContext(
+            caller=caller, caller_neuron=neuron, request_id=request_id, route=route.path
+        )
+
+    async def _handle_legacy(
+        self,
+        request: Request,
+        state: MutableMapping[str, Any],
+        request_id: str | None,
+        legacy: LegacyServerLike,
+    ) -> Response:
+        route = self.route
+        started = time.perf_counter()
+        state["tw_protocol"] = "v10"
+        if not route.accepts_legacy:
+            raise LegacyAuthFailed("this route does not accept v10 requests")
+        if route.stream:
+            # D33: no streaming over the v10 wire. Refused before any
+            # verification work (no signature check, replay write or token).
+            _log.info("legacy_stream_refused", route=route.path)
+            raise InvalidRequest()
+        body = await _read_body(request, route.max_body_bytes)  # [2/3]
+        rt = self._lifecycle.runtime
+        rt.gate.precheck()  # [5]
+        verify_started = time.perf_counter()
+        try:  # [6] v10 signature + the kit's freshness window and replay store
+            verified = await legacy.verify(
+                list(request.headers.items()),
+                body,
+                synapse_cls=route.legacy_synapse,
+                body_hash=route.legacy_body_hash,
+            )
+        except ReplayStoreUnavailable:
+            state["tw_store_backend"] = rt.store_backend
+            raise
+        finally:
+            self._metrics.auth_verify_duration.observe(
+                time.perf_counter() - verify_started
+            )
+        state["tw_legacy_request"] = verified
+        ctx = await self._admit(rt, state, verified.caller, request_id)  # [7] [8]
+        argument = self._legacy_argument(verified, body)  # [9]
+        result = await self._invoke(argument, ctx)  # [10]
+        synapse, raw = self._legacy_result(verified, result)  # [11]
+        response = _legacy_response(  # may refuse the answer (HandlerError)
+            legacy,
+            request,
+            verified=verified,
+            status=200,
+            synapse=synapse,
+            raw_body=raw,
+            started=started,
+        )
+        self._lifecycle.legacy_traffic.record(verified.caller.hotkey_ss58, "ok")
+        return response
+
+    def _legacy_argument(self, verified: LegacyRequestLike, body: bytes) -> Any:
+        route = self.route
+        synapse = verified.synapse
+        if synapse is None:
+            return route.parse(body)
+        model = route.request_model
+        if model is None or isinstance(synapse, model):
+            return synapse
+        try:
+            return model.model_validate(_user_fields(synapse))
+        except ValidationError:
+            raise InvalidRequest() from None
+
+    def _legacy_result(
+        self, verified: LegacyRequestLike, result: Any
+    ) -> tuple[BaseModel | None, bytes | None]:
+        """The v10 answer: a filled Synapse, or (body-hash routes) raw JSON."""
+        synapse = verified.synapse
+        if synapse is None:
+            if isinstance(result, (bytes, bytearray)):
+                return None, bytes(result)
+            if isinstance(result, BaseModel):
+                raw = result.model_dump_json().encode()
+                # D11 / G4-4: never let inf / nan become null silently (8.11.2).
+                bad = wire.non_finite_field(result, rendered=json.loads(raw), skip=())
+                if bad is not None:
+                    _log.error(
+                        "legacy_non_finite_answer",
+                        route=self.route.path,
+                        field=bad,
+                        hint="v10 answers are JSON: inf / nan would become null",
+                    )
+                    raise HandlerError()
+                return None, raw
+        elif isinstance(result, type(synapse)):
+            return result, None
+        elif isinstance(result, BaseModel):
+            return synapse.model_copy(update=result.model_dump()), None
+        _log.error(
+            "legacy_bad_return",
+            route=self.route.path,
+            returned=type(result).__name__,
+            hint="a route serving v10 requests must return its Synapse or a model",
+        )
+        raise HandlerError()
+
+    async def _invoke(self, argument: Any, ctx: RouteContext) -> Any:
+        route = self.route
+        result: Any = None
+        try:
+            with anyio.move_on_after(route.timeout_s) as scope:
+                if route.is_async_generator:
+                    result = route.handler(argument, ctx)  # runs as it is read
+                elif route.is_async:
+                    result = await route.handler(argument, ctx)
+                else:
+                    call = functools.partial(route.handler, argument, ctx)
+                    result = await anyio.to_thread.run_sync(
+                        call, abandon_on_cancel=True
+                    )
+        except TWError:
+            raise  # kit errors carry their own safe public message
+        except Exception:  # noqa: BLE001 - any handler bug becomes a 500, never a crash
+            _log.exception("handler_error", route=route.path, request_id=ctx.request_id)
+            raise HandlerError() from None
+        if scope.cancelled_caught:
+            _log.warning(
+                "handler_timeout",
+                route=route.path,
+                request_id=ctx.request_id,
+                timeout_s=route.timeout_s,
+            )
+            raise HandlerTimeout()
+        return result
+
+
+def _user_fields(synapse: BaseModel) -> dict[str, Any]:
+    fields = getattr(synapse, "user_fields", None)
+    if callable(fields):
+        values: dict[str, Any] = fields()
+        return values
+    return synapse.model_dump()
+
+
+def _legacy_response(
+    legacy: LegacyServerLike,
+    request: Request,
+    *,
+    verified: LegacyRequestLike | None,
+    status: int,
+    started: float,
+    synapse: BaseModel | None = None,
+    error: TWError | None = None,
+    raw_body: bytes | None = None,
+) -> Response:
+    content, headers = legacy.respond(
+        request.headers,
+        request=verified,
+        status=status,
+        synapse=synapse,
+        error=error,
+        process_time_s=time.perf_counter() - started,
+        raw_body=raw_body,
+    )
+    response = Response(content=content, status_code=status)
+    for name, value in headers:
+        if name.lower() != "content-length":  # Starlette sets it from the content
+            response.headers.append(name, value)
+    return response

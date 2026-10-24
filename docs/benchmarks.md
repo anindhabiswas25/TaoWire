@@ -1,6 +1,6 @@
 # Benchmarks
 
-Spec 13.7 targets, measured with `tensorwire bench` (`just bench`), and the
+Spec 13.7 targets, measured with `taowire bench` (`just bench`), and the
 13.6 abuse tests (`just abuse`). Numbers are from one machine on one day;
 re-run them on your own hardware before you rely on them.
 
@@ -12,10 +12,10 @@ re-run them on your own hardware before you rely on them.
 | Memory | 15.3 GiB |
 | OS | Linux 7.0.0-38-generic |
 | Python | 3.12.3 |
-| Packages | tensorwire 0.1.0.dev0, bittensor 11.3.0, uvicorn 0.54.0, httptools 0.9.0, fastapi 0.159.1, starlette 1.9.0, redis-py 5.3.1 |
+| Packages | taowire 0.1.0.dev0, bittensor 11.3.0, uvicorn 0.54.0, httptools 0.9.0, fastapi 0.159.1, starlette 1.9.0, redis-py 5.3.1 |
 | Redis | 7.4.11 in Docker (`redis:7`), container `tw-redis` at `172.17.0.3` (direct path), also published on `127.0.0.1:6379` (docker-proxy) |
 
-The spec's reference is 4 vCPU / 8 GB. `tensorwire bench` pins the miner
+The spec's reference is 4 vCPU / 8 GB. `taowire bench` pins the miner
 (4 uvicorn workers) to logical CPUs 0-3, which are two performance cores
 with their hyper-threads, and the load generators to CPUs 4-15, so the
 miner has 4 logical CPUs. Memory is not limited; the miner used about
@@ -25,7 +25,7 @@ miner has 4 logical CPUs. Memory is not limited; the miner used about
 
 **What counts (D17, 13.7):** Redis reached directly (host network, Unix
 socket or the container's own IP), as in production. `just bench` /
-`tensorwire bench` find Redis that way by default and print the path
+`taowire bench` find Redis that way by default and print the path
 (`redis path: direct: container tw-redis at its own IP`); a run through
 Docker's port mapping (`docker-proxy`) is printed as "extra information
 only" and is never the result.
@@ -88,7 +88,7 @@ to the container's own address (`172.17.0.3`). With the same container
 reached directly, auth + policy p99 was 4.24-4.34 ms in three Phase 3 runs
 and 3.755 ms at the Phase 3 gate. The target has not been loosened. Since
 D17, `just bench` uses the direct path by default; set
-`TENSORWIRE_BENCH_REDIS_URL` (or `--redis-url`) to choose a Redis yourself.
+`TAOWIRE_BENCH_REDIS_URL` (or `--redis-url`) to choose a Redis yourself.
 The bench prints whether that URL is direct or a `docker-proxy` mapping.
 
 What this means for operators:
@@ -101,7 +101,7 @@ What this means for operators:
   0.22 ms p50 and 0.91 ms p99.
 
 To reproduce: `just bench` (direct path found automatically), or
-`tensorwire bench --redis-url redis://<container-ip>:6379/14`.
+`taowire bench --redis-url redis://<container-ip>:6379/14`.
 
 ## Abuse tests (spec 13.6)
 

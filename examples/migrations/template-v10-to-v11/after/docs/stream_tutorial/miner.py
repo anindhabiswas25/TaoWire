@@ -10,8 +10,8 @@ from starlette.types import Send
 
 import bittensor as bt
 import logging
-from tensorwire import Miner
-from tensorwire.compat import Axon
+from taowire import Miner
+from taowire.compat import Axon
 from transformers import GPT2Tokenizer
 from typing import List, Dict, Tuple, Union, Callable, Awaitable
 

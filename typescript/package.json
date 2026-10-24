@@ -1,7 +1,7 @@
 {
-  "name": "@tensorwire/btauth",
+  "name": "@taowire/btauth",
   "version": "0.1.0",
-  "description": "btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets (TensorWire, spec 11.3)",
+  "description": "btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets (TaoWire, spec 11.3)",
   "license": "MIT",
   "private": true,
   "type": "module",

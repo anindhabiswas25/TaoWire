@@ -1,20 +1,20 @@
-# @tensorwire/btauth (TypeScript)
+# @taowire/btauth (TypeScript)
 
 btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets: the TypeScript package of
-[TensorWire](../README.md) (spec 11.3). Node.js ≥ 20, ESM and CommonJS builds. Not published (`"private": true`).
+[TaoWire](../README.md) (spec 11.3). Node.js ≥ 20, ESM and CommonJS builds. Not published (`"private": true`).
 
-Entry points: `@tensorwire/btauth`, `/fastify`, `/redis`, `/sidecar`.
+Entry points: `@taowire/btauth`, `/fastify`, `/redis`, `/sidecar`.
 
 Dependencies: `@polkadot/util-crypto`, `@polkadot/util` and `@polkadot/wasm-crypto` (sr25519 / ed25519 in
-WASM, SS58). Optional peers: `fastify` (the adapter, `@tensorwire/btauth/fastify`) and `ioredis` (the shared
-replay store, `@tensorwire/btauth/redis`).
+WASM, SS58). Optional peers: `fastify` (the adapter, `@taowire/btauth/fastify`) and `ioredis` (the shared
+replay store, `@taowire/btauth/redis`).
 
 ## Quickstart (miner, Fastify)
 
 ```ts
 import Fastify from "fastify";
-import { Keypair, MemoryStore, Verifier, initCrypto } from "@tensorwire/btauth";
-import { btauth, rawBody } from "@tensorwire/btauth/fastify";
+import { Keypair, MemoryStore, Verifier, initCrypto } from "@taowire/btauth";
+import { btauth, rawBody } from "@taowire/btauth/fastify";
 
 await initCrypto(); // once: loads the WASM crypto
 const key = Keypair.fromHotkeyFile(process.env.HOTKEY_FILE!); // secretSeed or secretPhrase; chmod 600
@@ -72,7 +72,7 @@ API docs: `npm run docs` (TypeDoc, into `docs-api/`).
 ```bash
 npm ci
 npm run lint && npm run typecheck     # eslint (strict type-checked) + prettier; tsc --noEmit
-npm test                              # vitest; TENSORWIRE_TEST_REDIS_URL=redis://... for the Redis store
+npm test                              # vitest; TAOWIRE_TEST_REDIS_URL=redis://... for the Redis store
 npm run conformance                   # every vector in conformance/vectors (except legacy_v10, Python only)
 npm run coverage                      # thresholds: >= 90% on the btauth modules
 TW_FUZZ_SECONDS=300 npm run fuzz      # fast-check properties, time-boxed

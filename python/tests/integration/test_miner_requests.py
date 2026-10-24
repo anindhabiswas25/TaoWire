@@ -12,15 +12,15 @@ from typing import Any
 import pytest
 from pydantic import BaseModel
 
-from tensorwire.chain.metagraph_cache import StalenessStage
-from tensorwire.extensions.response_sig import verify_response
-from tensorwire.miner.app import Miner
-from tensorwire.miner.routes import RouteContext
-from tensorwire.testing.client import SignedClient
-from tensorwire.testing.clock import FakeClock
-from tensorwire.testing.fake_chain import FakeChain
-from tensorwire.testing.keys import dev_key
-from tensorwire.testing.pytest_plugin import TEST_NETUID
+from taowire.chain.metagraph_cache import StalenessStage
+from taowire.extensions.response_sig import verify_response
+from taowire.miner.app import Miner
+from taowire.miner.routes import RouteContext
+from taowire.testing.client import SignedClient
+from taowire.testing.clock import FakeClock
+from taowire.testing.fake_chain import FakeChain
+from taowire.testing.keys import dev_key
+from taowire.testing.pytest_plugin import TEST_NETUID
 
 pytestmark = pytest.mark.asyncio
 

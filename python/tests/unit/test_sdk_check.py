@@ -8,8 +8,8 @@ import types
 
 import pytest
 
-from tensorwire.auth.sdk_check import REQUIRED_SYMBOLS, TESTED_VERSIONS, check_sdk
-from tensorwire.errors import StartupError
+from taowire.auth.sdk_check import REQUIRED_SYMBOLS, TESTED_VERSIONS, check_sdk
+from taowire.errors import StartupError
 
 
 def test_installed_sdk_passes() -> None:
