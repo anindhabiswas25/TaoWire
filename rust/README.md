@@ -30,7 +30,7 @@ async fn main() {
 ```
 
 A runnable miner and signer with dev keys: `examples/interop.rs`
-(`cargo run --example interop --features axum,client -- serve 127.0.0.3:8096 <seed-hex>`).
+(`cargo run --example interop --features axum,client,sidecar -- serve 127.0.0.3:8096 <seed-hex>`).
 
 Validator side (feature `client`): `Client::new(Signer::new(validator_key), reqwest_client)` and
 `client.send(Method::POST, url, body, miner_hotkey).await`; `Ok` means the twresp/1 signature verified.

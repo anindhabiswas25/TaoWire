@@ -23,7 +23,7 @@ from dataclasses import dataclass, field, replace
 
 from tensorwire.chain.gateway import MetagraphView, NeuronView
 from tensorwire.chain.metagraph_cache import MetagraphSource, StalenessStage
-from tensorwire.config import MinerSettings
+from tensorwire.config import CallerPolicySettings
 from tensorwire.errors import Forbidden, MetagraphStale
 
 __all__ = ["DEFAULT_MAX_KNOWN_CALLERS", "CallerGate", "CallerPolicy", "KnownCallers"]
@@ -57,7 +57,7 @@ class CallerPolicy:
             raise ValueError("a hotkey cannot be both allowed and denied")
 
     @classmethod
-    def from_settings(cls, settings: MinerSettings) -> CallerPolicy:
+    def from_settings(cls, settings: CallerPolicySettings) -> CallerPolicy:
         """The default route policy from ``TW_REQUIRE_PERMIT``, stake and lists."""
         return cls(
             require_registered=True,

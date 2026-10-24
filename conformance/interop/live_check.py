@@ -121,7 +121,7 @@ def build(out: Path) -> dict[str, list[str]]:
     go_bin = Path(tempfile.mkdtemp(prefix="tw-interop-go-")) / "btauth-interop"
     go = [_tool("go"), "build", "-o", str(go_bin), "./cmd/btauth-interop"]
     cargo = [_tool("cargo"), "build", "-j", "2", "--example", "interop"]
-    cargo += ["--features", "axum,client"]
+    cargo += ["--features", "axum,client,sidecar"]
     npm = [_tool("npm"), "run", "build:examples"]
     env = {**os.environ, "GOTOOLCHAIN": "local"}
     with (out / "build.txt").open("w", encoding="utf-8") as log:

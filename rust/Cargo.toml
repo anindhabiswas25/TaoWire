@@ -48,7 +48,7 @@ path = "tests/conformance.rs"
 
 [[example]]
 name = "interop"
-required-features = ["axum", "client"]
+required-features = ["axum", "client", "sidecar"]
 
 [[test]]
 name = "integration"

@@ -6,13 +6,16 @@
 //       --receiver <ss58> [--scheme ed25519] [--count 200] [--body '{"text":"hello"}']
 //   node build/examples/interop.js stream --url http://127.0.0.2:8094/v1/stream --seed <hex> \
 //       --receiver <ss58> [--scheme ed25519] [--count 1] [--body '{"text":"hello"}']
+//   node build/examples/interop.js sidecar --url http://127.0.0.1:9910 --token-file <path> \
+//       --netuid 1 --receiver <miner ss58> --probes <ss58,...>
 //
 // serve answers POST /v1/upper ({"text": s} -> {"result": upper(s)}) behind the Fastify
 // adapter with twresp/1 signing, and POST /v1/stream with five SSE chunks
 // {"i": n, "text": upper(s)} and a signed tw-end (spec 9.2). sign sends count requests
 // with a fresh signature each and prints one JSON summary line; stream reads count
-// streams the same way (conformance/interop/stream_check.py). Seeds are public dev keys
-// only.
+// streams the same way (conformance/interop/stream_check.py); sidecar runs the sidecar
+// client's calls against a real `tensorwire sidecar` (conformance/interop/sidecar_check.py).
+// Seeds are public dev keys only.
 import { parseArgs } from "node:util";
 import Fastify from "fastify";
 import {
@@ -27,6 +30,55 @@ import {
     initCrypto,
 } from "@tensorwire/btauth";
 import { btauth, rawBody, streamReply } from "@tensorwire/btauth/fastify";
+import { SidecarChainError, SidecarClient } from "@tensorwire/btauth/sidecar";
+
+function codeOf(err: unknown): string {
+    if (err instanceof TWError) return err.code;
+    if (err instanceof SidecarChainError) return `chain:${err.code}`;
+    return String(err);
+}
+
+async function sidecarCheck(url: string, tokenFile: string, netuid: number, miner: string, probes: string[]) {
+    const settle = async <T>(f: () => Promise<T>): Promise<[T | null, string]> => {
+        try {
+            return [await f(), "ok"];
+        } catch (err) {
+            return [null, codeOf(err)];
+        }
+    };
+    const c = new SidecarClient({ netuid, url, tokenFile, expectedHotkey: miner });
+    const [, start] = await settle(() => c.start());
+    const [h, healthErr] = await settle(() => c.health());
+    const check: Record<string, string> = {};
+    const caller: Record<string, string> = {};
+    for (const hk of probes) {
+        try {
+            c.check(hk, "middleware");
+            check[hk] = "ok";
+        } catch (err) {
+            check[hk] = codeOf(err);
+        }
+        const [d, err] = await settle(() => c.caller(hk));
+        caller[hk] = d === null ? err : d.allowed ? "allowed" : d.code;
+    }
+    const [hash, serve] = await settle(() => c.serveAxon({ ip: "127.0.0.2", port: 8099 }));
+    const wrong = new SidecarClient({ netuid, url, token: "w".repeat(32) });
+    const [, wrongToken] = await settle(() => wrong.health());
+    c.stop();
+    const summary = {
+        language: "typescript",
+        start,
+        health: h === null ? { err: healthErr } : { ok: h.ok, hotkey: h.hotkey, stage: h.stage, err: "ok" },
+        neurons: c.snapshot()?.neurons.length ?? 0,
+        stage: c.stage(),
+        check,
+        caller,
+        serve_axon: serve,
+        block_hash_ok: typeof hash === "string" && hash.length === 66,
+        wrong_token: wrongToken,
+    };
+    console.log(JSON.stringify(summary));
+}
 
 function textOf(body: Buffer): string {
     let text: unknown;
@@ -144,9 +196,17 @@ async function main(): Promise<number> {
             receiver: { type: "string", default: "" },
             count: { type: "string" },
             body: { type: "string", default: '{"text":"hello"}' },
+            "token-file": { type: "string", default: "" },
+            netuid: { type: "string", default: "1" },
+            probes: { type: "string", default: "" },
         },
     });
     await initCrypto();
+    if (mode === "sidecar") {
+        const probes = values.probes.split(",").filter((p) => p !== "");
+        await sidecarCheck(values.url, values["token-file"], Number(values.netuid), values.receiver, probes);
+        return 0;
+    }
     const k = key(values.seed, values.scheme === "ed25519" ? "ed25519" : "sr25519");
     if (mode === "serve") {
         await serve(values.addr, k);
@@ -162,7 +222,7 @@ async function main(): Promise<number> {
             ? 0
             : 1;
     }
-    console.error("usage: interop.js serve|sign|stream [flags]");
+    console.error("usage: interop.js serve|sign|stream|sidecar [flags]");
     return 2;
 }
 

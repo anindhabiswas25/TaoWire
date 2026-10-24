@@ -12,6 +12,7 @@ from tensorwire.cli.conformance_cmd import conformance
 from tensorwire.cli.doctor import doctor
 from tensorwire.cli.init_cmd import init
 from tensorwire.cli.migrate_cmd import migrate_app
+from tensorwire.cli.sidecar_cmd import sidecar
 from tensorwire.cli.sign_request import sign_request
 from tensorwire.version import __version__
 
@@ -41,5 +42,6 @@ app.command("bench")(bench)
 app.command("conformance")(conformance)
 app.command("doctor")(doctor)
 app.command("init")(init)
+app.command("sidecar")(sidecar)
 app.command("sign-request")(sign_request)
 app.add_typer(migrate_app, name="migrate")

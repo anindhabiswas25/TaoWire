@@ -38,6 +38,7 @@ __all__ = [
     "PayloadTooLarge",
     "RateLimited",
     "ReplayStoreUnavailable",
+    "SidecarUnauthorized",
     "StartupError",
     "TWError",
     "client_http_code",
@@ -137,6 +138,11 @@ ERROR_CODES: Mapping[str, ErrorSpec] = _catalogue(
         signed=False,
     ),
     ErrorSpec("tw.config_invalid", 500, "internal error", signed=False),
+    # The sidecar's own bearer auth (spec 11.6; not in Appendix A yet: spec
+    # question 10). Never signed: the sidecar signs nothing.
+    ErrorSpec(
+        "tw.sidecar_unauthorized", 401, "sidecar token missing or wrong", signed=False
+    ),
 )
 
 #: Client-side codes used only in ``MinerResult.error_code`` (Appendix A).
@@ -322,6 +328,12 @@ class LegacyDisabled(TWError):
     """A v10 request arrived after ``TW_LEGACY_V10_UNTIL``."""
 
     code = "tw.legacy_disabled"
+
+
+class SidecarUnauthorized(TWError):
+    """A sidecar request without the right bearer token (spec 11.6)."""
+
+    code = "tw.sidecar_unauthorized"
 
 
 class ConfigError(TWError):

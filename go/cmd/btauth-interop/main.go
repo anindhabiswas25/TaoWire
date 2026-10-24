@@ -6,6 +6,7 @@
 //	    [--scheme ed25519] [--count 200] [--body '{"text":"hello"}']
 //	btauth-interop stream --url http://127.0.0.2:8094/v1/stream --seed <hex> --receiver <ss58> \
 //	    [--scheme ed25519] [--count 1] [--body '{"text":"hello"}']
+//	btauth-interop sidecar --url http://127.0.0.1:9910 --token-file <path> --netuid 1 --receiver <miner ss58>
 //
 // serve answers POST /v1/upper ({"text": s} -> {"result": upper(s)}) behind
 // btauth.Middleware with twresp/1 signing, and POST /v1/stream with an SSE
@@ -13,13 +14,16 @@
 // (spec 9.2). sign sends count requests with a fresh signature each and
 // prints one JSON summary line: every answer must be 200 with a verified
 // twresp/1 signature. stream reads count streams the same way (conformance/
-// interop/stream_check.py). Seeds are public dev keys only.
+// interop/stream_check.py). sidecar runs the sidecar client's calls against a
+// real `tensorwire sidecar` and prints what each returned
+// (conformance/interop/sidecar_check.py). Seeds are public dev keys only.
 package main
 
 import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -29,6 +33,7 @@ import (
 	"time"
 
 	"github.com/tensorwire/tensorwire/go/btauth"
+	"github.com/tensorwire/tensorwire/go/sidecar"
 )
 
 func key(seedHex, scheme string) (*btauth.Keypair, error) {
@@ -145,9 +150,66 @@ func stream(url, receiver, body string, count int, k *btauth.Keypair) error {
 	return nil
 }
 
+// sidecarCheck exercises every client call against a real sidecar.
+func sidecarCheck(base, tokenFile string, netuid int, miner string, probes []string) error {
+	ctx := context.Background()
+	out := map[string]any{"language": "go"}
+	c, err := sidecar.New(sidecar.Config{NetUID: netuid, URL: base, TokenFile: tokenFile, ExpectedHotkey: miner})
+	if err != nil {
+		return err
+	}
+	code := func(err error) string {
+		var e *btauth.Error
+		var ce *sidecar.ChainError
+		switch {
+		case err == nil:
+			return "ok"
+		case errors.As(err, &e):
+			return e.Code
+		case errors.As(err, &ce):
+			return "chain:" + ce.Code
+		}
+		return err.Error()
+	}
+	out["start"] = code(c.Start(ctx))
+	defer c.Stop()
+	h, err := c.Health(ctx)
+	out["health"] = map[string]any{"ok": h.OK, "hotkey": h.Hotkey, "stage": h.Stage, "err": code(err)}
+	if s := c.Snapshot(); s != nil {
+		out["neurons"] = len(s.Neurons)
+	}
+	out["stage"] = c.Stage()
+	checks, callers := map[string]string{}, map[string]string{}
+	for _, hk := range probes {
+		_, err := c.Check(hk, sidecar.PolicyScope)
+		checks[hk] = code(err)
+		d, err := c.Caller(ctx, hk)
+		switch {
+		case err != nil:
+			callers[hk] = code(err)
+		case d.Allowed:
+			callers[hk] = "allowed"
+		default:
+			callers[hk] = d.Code
+		}
+	}
+	out["check"], out["caller"] = checks, callers
+	hash, err := c.ServeAxon(ctx, "127.0.0.2", 8099, "")
+	out["serve_axon"] = code(err)
+	out["block_hash_ok"] = strings.HasPrefix(hash, "0x") && len(hash) == 66
+	wrong, err := sidecar.New(sidecar.Config{NetUID: netuid, URL: base, Token: strings.Repeat("w", 32)})
+	if err == nil {
+		_, err = wrong.Health(ctx)
+	}
+	out["wrong_token"] = code(err)
+	b, _ := json.Marshal(out)
+	fmt.Println(string(b))
+	return nil
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: btauth-interop serve|sign|stream [flags]")
+		fmt.Fprintln(os.Stderr, "usage: btauth-interop serve|sign|stream|sidecar [flags]")
 		os.Exit(2)
 	}
 	fs := flag.NewFlagSet(os.Args[1], flag.ExitOnError)
@@ -158,7 +220,17 @@ func main() {
 	receiver := fs.String("receiver", "", "sign: miner hotkey")
 	count := fs.Int("count", 200, "sign: requests")
 	body := fs.String("body", `{"text":"hello"}`, "sign: JSON body")
+	tokenFile := fs.String("token-file", "", "sidecar: token file")
+	netuid := fs.Int("netuid", 1, "sidecar: netuid")
+	probes := fs.String("probes", "", "sidecar: comma-separated hotkeys to check")
 	_ = fs.Parse(os.Args[2:])
+	if os.Args[1] == "sidecar" {
+		if err := sidecarCheck(*url, *tokenFile, *netuid, *receiver, strings.Split(*probes, ",")); err != nil {
+			fmt.Fprintln(os.Stderr, "btauth-interop:", err)
+			os.Exit(1)
+		}
+		return
+	}
 	k, err := key(*seed, *scheme)
 	if err == nil {
 		switch os.Args[1] {

@@ -45,6 +45,7 @@ __all__ = [
     "STREAM_IDLE_S_RANGE",
     "STREAM_MAX_BYTES_RANGE",
     "STREAM_MAX_S_RANGE",
+    "CallerPolicySettings",
     "CommonSettings",
     "HostPort",
     "MinerSettings",
@@ -351,7 +352,42 @@ class CommonSettings(BaseSettings):
         )
 
 
-class MinerSettings(CommonSettings):
+class CallerPolicySettings(CommonSettings):
+    """Caller-policy settings (spec 8.5, 12.2), shared by the miner and the sidecar."""
+
+    require_permit: bool = True
+    min_caller_stake_tao: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    allow_hotkeys: HotkeySet = frozenset()
+    deny_hotkeys: HotkeySet = frozenset()
+
+    @field_validator("allow_hotkeys", "deny_hotkeys", mode="before")
+    @classmethod
+    def _csv_policy(cls, value: Any) -> Any:
+        return _split_csv(value)
+
+    @field_validator("allow_hotkeys", "deny_hotkeys")
+    @classmethod
+    def _ss58(cls, value: frozenset[str]) -> frozenset[str]:
+        bad = [v for v in value if not _is_ss58(v)]
+        if bad:
+            raise ValueError(
+                f"{len(bad)} entr{'y is' if len(bad) == 1 else 'ies are'} "
+                "not a valid SS58 hotkey (prefix 42)"
+            )
+        return value
+
+    @model_validator(mode="after")
+    def _policy_lists(self) -> CallerPolicySettings:
+        overlap = self.allow_hotkeys & self.deny_hotkeys
+        if overlap:
+            raise ValueError(
+                f"{len(overlap)} hotkey(s) are in both TW_ALLOW_HOTKEYS "
+                "and TW_DENY_HOTKEYS"
+            )
+        return self
+
+
+class MinerSettings(CallerPolicySettings):
     """Miner settings (spec 12.1 + 12.2)."""
 
     bind_host: str = "0.0.0.0"  # noqa: S104 - a miner must listen publicly; validators find it on chain
@@ -372,10 +408,6 @@ class MinerSettings(CommonSettings):
     rate_hotkey_per_s: float = Field(default=20.0, gt=0, le=1_000_000)
     rate_hotkey_burst: int = Field(default=40, ge=1, le=1_000_000)
     trusted_proxies: CidrList = ()
-    require_permit: bool = True
-    min_caller_stake_tao: float = Field(default=0.0, ge=0, allow_inf_nan=False)
-    allow_hotkeys: HotkeySet = frozenset()
-    deny_hotkeys: HotkeySet = frozenset()
     handler_timeout_s: float = Field(default=10.0, gt=0, le=600)
     sign_responses: bool = True
     drain_s: float = Field(default=10.0, ge=0, le=600)
@@ -385,11 +417,6 @@ class MinerSettings(CommonSettings):
     tls_key_file: Path | None = None
     tls_published_cert_file: Path | None = None
     unsafe_allow_memory_nonce_multiworker: bool = False
-
-    @field_validator("allow_hotkeys", "deny_hotkeys", mode="before")
-    @classmethod
-    def _csv_miner(cls, value: Any) -> Any:
-        return _split_csv(value)
 
     @field_validator("trusted_proxies", mode="before")
     @classmethod
@@ -404,17 +431,6 @@ class MinerSettings(CommonSettings):
             except (TypeError, ValueError):
                 raise ValueError("expected comma-separated CIDRs") from None
         return tuple(networks)
-
-    @field_validator("allow_hotkeys", "deny_hotkeys")
-    @classmethod
-    def _ss58(cls, value: frozenset[str]) -> frozenset[str]:
-        bad = [v for v in value if not _is_ss58(v)]
-        if bad:
-            raise ValueError(
-                f"{len(bad)} entr{'y is' if len(bad) == 1 else 'ies are'} "
-                "not a valid SS58 hotkey (prefix 42)"
-            )
-        return value
 
     @field_validator("bind_host")
     @classmethod
@@ -473,12 +489,6 @@ class MinerSettings(CommonSettings):
                     "TW_TLS_PUBLISHED_CERT_FILE means a reverse proxy terminates "
                     "TLS: set TW_TRUSTED_PROXIES to its address (spec 16.3)"
                 )
-        overlap = self.allow_hotkeys & self.deny_hotkeys
-        if overlap:
-            raise ValueError(
-                f"{len(overlap)} hotkey(s) are in both TW_ALLOW_HOTKEYS "
-                "and TW_DENY_HOTKEYS"
-            )
         multi = self.workers > 1 or self.instance_count > 1
         if (
             multi
@@ -534,8 +544,8 @@ class ValidatorSettings(CommonSettings):
         return self
 
 
-class SidecarSettings(CommonSettings):
-    """Sidecar settings (spec 12.1 + 12.4)."""
+class SidecarSettings(CallerPolicySettings):
+    """Sidecar settings (spec 12.1, 12.4; the 12.2 caller policy for ``/v1/caller``)."""
 
     sidecar_port: int = Field(default=9910, ge=1, le=65535)
     #: ``None`` = ``$TW_STATE_DIR/sidecar.token``.
