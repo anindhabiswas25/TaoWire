@@ -3,7 +3,7 @@
 - Status: accepted
 - Date: 2026-10-22 (Phase 0 findings, Phase 1 implementation)
 - Owner: Engineer B
-- Spec: Section 7 (ADR-0001), 3, 8.3, 8.5.1. PM decisions D1, D2 and D5 (`.team-shared/GATE-phase-0.md`)
+- Spec: Section 7 (ADR-0001), 3, 8.3, 8.5.1. PM decisions D1, D2 and D5
 
 ## Context
 
@@ -14,7 +14,7 @@ Bittensor v11 generates its chain layer from runtime metadata, so it follows run
 1. **One gateway.** All chain reads and writes in the kit go through the `ChainGateway` Protocol in `taowire/chain/gateway.py`. The real implementation, `BittensorGateway`, is the only kit module that uses `bittensor` for chain operations. The rest of the kit sees kit-owned, frozen views (`NeuronView`, `MetagraphView`, `TxOutcome`), never SDK types. `testing/fake_chain.FakeChain` implements the same Protocol for tests.
 2. **Signing and verification** go through two narrow modules:
    - `auth/*` may import `bittensor.http_auth`, `bittensor.signing` and `bittensor.sp_core` only.
-   - `crypto.py` may also import `bittensor.keyfiles` (`Keypair`) and `bittensor.wallet` (`Wallet`). It wraps signing and verification so that an SDK rename touches one file (spec 3.6). This extension was agreed in COORDINATION.md on 2026-10-22.
+   - `crypto.py` may also import `bittensor.keyfiles` (`Keypair`) and `bittensor.wallet` (`Wallet`). It wraps signing and verification so that an SDK rename touches one file (spec 3.6). This extension was agreed on 2026-10-22.
 3. **Enforcement** has two layers (`just lint`, `just test`):
    - import-linter contract "ADR-0001": only `chain.gateway`, `crypto` and `auth.*` import `bittensor` at all.
    - `tests/unit/test_architecture.py`: a per-module allowlist of `bittensor` submodules, including imports inside functions. It covers what import-linter cannot see inside an external package.
@@ -22,7 +22,7 @@ Bittensor v11 generates its chain layer from runtime metadata, so it follows run
 
 ## Stake units (spec 8.3 open item): findings and decision D2
 
-Measured on localnet (`subtensor-localnet:devnet`, runtime spec_version 482, bittensor 11.3.0) with `scripts/localnet_probe.py`. Evidence: `reports/phase-0/b/localnet-probe.json`.
+Measured on localnet (`subtensor-localnet:devnet`, runtime spec_version 482, bittensor 11.3.0) with `scripts/localnet_probe.py`.
 
 - `MetagraphNeuron.alpha_stake` is in the subnet's alpha (a `Balance` tagged with the netuid). `tao_stake` is root TAO.
 - `MetagraphNeuron.total_stake` is the chain's **stake weight**, `alpha_stake + TaoWeight × tao_stake`, and is also tagged as subnet alpha. Measured: alpha 285.716635065, root TAO 100, TaoWeight 0.05267697 (raw u64 / 2^64). Predicted 290.984332503, reported 290.984332498 (fixed-point rounding). `total_stake.tao` raises `UnitMismatchError`.

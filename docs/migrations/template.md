@@ -8,11 +8,11 @@ Source: <https://github.com/latent-to/bittensor-subnet-template> at
 apply` (target ≤ 50, spec 1.5). The template's miner (`forward`,
 `blacklist`, `priority`) and validator (`forward`, `reward`) run on
 TaoWire with their logic unchanged. `after/` runs on localnet from `TW_*`
-variables alone (`reports/phase-3/a/after-localnet/`): rounds over
+variables alone: rounds over
 btauth/1, weights committed with `TW_WEIGHTS_VERSION_KEY`, and
 `taowire migrate status` reading both nodes. The mixed-fleet localnet
-walk-through (v10 and TaoWire nodes, rollout stages 1-4) is Engineer B's
-evidence in `reports/phase-3/b/`.
+walk-through (v10 and TaoWire nodes, rollout stages 1-4, every rollback) is
+`scripts/rollout_walkthrough.py`.
 
 ## How it is built (golden test, spec 13.8)
 

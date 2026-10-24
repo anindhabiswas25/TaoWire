@@ -2,7 +2,7 @@
 """Live interop without a chain (Phase 5): Go, Rust and TypeScript against Python.
 
     cd python
-    uv run python ../conformance/interop/live_check.py --out ../reports/phase-5/interop
+    uv run python ../conformance/interop/live_check.py --out ../dist/interop
 
 Six directions, ``--count`` requests each (default 200), every one with a
 fresh signature:

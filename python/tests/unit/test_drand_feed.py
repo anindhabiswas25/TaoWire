@@ -1,7 +1,7 @@
 """``scripts/drand_feed.py``: telling a failing drand feed apart from a defect (G3-8).
 
-The log lines are the chain's own, from the Phase 2 gate re-run
-(``.team-shared/gate-phase-2/rerun/local_chain-drand-429.log``).
+The log lines are the chain's own, captured from a local chain whose drand
+feed was rate-limited (HTTP 429) during the Phase 2 gate re-run.
 """
 
 from __future__ import annotations

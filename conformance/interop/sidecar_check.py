@@ -3,7 +3,7 @@
 
     cd python
     uv run python ../conformance/interop/sidecar_check.py \\
-        --out ../reports/phase-5/sidecar-interop
+        --out ../dist/sidecar-interop
 
 Starts ``taowire.sidecar.Sidecar`` (uvicorn on 127.0.0.1, the token file
 generated on disk, a FakeChain inside the process: //Bob is the miner and the

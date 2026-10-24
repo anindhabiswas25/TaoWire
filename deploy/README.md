@@ -180,8 +180,9 @@ The kit cannot enforce these. Check them per host.
 `proxy/Caddyfile` and `proxy/nginx.conf` terminate TLS on port 8443 and
 forward to a miner on `127.0.0.1:8091` with the request target and body
 unchanged, `X-Forwarded-For` appended, and SSE streams unbuffered (checked
-against `caddy:2.10.2-alpine` and `nginx:1.29.3-alpine`:
-`reports/phase-4/wp6/proxy_check.py`). The miner runs with
+against `caddy:2.10.2-alpine` and `nginx:1.29.3-alpine` by
+[`proxy/proxy_check.py`](proxy/proxy_check.py), which runs both proxies in
+Docker in front of a recording upstream). The miner runs with
 `TW_BIND_HOST=127.0.0.1`, `TW_EXTERNAL_PORT=8443`,
 `TW_TRUSTED_PROXIES=127.0.0.1/32` and `TW_TLS_PUBLISHED_CERT_FILE` set to the
 proxy's certificate (Ed25519 or EC P-256), which it publishes with

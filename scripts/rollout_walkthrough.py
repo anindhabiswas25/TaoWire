@@ -2,10 +2,10 @@
 """Walk the rollout runbook (spec 10b.5) with rollbacks on the localnet mixed fleet.
 
     PY=<tree>/python/.venv/bin/python
-    "$PY" scripts/rollout_walkthrough.py --tree <tree> --out reports/phase-3/b/rollout
+    "$PY" scripts/rollout_walkthrough.py --tree <tree> --out dist/rollout
 
-``<tree>`` is a checkout with Engineer A's code merged (``taowire migrate
-status`` and the ported template in ``examples/migrations/template-v10-to-v11/after/``).
+``<tree>`` is a checkout of this repository (``taowire migrate status`` and
+the ported template in ``examples/migrations/template-v10-to-v11/after/``).
 Run this script with that tree's interpreter. The fleet, on the localnet from
 ``scripts/localnet_up.sh`` (netuid 2, dev wallets):
 

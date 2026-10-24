@@ -200,7 +200,6 @@ attrs==26.1.0 \
 bittensor==10.5.0 \
     --hash=sha256:0003daae373f821436be256061690f6ded1dd5f0c32539c71c0916dea61c8dbb \
     --hash=sha256:ee2d7f98a8ce9dda07e8110571de8cc12c86cb18151aeb6dfe06aa35c25ec37f
-    # via -r legacy.in
 bittensor-drand==2.0.0 \
     --hash=sha256:04510b38f7e7db2cc52ec3ac3861315a2b2df8a67231b6082f85252083eea1c3 \
     --hash=sha256:0c7fda87f64acf8e9fa0381c510b384b8fdd1aae2abde3ceb445cd61591623e3 \

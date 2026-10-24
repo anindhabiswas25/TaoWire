@@ -18,6 +18,7 @@ sidecar.token
 __pycache__/
 *.py[cod]
 .venv/
+.venv*/
 venv/
 *.egg-info/
 build/
@@ -30,6 +31,11 @@ dist/
 .coverage
 .coverage.*
 htmlcov/
+coverage/
+coverage.out
+*.coverprofile
+*.profraw
+lcov.info
 
 # TypeScript (dist/ and build/ are ignored above)
 node_modules/

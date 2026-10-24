@@ -72,7 +72,7 @@ The miner's public port uses httptools with three extra limits:
   check, so without the bound one unauthenticated request with a 64 KiB
   sender cost about 0.8-1.35 s of CPU (about 50-85 ms at the 16 KiB header
   cap). With the bound it is refused as `tw.auth_malformed` in about 10 µs
-  (`reports/phase-3/gate-fix/g4-2-timing.txt`).
+  (measured in Phase 3 on the benchmark machine of `docs/benchmarks.md`).
 - **Streams** (spec 9.2, D29; [streaming.md](streaming.md)): the whole
   request path runs before the first byte; both ends enforce
   `TW_STREAM_MAX_S`, `_MAX_BYTES` and `_IDLE_S`. The miner cuts a stream
@@ -243,8 +243,10 @@ key that did not land refuses startup.
    makes every request fail with 401 `tw.auth_bad_signature`.
    [`deploy/proxy/Caddyfile`](../deploy/proxy/Caddyfile) and
    [`deploy/proxy/nginx.conf`](../deploy/proxy/nginx.conf) are checked to
-   do this (target, body, `X-Forwarded-For`, SSE streaming; evidence in
-   `reports/phase-4/wp6/proxy-check.txt`). The kit uses the right-most
+   do this (target, body, `X-Forwarded-For`, SSE streaming:
+   [`deploy/proxy/proxy_check.py`](../deploy/proxy/proxy_check.py) runs both
+   proxies in Docker and checks each, all true with `caddy:2.10.2-alpine` and
+   `nginx:1.29.3-alpine`). The kit uses the right-most
    `X-Forwarded-For` address that is not in `TW_TRUSTED_PROXIES` as the
    client address (rate limits); the header is ignored from any other peer.
 

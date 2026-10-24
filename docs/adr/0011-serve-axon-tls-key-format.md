@@ -38,7 +38,7 @@ values. The subtensor repository's generated doc `docs/tx/serve-axon-tls.mdx` sa
 also without an algorithm table; the docs page it cites (`docs.learnbittensor.org/subnets/neuron-tls-certificates`)
 now redirects to the general docs index. **No algorithm convention exists in the ecosystem.**
 
-**Localnet** (`reports/phase-4/wp6/serve-axon-tls-localnet.jsonl`; dev wallet `miner_go`, netuid 2, SDK 11.3.0):
+**Localnet** (measured in Phase 4; dev wallet `miner_go`, netuid 2, SDK 11.3.0):
 
 | Sent (`certificate`) | Extrinsic | Read back (`NeuronCertificates`) |
 |---|---|---|

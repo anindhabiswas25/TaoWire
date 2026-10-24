@@ -3,7 +3,7 @@
 
     just localnet-up
     cd python && uv run python ../conformance/interop/run_matrix.py \\
-        --out ../reports/phase-5/interop-matrix [--count 200]
+        --out ../dist/interop-matrix [--count 200]
 
 On the localnet subnet of ``scripts/localnet_up.sh`` (dev wallets only), it
 starts the four text-ops miners, each on its own address and port and with

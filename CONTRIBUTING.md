@@ -31,7 +31,7 @@ Without `just`, run the commands from the `justfile` directly.
 - Error responses use fixed public messages from `taowire.errors`; never include stack traces,
   signatures, payloads or internal paths.
 - Every public API has a docstring; every Appendix A error path has a test.
-- No `TODO`/`FIXME` without a matching entry in the coordination log; no commented-out code.
+- No `TODO`/`FIXME` without an open GitHub issue it names; no commented-out code.
 - No secrets, wallets or `.env` files in git. Tests use only well-known dev keys (`//Alice`, ...).
 - Python tests that need a real Redis read `TAOWIRE_TEST_REDIS_URL` (not a `TW_*` name: unknown
   `TW_*` variables are a startup error).

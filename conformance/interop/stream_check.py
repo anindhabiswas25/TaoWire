@@ -3,7 +3,7 @@
 
     cd python
     uv run python ../conformance/interop/stream_check.py \
-        --out ../reports/phase-5/stream-interop
+        --out ../dist/stream-interop
 
 Cells: the Go, Rust and TypeScript stream clients against the Python
 streaming miner, and the Python client (``ValidatorClient.query_stream``)

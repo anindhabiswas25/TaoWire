@@ -66,8 +66,7 @@ weight setting through the sidecar.
 | Go | `github.com/anindhabiswas25/TaoWire/go/sidecar` | `sidecar.New(sidecar.Config{...})`, `Start(ctx)`, `MiddlewareConfig{Policy: sc.Policy()}` |
 | Rust | `taowire-btauth`, feature `sidecar` | `SidecarClient::new(Config {...})`, `start().await`, `MinerAuth::with_policy(sc.policy())` |
 
-Without a chain, `conformance/interop/sidecar_check.py` runs all three against a FakeChain-backed sidecar
-(evidence in `reports/phase-5/sidecar-interop/`).
+Without a chain, `conformance/interop/sidecar_check.py` runs all three against a FakeChain-backed sidecar.
 
 ## Security notes
 

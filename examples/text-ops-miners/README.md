@@ -70,5 +70,5 @@ The miners read the `TW_*` variables of the Python miner that apply to them (spe
 
 Unlike the Python kit, these examples do not refuse unknown `TW_*` variables, and have no TLS, no trusted-proxy
 handling (the per-IP limit sees the socket peer) and no Prometheus endpoint. Without a chain,
-`conformance/interop/miners_check.py` runs each one against a FakeChain-backed sidecar (evidence in
-`reports/phase-5/miners-smoke/`).
+`conformance/interop/miners_check.py` runs each one against a FakeChain-backed sidecar: routes, byte-identical
+answers, caller policy, signed refusals, and slow or silent clients cut within 15 s.

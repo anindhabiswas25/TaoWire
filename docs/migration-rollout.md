@@ -21,7 +21,8 @@ Rules for every stage:
 
 This runbook was walked end to end on a localnet mixed fleet (v10 nodes on
 `bittensor==10.5.0`, TaoWire nodes from the ported template), including
-every rollback: 72 of 72 checks passed (Engineer B, `reports/phase-3/b/rollout/`).
+every rollback: 72 of 72 checks passed (`scripts/rollout_walkthrough.py`, Phase 3;
+stages 1-3 again at the Phase 5 gate: 58 of 58).
 The numbers quoted below are from that walk.
 
 ## The numbers: `taowire migrate status`

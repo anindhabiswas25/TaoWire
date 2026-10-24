@@ -24,12 +24,12 @@ die() { echo "legacy_venv: $*" >&2; exit 1; }
 command -v uv >/dev/null || die "uv is required (https://docs.astral.sh/uv/)"
 
 if [[ "${1:-}" == "--relock" ]]; then
-  input="$(mktemp)"
-  trap 'rm -f "$input"' EXIT
-  echo "bittensor==$LEGACY_VERSION" >"$input"
-  uv pip compile --quiet --universal --generate-hashes --python-version "$LEGACY_PYTHON" \
-    --no-header --custom-compile-command "scripts/legacy_venv.sh --relock" \
-    "$input" -o "$lock"
+  # The requirement comes from stdin, so the lock's "# via" comment names no
+  # temporary file (no host path in a committed file).
+  echo "bittensor==$LEGACY_VERSION" |
+    uv pip compile --quiet --universal --generate-hashes --python-version "$LEGACY_PYTHON" \
+      --no-header --custom-compile-command "scripts/legacy_venv.sh --relock" \
+      - -o "$lock"
   echo "wrote $lock"
   exit 0
 elif [[ -n "${1:-}" ]]; then

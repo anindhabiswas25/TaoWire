@@ -32,9 +32,9 @@ those types. If their shapes survive, a migration is mostly an import change.
    as v10 expects.
 5. Dependency direction: `compat` depends on `miner`, `validator` and
    `extensions.legacy_v10.wire` (which owns the v10 body-hash rule); the
-   bridge never imports `compat`. Until the Phase 2 gate merges `wire.py`,
-   `compat.Synapse.body_hash` carries the same rule, checked against every
-   captured v10 vector (tracked in COORDINATION.md).
+   bridge never imports `compat`. `compat.Synapse.body_hash` delegates to
+   `wire.body_hash`, so there is one implementation, checked against every
+   captured v10 vector.
 
 ## Consequences
 

@@ -8,7 +8,7 @@ test adds the finer rule:
 
 - ``auth/*`` may only use ``http_auth``, ``signing`` and ``sp_core``;
 - ``crypto.py`` may also use ``keyfiles`` (``Keypair``) and ``wallet``
-  (``Wallet``), agreed with Engineer B in COORDINATION.md.
+  (``Wallet``) (ADR-0001).
 
 Function-level imports are checked too.
 """

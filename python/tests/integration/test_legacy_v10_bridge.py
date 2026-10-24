@@ -14,8 +14,6 @@
 Needs Engineer A's ``compat`` and ``validator`` packages; skipped without them.
 """
 
-# (ruff files the taowire modules that exist only on eng-a/core as third-party
-# on eng-b/chain; known-first-party is requested in COORDINATION.md.)
 from __future__ import annotations
 
 import dataclasses

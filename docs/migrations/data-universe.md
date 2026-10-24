@@ -3,9 +3,8 @@
 Source: <https://github.com/macrocosm-os/data-universe> at `bb261aa`, MIT licence,
 `bittensor==10.3.0`. A public open-source subnet standing in for a design partner
 (S7); nobody from the team was involved. The port lives outside this repository
-(`~/Project/taowire/.ports/data-universe`, branch `taowire-port-2`,
-git-ignored): none of the subnet's code is committed here, only these counts and
-the evidence in `reports/phase-4/wp7/` (Phase 3: `reports/phase-3/gate-fix/port-data-universe/`).
+(a git-ignored checkout): none of the subnet's code is committed here, only these
+counts.
 
 **Result: S6 = 24 changed lines** (target ≤ 50, spec 1.5 with D18), counted as
 for the template: `git diff` between the `taowire migrate apply` output and
@@ -21,7 +20,7 @@ S6 targets template-derived subnets, so this number is reported, not gated
 
 ## What `migrate scan` and `migrate apply` did
 
-With `apply` at eng/build WP7 (`reports/phase-4/wp7/data-universe-*.txt`):
+With `apply` as of Phase 4 (WP7):
 
 - `scan` (before): 142 files, 788 findings (748 auto, 34 manual, 6 risk).
 - `apply`: 46 files changed, 754 rewrites, 40 `# TW-MIGRATE:` comments.
@@ -34,8 +33,8 @@ With `apply` at eng/build WP7 (`reports/phase-4/wp7/data-universe-*.txt`):
 
 ## The hand fixes, counted (S6)
 
-`reports/phase-4/wp7/data-universe/hand-fixes.patch`, counted with the
-template's counter (`s6.txt`).
+The diff from the `apply` output to the finished port, counted with the
+template's counter (`examples/migrations/template-v10-to-v11/golden.py`).
 
 | File | +/- | Counted | Why |
 |---|---|---|---|
@@ -69,15 +68,15 @@ they mock v10 objects (`bt.MockSubtensor`, `bt.Metagraph(netuid=1, sync=False)`)
   `common.metagraph_syncer`, `dynamic_desirability.{chain_utils,desirability_retrieval,desirability_uploader}`,
   `vali_utils.miner_evaluator` and `upload_utils.s3_uploader` import on
   bittensor 11.3.0 + TaoWire with the subnet's own requirements.
-- Their chain code on localnet (`data-universe-chain-check.txt`): the subnet
+- Their chain code on localnet: the subnet
   owner hotkey (`get_subnet_owner_hotkey` → `query_subtensor`), their
   `ChainPreferenceStore.store_preferences` (a commitment written with the dev
   `miner_ts` hotkey, from their `fork` worker) and their
   `_sync_retrieve_metadata` reading it back: equal. The first run of this
-  check found that `compat.Subtensor` hung in a forked child (fixed, see
-  `reports/phase-4/reviews.md`, WP7 finding 2).
+  check found that `compat.Subtensor` hung in a forked child (fixed in Phase 4:
+  in a forked child the facade starts its own loop thread and connections).
 - Their ported miner on localnet (dev `miner_ts`, 127.0.0.4:8097, settings
-  from `TW_*`; `data-universe-query.txt`): the kit published the axon, and
+  from `TW_*`): the kit published the axon, and
   their `GetMinerIndex` handler answered a TaoWire `compat.Dendrite` signed
   by the dev `validator` hotkey over btauth/1.
 

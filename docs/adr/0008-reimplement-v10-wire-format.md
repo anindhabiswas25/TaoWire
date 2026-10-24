@@ -3,7 +3,7 @@
 - Status: accepted (implementation in Phase 2: `extensions/legacy_v10/`)
 - Date: 2026-10-22
 - Owner: Engineer B
-- Spec: Section 7 (ADR-0008), 8.11, 10b.6. PM decision D3 (`.team-shared/GATE-phase-0.md`)
+- Spec: Section 7 (ADR-0008), 8.11, 10b.6. PM decision D3
 
 ## Context
 
@@ -20,7 +20,7 @@ The two-way legacy bridge (spec 8.11) lets TaoWire miners serve v10 validators a
    - `scripts/legacy_venv.sh` builds a separate venv (`~/.taowire/venvs/bittensor-10.5.0`) from a hash-locked requirements file (`scripts/legacy_v10.requirements.txt`).
    - `scripts/capture_v10_vectors.py` runs a real 10.5.0 `Axon` on loopback behind a recording TCP proxy and drives it with a real 10.5.0 `Dendrite`. It writes `conformance/vectors/legacy_v10.json`: 13 vectors, accepted cases V1–V5 and edge/failure cases N1–N8.
    - `python/tests/migration/test_legacy_v10_vectors.py` (64 tests) re-derives every hash, signed message and signature from those bytes with the v11 SDK. It is the reference the Phase 2 implementation must pass.
-3. Spec 8.11.1 was rewritten from the captured bytes (COORDINATION.md, 2026-10-22 19:15). The earlier draft was wrong on several points:
+3. Spec 8.11.1 was rewritten from the captured bytes (2026-10-22). The earlier draft was wrong on several points:
    - The body is the whole Synapse.
    - `bt_header_input_obj_*` carries a default instance of the field type.
    - Successful (200) responses are unsigned.

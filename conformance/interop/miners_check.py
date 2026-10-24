@@ -3,7 +3,7 @@
 
     cd python
     uv run python ../conformance/interop/miners_check.py \\
-        --out ../reports/phase-5/miners-smoke [--only go]
+        --out ../dist/miners-smoke [--only go]
 
 For each example miner (spec 10, 11.1, P4): a FakeChain-backed
 ``taowire sidecar`` (//Bob is the miner and the sidecar's hotkey, //Alice a

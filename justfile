@@ -83,7 +83,7 @@ localnet-test:
 
 # spec 13.5 on localnet (just localnet-up first): four miners, the Python validator, TS/Go/Rust signers
 interop: setup go-sdk ts-ensure
-    cd python && uv run python ../conformance/interop/run_matrix.py --out ../reports/interop-matrix
+    cd python && uv run python ../conformance/interop/run_matrix.py --out ../dist/interop-matrix
 
 # spec 8.10: one real seal + open through the public drand API (not part of `just test`)
 drand-test: setup

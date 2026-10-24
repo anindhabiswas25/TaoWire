@@ -5,8 +5,8 @@ The v10 wire format itself (signature, body hash, v10-shaped responses) is
 what the miner needs around it:
 
 - :class:`LegacyServerLike` / :class:`LegacyRequestLike`: the interface the
-  pipeline calls at step [6] and when answering (agreed in COORDINATION.md),
-  so the request path does not depend on the bridge's internals;
+  pipeline calls at step [6] and when answering, so the request path does
+  not depend on the bridge's internals;
 - :func:`build_legacy_server`: builds the bridge at startup when
   ``TW_LEGACY_V10_UNTIL`` is set;
 - :class:`LegacyTraffic`: counts and logs inbound legacy calls (INFO per

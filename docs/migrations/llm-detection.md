@@ -3,9 +3,8 @@
 Source: <https://github.com/It-s-AI/llm-detection> at `37dcb27` (2026-07-23),
 MIT licence, `bittensor==10.5.0`. A public open-source subnet standing in for a
 design partner (S7); nobody from the team was involved. The port lives outside
-this repository (`~/Project/taowire/.ports/llm-detection`, git-ignored): none
-of the subnet's code is committed here, only these counts, the launcher and
-fleet driver, and the evidence in `reports/phase-3/gate-fix/port-llm-detection/`.
+this repository (a git-ignored checkout): none of the subnet's code is committed
+here, only these counts.
 
 **Result: S6 = 8 changed lines** (target ≤ 50, spec 1.5 with D18: the subnet's
 own customised `detection/base/*` and `detection/utils/config.py` are counted),
@@ -39,15 +38,14 @@ count"):
   `bt.config(parser)`, `bt.logging.check_config(...)`, `bt.Config` annotations).
 
 **Phase 4 recount (WP7):** with `apply` after `compat.Subtensor` (TWM008 now
-`auto`) the count is unchanged, **8** (`reports/phase-4/wp7/llm-detection/`,
-counted by `reports/phase-4/wp7/recount.py`). `apply` rewrites no `subtensor`
+`auto`) the count is unchanged, **8**. `apply` rewrites no `subtensor`
 here (the TWM026 base swap already removes it). The port's one kept TWM100
-marker takes `apply`'s current text, which now carries the D28 warning (branch
-`taowire-port-5`, a comment-only commit on top of the Phase 3 port).
+marker takes `apply`'s current text, which now carries the D28 warning (a
+comment-only change on top of the Phase 3 port).
 
 ## What `migrate scan` and `migrate apply` did
 
-With `apply` at eng/build `b7ee321` (`scan-before.txt`, `apply.txt`):
+With `apply` as of Phase 3:
 
 - 89 files read, 28 changed, 154 rewrites, 14 `# TW-MIGRATE:` comments.
 - TWM007 ×125, TWM001 ×5, TWM013 ×4, TWM023 ×4, TWM026 ×3 (the three bases),
@@ -61,9 +59,9 @@ With `apply` at eng/build `b7ee321` (`scan-before.txt`, `apply.txt`):
 
 ## The hand fixes, counted (S6)
 
-`reports/phase-3/gate-fix/port-llm-detection/hand-fixes.patch`, counted with the
-template's counter (`s6.txt`): added + removed lines, without import lines and
-removed `# TW-MIGRATE:` markers.
+The diff from the `apply` output to the finished port, counted with the
+template's counter (`examples/migrations/template-v10-to-v11/golden.py`): added +
+removed lines, without import lines and removed `# TW-MIGRATE:` markers.
 
 | File | +/- | Counted | Why |
 |---|---|---|---|

@@ -81,8 +81,8 @@ is one character and is fine). There are no differences from the Python referenc
 
 Interop without a chain: `conformance/interop/stream_check.py` (every language's stream client against the Python
 miner and the Python client against every language's miner, through a relay that tampers with, reorders, drops
-or adds chunks, tampers with, duplicates or removes the trailer, or adds an event after it; evidence in
-`reports/phase-5/stream-interop/`).
+or adds chunks, tampers with, duplicates or removes the trailer, or adds an event after it; it checks that each
+case is refused as spec 9.2 says).
 
 ## Sidecar API (spec 11.6)
 
@@ -188,8 +188,7 @@ cd typescript && npm run conformance
 ## Interoperability
 
 Live checks without a chain: `conformance/interop/live_check.py` runs Go, Rust and TypeScript signers against
-the Python miner, and the Python signer against the Go and Rust middleware and the TypeScript Fastify adapter
-(evidence in `reports/phase-5/interop-ts/`).
+the Python miner, and the Python signer against the Go and Rust middleware and the TypeScript Fastify adapter.
 The localnet matrix of spec 13.5 is `conformance/interop/run_matrix.py` (`just interop`, after `just
 localnet-up`): the four text-ops miners with their own registered hotkeys (the TS / Go / Rust ones publish
 their axons through their own sidecars), the Python validator querying all four (transform and streaming

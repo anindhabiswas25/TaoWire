@@ -2,8 +2,8 @@
 
 A proxy must pass the request target and body unchanged. Three ASGI proxies
 sit in front of a real miner app on FakeChain: one that passes everything
-through (as ``deploy/proxy/`` does; checked against real Caddy and nginx in
-``reports/phase-4/wp6/proxy-check.txt``), one that normalises the path, and
+through (as ``deploy/proxy/`` does; checked against real Caddy and nginx by
+``deploy/proxy/proxy_check.py``), one that normalises the path, and
 one that re-encodes the JSON body. The last two make every request fail
 verification with the documented 401 ``tw.auth_bad_signature``.
 """

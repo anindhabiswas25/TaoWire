@@ -4,7 +4,7 @@ Spec 13.7 targets, measured with `taowire bench` (`just bench`), and the
 13.6 abuse tests (`just abuse`). Numbers are from one machine on one day;
 re-run them on your own hardware before you rely on them.
 
-## Machine and versions (2026-10-23, commits `7187f43` and the Phase 3 head)
+## Machine and versions (2026-10-23 and 2026-10-24)
 
 | | |
 |---|---|
@@ -30,42 +30,30 @@ socket or the container's own IP), as in production. `just bench` /
 Docker's port mapping (`docker-proxy`) is printed as "extra information
 only" and is never the result.
 
-| Metric | Target | Result, Redis direct (final run, eng/build) | |
+| Metric | Target | Result, Redis direct (Phase 5 gate, 2026-10-24, quiet host) | |
 |---|---|---|---|
-| Verified requests/s (trivial handler, 1 KB body, 4 workers + Redis) | ≥ 500 | **1,437.2 req/s** (60 s, 96 in flight, 0 failed); 1,547.8 in the first gate-fix run | met |
-| Added latency of auth + policy, p50 | ≤ 2 ms | **1.50 ms**; 1.38-1.90 ms in the other runs | met |
-| Added latency of auth + policy, p99 | ≤ 5 ms | **6.122 ms**; 4.94-6.99 ms in the auth-only runs. Phase 3 gate on the same host, quiet, before D22: **3.755 ms** | **not met in the gate-fix runs** (busy host and the D22 cost, see below) |
-| Validator fan-out to 256 local miners, 1 KB | all done in ≤ 2 s | **0.675 s** (slowest of 5 rounds; 256 verified answers per round) | met |
+| Verified requests/s (trivial handler, 1 KB body, 4 workers + Redis) | ≥ 500 | **2,163.5 req/s** (60 s) | met |
+| Added latency of auth + policy, p50 | ≤ 2 ms | **0.46 ms** | met |
+| Added latency of auth + policy, p99 | ≤ 5 ms | **0.865 ms** | met |
+| Validator fan-out to 256 local miners, 1 KB | all done in ≤ 2 s | **0.446 s** | met |
 
-Raw output: `reports/phase-3/gate-fix/bench-final.txt` (`just bench`, final),
-`bench.txt` (first gate-fix run). Earlier runs: `reports/phase-3/a/bench/`,
-`reports/phase-3/a/final/just-bench.txt`, and the Phase 3 gate's
-`bench-container-ip.txt` (all four targets met on the direct path).
+The host was 98.9% idle before that run. The p99 depends heavily on a quiet
+host: on a busy desktop (the shell using about 6.5 cores, load average
+8-18 on 16 logical CPUs) the same code measured auth + policy p99 4.83 ms
+(Phase 5) and up to 6.1 ms (Phase 3), with the other three targets still met.
+Measure on a host that does nothing else.
 
-**Two causes, measured separately.**
-
-1. **The host was busy** for every gate-fix run: the desktop shell
-   (`gnome-shell`) used about 6.5 cores and the load average was 8-18 on 16
-   logical CPUs, so the miner's pinned CPUs were shared.
-2. **D22 costs two sr25519 verifications per request.** The strict
-   `<Bytes>` check (`crypto.is_bytes_wrapped_signature`) asks the SDK whether
-   the signature fits `<Bytes>payload</Bytes>`; the SDK's primitive, and
-   v11's `Keypair.verify`, try that and then a doubly wrapped form, so a plain
-   signature costs two failed verifications: about 145 µs of CPU per request
-   on this machine (`verify_sync` 220 µs p50 instead of about 75 µs). There is
-   no fallback-free sr25519 verify among the SDK modules the kit may import
-   (ADR-0001), so this is the price of D22 with the SDK as it is. Back-to-back
-   auth-only runs, same minute (`bench-auth-ab-final.txt`): `main` (before the
-   G4 fixes) p50 0.93-1.00 ms, p99 4.96-5.15 ms; `eng/build` p50 1.38-1.57 ms,
-   p99 4.94-6.73 ms. Earlier pair: `bench-auth-ab-main-vs-eng.txt`.
-
-The p99 target needs a re-run on a quiet host; whether D22's cost is
-acceptable, or should be removed with a raw verifier (for example from the
-Rust library in Phase 5), is a decision for the PM.
+**What a request costs.** Since D22 the verifier also checks that an sr25519
+signature is not a `<Bytes>`-wrapped one; the SDK's primitive tries the
+wrapped forms, so a plain signature costs two extra failed verifications,
+about 145 µs of CPU per request on this machine (`verify_sync` 220 µs p50
+instead of about 75 µs). No fallback-free sr25519 verify exists among the SDK
+modules the kit may import (ADR-0001), so this is the price of D22 with the
+SDK as it is.
 
 **Extra information, not the result (D17):** through `docker-proxy`
-(`127.0.0.1:6379`), first gate-fix run: 1,592.2 req/s, auth p50 3.268 ms, p99
-10.422 ms, fan-out 0.761 s (`reports/phase-3/gate-fix/bench-docker-proxy.txt`).
+(`127.0.0.1:6379`), Phase 3: 1,592.2 req/s, auth p50 3.268 ms, p99
+10.422 ms, fan-out 0.761 s; see below for why.
 
 ### Why the Redis path matters for p99
 
@@ -108,7 +96,9 @@ To reproduce: `just bench` (direct path found automatically), or
 `just abuse`: a real miner process (2 workers on Redis) under attack on
 loopback, while a permitted validator queries it at 10 req/s from another
 source address. Every test asserts that the validator gets 200 on every
-request, with p99 < 200 ms. Evidence: `reports/phase-3/a/abuse/`.
+request, with p99 < 200 ms. The numbers below are from Phase 3 (two runs);
+since then the suite passed 7/7 three times in a row at the Phase 5 gate
+(quiet host, D45).
 
 | Attack | Result (two runs) |
 |---|---|
