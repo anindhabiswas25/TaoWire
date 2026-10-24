@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0a2] - 2026-10-25
+
+Second alpha: the Python package adds an MCP server so AI coding agents can use the kit.
+**Not security-reviewed; APIs may change; for localnet and testnet, not for mainnet value.**
+Only `taowire` (PyPI) changes; the TypeScript, Go and Rust packages stay at 0.1.0-alpha.1.
+
+### Added
+- `taowire mcp` and the `taowire[mcp]` extra: a Model Context Protocol server (stdio) for Claude
+  Code, Claude Desktop, Cursor, VS Code and other MCP clients ([docs/mcp.md](docs/mcp.md)). Tools:
+  `explain_error`, `list_error_codes`, `list_settings`, `list_docs` / `read_doc` / `search_docs`
+  (the docs ship inside the package), `inspect_request` (btauth/1: the signed lines and the failing
+  step), `inspect_response` (`twresp/1`), `migrate_scan`, `migrate_apply` (diff first; writes only
+  into a clean git tree), `scaffold_project` (empty directory only), `doctor`, `read_metagraph`
+  (read-only), `taowire_info`; prompts `new_subnet` and `port_v10_subnet`. No tool reads private
+  keys or writes to a chain.
+- `scripts/sync_mcp_data.py` keeps the bundled docs and `.env.example` equal to the repository's.
+
 ## [0.1.0a1] - 2026-10-24
 
 The first alpha (spec 18.5, D47): a labelled pre-release so subnet builders can build on the kit and

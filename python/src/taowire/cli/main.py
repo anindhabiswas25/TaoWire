@@ -11,6 +11,7 @@ from taowire.cli.bench_cmd import bench
 from taowire.cli.conformance_cmd import conformance
 from taowire.cli.doctor import doctor
 from taowire.cli.init_cmd import init
+from taowire.cli.mcp_cmd import mcp
 from taowire.cli.migrate_cmd import migrate_app
 from taowire.cli.sidecar_cmd import sidecar
 from taowire.cli.sign_request import sign_request
@@ -42,6 +43,7 @@ app.command("bench")(bench)
 app.command("conformance")(conformance)
 app.command("doctor")(doctor)
 app.command("init")(init)
+app.command("mcp")(mcp)
 app.command("sidecar")(sidecar)
 app.command("sign-request")(sign_request)
 app.add_typer(migrate_app, name="migrate")

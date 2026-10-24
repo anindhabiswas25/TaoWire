@@ -5,7 +5,7 @@ Python core · btauth/1 native · v10 → v11 migration (compat layer, two-way b
 
 | Field | Value |
 |---|---|
-| Document version | 1.10 |
+| Document version | 1.11 |
 | Changes in 1.1 | Migration of existing v10 subnets is a first-class goal: new Section 10b, two-way legacy bridge (8.11), `taowire migrate` CLI, migration rollout runbook, success criterion S6, phase plan updated |
 | Changes in 1.2 | SDK version range instead of an exact pin (3, 18); staged metagraph staleness instead of a 15-minute hard stop (8.5.1); product metrics (1.6); relationship with the core team (1.7); sustainability and maintenance (Section 20) |
 | Changes in 1.3 | Phase 0–1 findings: protocol tag is a u8, default 87 (D1); stake units and `total_stake_tao` (D2, 2, 8.3); v10 marker (D3, 8.11.3); write retries and `set_weights` meaning (8.3); stricter shape rules (4.3); localnet facts (14.2, 14.5); 8.11.1 rewritten from captured vectors (by Engineer B) |
@@ -16,6 +16,7 @@ Python core · btauth/1 native · v10 → v11 migration (compat layer, two-way b
 | Changes in 1.8 | Phase 4 gate: stream chunks are JSON objects or arrays (D35, 9.2); `TW_STREAM_MAX_PER_CALLER` (D36, 9.2, 12.1); TLS with the v10 inbound bridge warns, never refused (D37, 16.3); `WeightsVersionKey` preflight before a timelocked commit (D38, 8.9); pinned cargo/npm tools before 1.0 (D39, 18.4); ADR-0001 exception for `bittensor_core` in the gateway (D40, 8.10); Phase 4 process (D41); the shared limiter fails closed and an attacker's 503 is a valid refusal (D42, 8.6.2, 13.6); Phase 5 carry-overs G6-1..G6-5 (17) |
 | Changes in 1.9 | Phase 5 gate: stream chunks nest at most 128 levels, the `tw-end` count is a plain non-negative integer and trailer strings hold no lone surrogates, in every language (D43, 9.2); `tw.sidecar_unauthorized` and the `/v1/serve-axon` refusal shapes (D44, 11.6, Appendix A); the 13.6 flood CPU bound is measured on a quiet host (D45, 13.6); Phase 6 carry-overs G7-1..G7-3 (17) |
 | Changes in 1.10 | The product is renamed **TaoWire** (was TensorWire; the name is taken by an unrelated project): package, CLI, module paths, state directory; every wire and operator name (`TW_*`, `tw.*`, `twresp/1`, `X-TW-Resp-*`, `tw-end`, `tw_*` metrics, `TWM*` rules) is unchanged (D46, 3.1, 6); a labelled alpha pre-release before Phase 6 so builders can try the kit and review it (D47, 18.5) |
+| Changes in 1.11 | `taowire mcp`: an MCP server for AI coding agents, read-only by default, no keys, no chain writes (D48, 8.15); Python alpha `0.1.0a2` |
 | Date | 24 October 2026 |
 | Target SDK | `bittensor>=11.3.0,<12` (baseline verified against 11.3.0, stable, released 7 Oct 2026; see Section 18.3) |
 | Target protocol | `btauth/1` (hotkey-signed HTTP, defined by the Bittensor v11 docs) |
@@ -1493,6 +1494,15 @@ Confirmed byte for byte against a real `bittensor==10.5.0` Dendrite and Axon (`c
 | `taowire migrate status` | Live view for subnet owners: btauth/1 vs v10 share of traffic, from a running validator's metrics |
 
 ---
+
+### 8.15 MCP server (`mcp_server/`, decision D48)
+
+`taowire mcp` runs a Model Context Protocol server over stdio (extra `taowire[mcp]`: the official `mcp` SDK `>=2.3,<3` plus libcst). It lets an AI coding agent use the kit; user guide in `docs/mcp.md`.
+
+- **Tools.** Knowledge: `taowire_info`, `explain_error` / `list_error_codes` (Appendix A plus a cause and fix per code; every code must have one, tested), `list_settings` (from the settings models plus the `.env.example` comments), `list_docs` / `read_doc` / `search_docs`. Debugging: `inspect_request` (btauth/1: decoded headers, the signed payload lines, the verifier's verdict with a fresh replay store; `check_freshness=false` for old captures), `inspect_response` (`twresp/1`). Actions: `scaffold_project` (= `taowire init`), `migrate_scan`, `migrate_apply`, `doctor`, `read_metagraph`. Prompts: `new_subnet`, `port_v10_subnet`.
+- **Safety rules (normative).** No tool reads, prints or signs with a private key; no tool writes to any chain (registration, stake, weights, `ServeAxon` stay with the user and `btcli`). Tools that write files carry `readOnlyHint=false` and refuse to overwrite: `scaffold_project` needs an empty directory; `migrate_apply` returns a diff unless `write=true`, and then needs a clean git tree (same rule as the CLI) unless `allow_dirty=true`. Expected failures reach the agent as tool errors with their message; anything else stays a crash whose text remains on the server. Logging goes to stderr: stdout carries the protocol only.
+- **Bundled data.** The docs (`docs/**/*.md` except `docs/team/`) and `.env.example` ship inside the package (`mcp_server/data/`), so the server works offline and always matches the installed version; `scripts/sync_mcp_data.py` copies them and a test fails while the copies differ.
+- **Chain access** is read-only and goes through `chain/gateway.py` (ADR-0001).
 
 ## 9. Kit protocol extensions (response signing, streaming)
 
