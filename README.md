@@ -80,15 +80,16 @@ A complete working subnet (miner, validator, scoring, tests) is in
 
 ## Install
 
-| Language | Install | Status |
+| Language | Install | Registry |
 |---|---|---|
-| Python | `pip install "taowire[all]==0.1.0a1"` | ✅ on [PyPI](https://pypi.org/project/taowire/0.1.0a1/) |
-| Go | `go get github.com/anindhabiswas25/TaoWire/go@v0.1.0-alpha.1` | ✅ on the Go module proxy |
-| TypeScript | `npm install @taowire/btauth@alpha` | coming soon (npm) |
-| Rust | `taowire-btauth = "0.1.0-alpha.1"` | coming soon (crates.io) |
+| Python | `pip install "taowire[all]==0.1.0a1"` | [PyPI](https://pypi.org/project/taowire/0.1.0a1/) |
+| TypeScript | `npm install @taowire/btauth@alpha` | [npm](https://www.npmjs.com/package/@taowire/btauth) |
+| Go | `go get github.com/anindhabiswas25/TaoWire/go@v0.1.0-alpha.1` | [Go packages](https://pkg.go.dev/github.com/anindhabiswas25/TaoWire/go) |
+| Rust | `cargo add taowire-btauth@0.1.0-alpha.1` | [crates.io](https://crates.io/crates/taowire-btauth) |
 
 The alpha is a **pre-release**: a plain `pip install taowire` skips it, so name the version (or use `pip install --pre taowire`).
-Until the TypeScript and Rust packages are published, use them from this repository ([typescript/](typescript), [rust/](rust)).
+Optional extras: Python `taowire[redis]`, `taowire[migrate]`, `taowire[ntp]` (`[all]` = all three); TypeScript peers
+`fastify` (server middleware) and `ioredis` (shared replay store); Rust features `axum`, `client`, `redis`, `sidecar`.
 
 ## Get started
 
