@@ -65,6 +65,13 @@ path = "src/tensorwire/version.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/tensorwire"]
 
+# G6-1: the sdist holds exactly these (hatchling would otherwise sweep in any
+# git-ignored virtualenv not named .venv, e.g. the .venv-py310 of the Python 3.10
+# check). tests/unit/test_packaging.py checks the archive against this list.
+[tool.hatch.build.targets.sdist]
+only-include = ["src/tensorwire", "pyproject.toml", "README.md"]
+exclude = ["__pycache__", "*.py[cod]"]
+
 # ---------------------------------------------------------------- ruff
 [tool.ruff]
 target-version = "py310"
