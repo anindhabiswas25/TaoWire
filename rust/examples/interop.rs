@@ -2,7 +2,7 @@
 //!
 //! ```text
 //! cargo run --example interop --features axum,client -- serve 127.0.0.3:8096 <seed-hex> [sr25519|ed25519]
-//! cargo run --example interop --features axum,client -- sign <url> <seed-hex> <receiver> [scheme] [count]
+//! cargo run --example interop --features axum,client -- sign <url> <seed-hex> <receiver> [scheme] [count] [body]
 //! cargo run --example interop --features axum,client -- stream <url> <seed-hex> <receiver> [scheme] [count]
 //! cargo run --example interop --features axum,client,sidecar -- sidecar <url> <token-file> <netuid> <miner> <probes,...>
 //! ```
@@ -79,16 +79,13 @@ async fn serve(addr: &str, k: Keypair) {
     axum::serve(listener, app).await.expect("serve");
 }
 
-async fn sign(url: &str, k: Keypair, receiver: &str, count: usize) -> bool {
+async fn sign(url: &str, k: Keypair, receiver: &str, count: usize, body: &str) -> bool {
     let (signer, scheme) = (k.ss58().to_owned(), k.scheme().as_str());
     let http = reqwest::Client::builder().timeout(Duration::from_secs(10)).build().expect("http");
     let client = Client::new(Signer::new(k), http);
     let (mut ok, mut statuses, mut errors) = (0, BTreeMap::new(), BTreeMap::new());
     for _ in 0..count {
-        match client
-            .send(reqwest::Method::POST, url, br#"{"text":"hello"}"#.to_vec(), receiver)
-            .await
-        {
+        match client.send(reqwest::Method::POST, url, body.as_bytes().to_vec(), receiver).await {
             Ok(r) => {
                 *statuses.entry(r.status).or_insert(0) += 1;
                 ok += usize::from(r.status == 200);
@@ -194,7 +191,8 @@ async fn main() {
         Some("sign") => {
             let k = key(arg(3).expect("seed"), arg(5).unwrap_or("sr25519"));
             let count = arg(6).map_or(200, |c| c.parse().expect("count"));
-            if !sign(arg(2).expect("url"), k, arg(4).expect("receiver"), count).await {
+            let body = arg(7).unwrap_or(r#"{"text":"hello"}"#);
+            if !sign(arg(2).expect("url"), k, arg(4).expect("receiver"), count, body).await {
                 std::process::exit(1);
             }
         }
