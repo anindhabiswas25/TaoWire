@@ -634,3 +634,16 @@ def test_env_example_loads_with_required_values(tw_env: TWEnv) -> None:
     assert c.SidecarSettings.from_env(ENV_EXAMPLE) == c.SidecarSettings(
         netuid=1, wallet_name="m"
     )
+
+
+def test_stream_max_per_caller(tw_env: TWEnv) -> None:
+    """TW_STREAM_MAX_PER_CALLER (spec 9.2, 12.1, D36): default 16, 1-256."""
+    tw_env.set(netuid=1, wallet_name="m", external_ip="44.1.2.3")
+    assert miner().stream_max_per_caller == 16
+    for ok in (1, 256):
+        tw_env.set(stream_max_per_caller=ok)
+        assert miner().stream_max_per_caller == ok
+    for bad in ("0", "257", "-1", "1.5", "x"):
+        tw_env.set(stream_max_per_caller=bad)
+        with fails("TW_STREAM_MAX_PER_CALLER"):
+            miner()

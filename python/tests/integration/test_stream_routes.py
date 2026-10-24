@@ -19,6 +19,7 @@ import pytest
 from pydantic import BaseModel
 
 from tensorwire.chain.gateway import NeuronView
+from tensorwire.config import MinerSettings
 from tensorwire.extensions.response_sig import HEADER_HOTKEY
 from tensorwire.extensions.streaming import StreamingReply
 from tensorwire.miner.app import Miner
@@ -502,3 +503,55 @@ async def test_a_caller_cannot_hold_more_than_its_stream_slots(
     assert second.response_verified  # a signed refusal
     assert held.ok, held
     assert third.ok, third
+
+
+async def test_stream_max_per_caller_setting_limits_open_streams(
+    tw_env: Any,
+    tw_miner_kwargs: dict[str, Any],
+    fake_chain: FakeChain,
+    tw_clock: FakeClock,
+) -> None:
+    """TW_STREAM_MAX_PER_CALLER=2 (D36): the third open stream of a caller is 429."""
+    tw_env.set(stream_max_per_caller=2)
+    base = tw_miner_kwargs["settings"]
+    settings = MinerSettings(
+        netuid=base.netuid,
+        wallet_name=base.wallet_name,
+        wallet_path=base.wallet_path,
+        external_ip=base.external_ip,
+        ntp_servers=(),
+    )
+    miner = Miner(**{**tw_miner_kwargs, "settings": settings})
+    release = (
+        asyncio.Event()
+    )  # this test's loop (the module's HELD may be bound elsewhere)
+
+    @miner.route("/v1/held", request=Gen, stream=True)
+    async def held(req: Gen, ctx: RouteContext) -> AsyncIterator[Any]:
+        yield {"i": 0}
+        await release.wait()
+
+    @miner.route("/v1/gen", request=Gen, response=Token, stream=True)
+    async def gen(req: Gen, ctx: RouteContext) -> AsyncIterator[Token]:
+        yield Token(token="x")
+
+    assert miner._stream_slots.limit == 2
+    async with miner.running() as app:
+        fake_chain.set_axon(TEST_NETUID, dev_key(MINER_KEY).ss58, ADDRESS, protocol=87)
+        mg = await fake_chain.metagraph(TEST_NETUID)
+        neuron = mg.by_hotkey(dev_key(MINER_KEY).ss58)
+        assert neuron is not None
+        router = AppRouter({ADDRESS: app})
+        async with validator(router, tw_clock) as vc:
+            holders = [
+                asyncio.create_task(vc.query_stream(neuron, "/v1/held", BODY))
+                for _ in range(2)
+            ]
+            while miner._stream_slots.open_for(dev_key("alice").ss58) < 2:
+                await asyncio.sleep(0.01)
+            third = await vc.query_stream(neuron, "/v1/gen", BODY)
+            release.set()
+            results = await asyncio.gather(*holders)
+    assert (third.error_code, third.status) == ("tw.rate_limited", 429)
+    assert third.response_verified
+    assert all(r.ok for r in results), results

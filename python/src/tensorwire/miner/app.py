@@ -153,7 +153,8 @@ class Miner:
             ),
         )
         self._app: FastAPI | None = None
-        self._stream_slots = StreamSlots()  # open streams per caller, all routes
+        # open streams per caller, all routes (TW_STREAM_MAX_PER_CALLER, D36)
+        self._stream_slots = StreamSlots(self.settings.stream_max_per_caller)
         self._timelock: Timelock | None = None
 
     @classmethod

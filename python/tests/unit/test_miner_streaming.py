@@ -190,8 +190,17 @@ async def test_stream_slots_cap_each_caller() -> None:
     assert slots.open_for("a") == 1
     slots.acquire("a")
     assert MAX_STREAMS_PER_CALLER == 16
-    with pytest.raises(ValueError, match="at least 1"):
-        StreamSlots(limit=0)
+
+
+@pytest.mark.parametrize("limit", [0, -1, 257, True])
+async def test_stream_slots_refuse_limits_outside_1_to_256(limit: int) -> None:
+    with pytest.raises(ValueError, match="between 1 and 256"):
+        StreamSlots(limit=limit)
+
+
+async def test_stream_slots_accept_the_range_ends() -> None:
+    assert StreamSlots(1).limit == 1
+    assert StreamSlots(256).limit == 256
 
 
 async def test_the_slot_is_released_when_the_stream_ends_or_fails() -> None:

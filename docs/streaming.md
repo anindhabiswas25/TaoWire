@@ -149,6 +149,8 @@ an async context manager (or call `aclose()`) when you stop early.
 | `TW_STREAM_MAX_S` | `60` | 1–600 | whole stream |
 | `TW_STREAM_MAX_BYTES` | `4194304` | 1024–67108864 | bytes on the wire |
 | `TW_STREAM_IDLE_S` | `10` | 1–120 | longest gap between two events |
+| `TW_STREAM_MAX_PER_CALLER` | `16` | 1–256 | open streams one caller hotkey may hold per miner process (D36); beyond it the miner answers the signed 429 `tw.rate_limited` with `Retry-After: 1` before any byte |
 
-Both miners and validators read them; a route or a call may override them
-within the same ranges.
+Both miners and validators read the first three; a route or a call may override them
+within the same ranges. `TW_STREAM_MAX_PER_CALLER` is the miner's, for all its routes together; with
+`TW_WORKERS > 1` it applies per worker process.

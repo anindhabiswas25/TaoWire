@@ -44,6 +44,7 @@ __all__ = [
     "LEGACY_MAX_HORIZON_DAYS",
     "STREAM_IDLE_S_RANGE",
     "STREAM_MAX_BYTES_RANGE",
+    "STREAM_MAX_PER_CALLER_RANGE",
     "STREAM_MAX_S_RANGE",
     "CallerPolicySettings",
     "CommonSettings",
@@ -67,6 +68,8 @@ DEFAULT_PROTOCOL_TAG = 0x57
 STREAM_MAX_S_RANGE = (1.0, 600.0)
 STREAM_MAX_BYTES_RANGE = (1024, 64 * 1024 * 1024)
 STREAM_IDLE_S_RANGE = (1.0, 120.0)
+#: Open streams per caller hotkey per process (D36).
+STREAM_MAX_PER_CALLER_RANGE = (1, 256)
 
 #: Latest allowed legacy-bridge end date, in days after the process starts
 #: (PM decision D4): the v10 bridge is time-boxed, never "forever".
@@ -250,6 +253,12 @@ class CommonSettings(BaseSettings):
     )
     stream_idle_s: float = Field(
         default=10.0, ge=STREAM_IDLE_S_RANGE[0], le=STREAM_IDLE_S_RANGE[1]
+    )
+    #: Open streams one caller hotkey may hold per miner process (9.2, D36).
+    stream_max_per_caller: int = Field(
+        default=16,
+        ge=STREAM_MAX_PER_CALLER_RANGE[0],
+        le=STREAM_MAX_PER_CALLER_RANGE[1],
     )
 
     def __init__(self, **values: Any) -> None:

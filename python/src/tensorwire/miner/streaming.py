@@ -19,8 +19,9 @@ or a drain ends the stream **without** ``tw-end``, so the validator rejects
 it; the miner never signs a trailer over partial data. Each abort is logged
 (``stream_aborted``) and counted in ``tw_stream_aborted_total{side="miner"}``.
 
-A caller may hold at most :data:`MAX_STREAMS_PER_CALLER` open streams per
-miner process (:class:`StreamSlots`); more are refused with the signed 429
+A caller may hold at most ``TW_STREAM_MAX_PER_CALLER`` (default
+:data:`MAX_STREAMS_PER_CALLER`, 1-256, D36) open streams per miner process
+(:class:`StreamSlots`); more are refused with the signed 429
 ``tw.rate_limited``. Streams live up to ``max_s``, far longer than a plain
 request, so without this one permitted validator could fill the server's
 connection limit and starve the others.
@@ -41,6 +42,7 @@ from starlette.responses import Response
 from starlette.types import Receive, Scope, Send
 
 from tensorwire.auth.verifier import Caller
+from tensorwire.config import STREAM_MAX_PER_CALLER_RANGE
 from tensorwire.crypto import HotkeySigner
 from tensorwire.errors import HandlerError, HandlerTimeout, RateLimited, TWError
 from tensorwire.extensions.response_sig import (
@@ -66,7 +68,8 @@ from tensorwire.observability.metrics import Metrics
 
 __all__ = ["MAX_STREAMS_PER_CALLER", "AbortReason", "StreamSlots", "open_stream"]
 
-#: Open streams one caller hotkey may hold per miner process.
+#: Default open streams one caller hotkey may hold per miner process
+#: (``TW_STREAM_MAX_PER_CALLER``, D36).
 MAX_STREAMS_PER_CALLER = 16
 
 AbortReason = Literal[
@@ -104,8 +107,9 @@ class StreamSlots:
     """Open streams per caller hotkey in this process (see the module docstring)."""
 
     def __init__(self, limit: int = MAX_STREAMS_PER_CALLER) -> None:
-        if limit < 1:
-            raise ValueError("limit must be at least 1")
+        low, high = STREAM_MAX_PER_CALLER_RANGE
+        if isinstance(limit, bool) or not low <= limit <= high:
+            raise ValueError(f"limit must be between {low} and {high}")
         self.limit = limit
         self._open: Counter[str] = Counter()
 
