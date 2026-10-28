@@ -6,21 +6,20 @@ Source: <https://github.com/macrocosm-os/data-universe> at `bb261aa`, MIT licenc
 (a git-ignored checkout): none of the subnet's code is committed here, only these
 counts.
 
-**Result: S6 = 24 changed lines** (target ≤ 50, spec 1.5 with D18), counted as
+**Result: S6 = 24 changed lines** (target ≤ 50, spec 1.5), counted as
 for the template: `git diff` between the `taowire migrate apply` output and
 the finished port, subnet code only (tests, scripts and docs left out), without
-import lines and removed `# TW-MIGRATE:` markers. Phase 3 measured **91**; the
-difference is `compat.Subtensor` (spec 10b.2.6, D34) and the TWM008 rewrite onto
+import lines and removed `# TW-MIGRATE:` markers. The first port (2026-10-23) measured **91**; the
+difference is `compat.Subtensor` (spec 10b.2.6) and the TWM008 rewrite onto
 it.
 
 **data-universe is not template-derived.** Its miner and validator are its own
 classes on top of v10's `bt.subtensor`, `bt.wallet` and `bt.metagraph`, and
-S6 targets template-derived subnets, so this number is reported, not gated
-(D24).
+S6 targets template-derived subnets, so this number is reported, not gated.
 
 ## What `migrate scan` and `migrate apply` did
 
-With `apply` as of Phase 4 (WP7):
+With `apply` as of 2026-10-24:
 
 - `scan` (before): 142 files, 788 findings (748 auto, 34 manual, 6 risk).
 - `apply`: 46 files changed, 754 rewrites, 40 `# TW-MIGRATE:` comments.
@@ -46,7 +45,7 @@ template's counter (`examples/migrations/template-v10-to-v11/golden.py`).
 | 6 more files | markers only | 0 | |
 | **Total** | | **24** | |
 
-Gone compared with Phase 3: `common/chain.py` (49 lines, a hand-written v10
+Gone compared with the first port: `common/chain.py` (49 lines, a hand-written v10
 `subtensor` facade) and the 18 lines around the `Chain(...)` call sites (in the neurons
 and `dynamic_desirability/*`). `apply` now writes `Subtensor(config=...)` /
 `Subtensor(network=...)` and the subnet's own calls (`metagraph`,
@@ -56,7 +55,7 @@ and `dynamic_desirability/*`). `apply` now writes `Subtensor(config=...)` /
 
 Left as they are, with their markers: three TWM100 notes on Synapses without
 `required_hash_fields` and three TWM104 notes on blacklists. Changing the hash
-fields would break the mixed fleet (D28, `docs/migration-rollout.md`); after
+fields would break the mixed fleet (`docs/migration-rollout.md`); after
 the rollout btauth/1 signs the whole body. The tests (`tests/`) were not ported;
 they mock v10 objects (`bt.MockSubtensor`, `bt.Metagraph(netuid=1, sync=False)`).
 
@@ -73,7 +72,7 @@ they mock v10 objects (`bt.MockSubtensor`, `bt.Metagraph(netuid=1, sync=False)`)
   `ChainPreferenceStore.store_preferences` (a commitment written with the dev
   `miner_ts` hotkey, from their `fork` worker) and their
   `_sync_retrieve_metadata` reading it back: equal. The first run of this
-  check found that `compat.Subtensor` hung in a forked child (fixed in Phase 4:
+  check found that `compat.Subtensor` hung in a forked child (fixed on 2026-10-24:
   in a forked child the facade starts its own loop thread and connections).
 - Their ported miner on localnet (dev `miner_ts`, 127.0.0.4:8097, settings
   from `TW_*`): the kit published the axon, and
@@ -92,10 +91,10 @@ same reason. The mixed-fleet requirement of S6 is met by llm-detection
 
 | Miss | Now |
 |---|---|
-| `bt.logging` set-up statements (10) by hand | **TWM032** (auto, Phase 3) |
-| `bt.Wallet(config=self.config)` (6) by hand | **TWM033** (auto, Phase 3) |
-| `bt.wallet.add_args(parser)`, `bt.config(parser)`, `config: bt.Config` | **TWM031** (auto, Phase 3) |
-| v10 `subtensor` reads and commitments: a 49-line hand facade | **`compat.Subtensor`** (10b.2.6, D34) and **TWM008** (auto): `bt.subtensor(...)`, `bt.Subtensor(config=...)` and annotations |
+| `bt.logging` set-up statements (10) by hand | **TWM032** (auto) |
+| `bt.Wallet(config=self.config)` (6) by hand | **TWM033** (auto) |
+| `bt.wallet.add_args(parser)`, `bt.config(parser)`, `config: bt.Config` | **TWM031** (auto) |
+| v10 `subtensor` reads and commitments: a 49-line hand facade | **`compat.Subtensor`** (10b.2.6) and **TWM008** (auto): `bt.subtensor(...)`, `bt.Subtensor(config=...)` and annotations |
 | `bt.Subtensor(network=...)` is a valid v11 call, but here it is used with v10 method names | **TWM008** (auto) when the file also calls a method v11's client lacks (`get_commitment`, `get_uid_for_hotkey_on_subnet`, ...) |
 | v10 writes `compat.Subtensor` does not perform (stake, transfer, register, ...) | **TWM036** (manual, names the v11 replacement); the facade raises `NotImplementedError` with the same text. data-universe makes none |
 | `uid.item()` on `metagraph.uids` elements (TWM023 covers `metagraph.<v>.item()` only) | limit, documented (4 lines here) |

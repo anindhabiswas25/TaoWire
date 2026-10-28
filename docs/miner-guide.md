@@ -126,8 +126,8 @@ arrays). The whole request path runs first, the first chunk is fetched within
 `timeout_s`, and `TW_STREAM_MAX_S` / `_MAX_BYTES` / `_IDLE_S` (or
 `stream_max_s` / `stream_max_bytes` / `stream_idle_s` per route) bound the
 stream; anything that cannot finish ends without a trailer. A caller may hold
-at most `TW_STREAM_MAX_PER_CALLER` (default 16) open streams per miner process
-(D36); more get the signed 429. See [streaming.md](streaming.md).
+at most `TW_STREAM_MAX_PER_CALLER` (default 16) open streams per miner process;
+more get the signed 429. See [streaming.md](streaming.md).
 
 ## Sealed challenges and answers (timelock)
 
@@ -222,7 +222,7 @@ again; unknown callers are never admitted on stale data. Set at least one
    (fail closed); `/healthz` and `/readyz` still answer.
    The replay store must keep pairs for at least
    `2 × (TW_AUTH_MAX_AGE_S + TW_AUTH_ALLOWED_SKEW_S)`; `TW_NONCE_RETENTION_S`
-   below that refuses to start (D21).
+   below that refuses to start.
 6. Check the clock against NTP (`TW_NTP_SERVERS`).
 7. Publish the axon (`TW_EXTERNAL_IP:TW_EXTERNAL_PORT`, protocol
    `TW_PROTOCOL_TAG`) when the chain shows something else and

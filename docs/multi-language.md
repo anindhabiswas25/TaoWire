@@ -1,7 +1,7 @@
 # Multi-language support
 
 TaoWire's Python package is the reference implementation. Miners written in other languages use a
-btauth/1 package for their language (spec 11). Every row of spec 11.1 is built (Phase 5):
+btauth/1 package for their language (spec 11). Every row of spec 11.1 is built:
 
 | Capability (spec 11.1) | Python | Go (`go/btauth`) | Rust (`taowire-btauth`) | TypeScript (`@taowire/btauth`) |
 |---|---|---|---|---|
@@ -39,10 +39,10 @@ Bittensor SDK, in the same ways everywhere:
 | Nonce is 1 to 20 ASCII digits; 20 digits above `u64::MAX` are stale, not malformed | malformed / stale | N29–N33, N51 |
 | `X-Bittensor-Crypto` is exactly `ed25519` or `sr25519` | `tw.auth_malformed` | N7, N34–N37 |
 | Signature is hex digits only (optional `0x`); odd length is shape, wrong byte length is step 4 | `tw.auth_malformed` | N8, N9, N40–N46 |
-| Never a `<Bytes>`-wrapped signature, Python included (D22) | `tw.auth_bad_signature` | N19, N20 |
-| Weak public keys refused (ADR-0010, D20) | `tw.auth_bad_signature` | N63, N64 |
+| Never a `<Bytes>`-wrapped signature, Python included | `tw.auth_bad_signature` | N19, N20 |
+| Weak public keys refused (ADR-0010) | `tw.auth_bad_signature` | N63, N64 |
 
-Replay stores follow the same rules everywhere (spec 8.4.3-8.4.4, D21): a verifier refuses a store whose
+Replay stores follow the same rules everywhere (spec 8.4.3-8.4.4): a verifier refuses a store whose
 retention is below `2 × (max_age + allowed_skew)`; the memory stores forget a pair only when both the
 monotonic and the wall clock say it is old; and every verifier watches `wall − monotonic` on the requests
 that reach the replay check. A backwards wall-clock step larger than `retention − (max_age +
@@ -52,12 +52,12 @@ covers Redis stores too (Redis cannot see a step on the miner). Python reports i
 `LastClockStep()`, Rust `Verifier::failing_closed()` / `last_clock_step()` for a server's readiness probe
 and metrics.
 
-## Streaming (spec 9.2, D29, D35, D36)
+## Streaming (spec 9.2)
 
 Every package has the same four pieces as the Python reference (`taowire.extensions.streaming`): an
-incremental SSE parser (WHATWG rules, linear in the input, never fails), the chunk rule (D35: JSON objects or
+incremental SSE parser (WHATWG rules, linear in the input, never fails), the chunk rule (JSON objects or
 arrays only; nesting deeper than 128 is refused on both sides, see below), the strict `tw-end` parser and the
-running digest. Miner side, in this order: a stream slot for the caller (D36, 16 per process by default, 1–256;
+running digest. Miner side, in this order: a stream slot for the caller (16 per process by default, 1–256;
 full → signed 429 `tw.rate_limited` with `Retry-After: 1`), the first chunk within the handler timeout (else the
 signed JSON 500 / 504), then `200 text/event-stream` with the `X-TW-Resp-*` identity headers, the chunks and the
 signed trailer. A handler error, a bad chunk, the idle limit, `max_s`, `max_bytes` or a disconnect ends the
@@ -73,7 +73,7 @@ until the trailer verifies.
 | Slots | `StreamSlots`, `DefaultStreamSlots` | `sse::StreamSlots` (a dropped `StreamSlot` releases) | `StreamSlots`, `DEFAULT_STREAM_SLOTS` |
 | A client that stops reading | `max_s` is a write deadline (`http.ResponseController`) | the producer stops at `max_s`; hyper has no write deadline, so the socket stays until TCP gives up (bounded by the slots) | the socket is destroyed at `max_s` |
 
-Chunk and trailer rules are the same in all four languages, Python included (spec 9.2, D43): a chunk nests at
+Chunk and trailer rules are the same in all four languages, Python included (spec 9.2): a chunk nests at
 most 128 levels (arrays and objects counted together; the miner never emits a deeper one, the client rejects one as
 `tw.invalid_response`); in `tw-end`, `count` is a plain non-negative integer literal that fits a u64 (`-0`, a
 fraction or an exponent is refused) and no string holds a lone UTF-16 surrogate escape (an escaped high + low pair

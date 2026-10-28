@@ -143,7 +143,7 @@ raises for one miner's failure: `error_code` is `tw.timeout`, `tw.connect_error`
 
 v10 answers are reported as `MinerResult(protocol="v10", response_verified=False)`.
 
-### Rollback through the signed protocol tag (spec 8.11.3 step 5, decision D16)
+### Rollback through the signed protocol tag (spec 8.11.3 step 5)
 
 "No downgrade" would otherwise leave a miner that rolls back to its v10 release
 unreachable from every running TaoWire validator until that validator
@@ -164,7 +164,7 @@ publishes `TW_PROTOCOL_TAG` (default 87) and v10's `serve_axon` publishes 4.
   10b.5). If it later re-publishes the kit's tag, step 1 applies again
   immediately.
 - `ProtocolSelector` itself is unchanged: the trigger lives in the validator's
-  refresh path (Engineer A), next to the `forget()` on a hotkey change.
+  refresh path, next to the `forget()` on a hotkey change.
 
 Limits:
 
@@ -172,7 +172,7 @@ Limits:
   its own, with no tag change, still never downgrades a btauth/1 hotkey. A miner
   that answered btauth/1 but never published the kit's tag (for example, it runs
   the kit with its own `ServeAxon` code) stays btauth/1-only until the validator
-  restarts, as before D16.
+  restarts, as before this rule.
 - The switch happens at the validator's **first refresh after** the new axon
   info is on chain (`TW_METAGRAPH_REFRESH_S`, default 120 s). The miner's
   `ServeAxon` is subject to the subnet's `serving_rate_limit` (50 blocks by

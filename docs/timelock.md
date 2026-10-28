@@ -112,7 +112,7 @@ depend on (a localnet chain already sees HTTP 429 from it).
 
 `bt.timelock` and the SDK's compiled core (`bittensor_core`, for the round
 signatures) are called only by the chain gateway (`timelock_seal`,
-`timelock_parse`, `timelock_signature`, `timelock_decrypt`; ADR-0001, D30);
+`timelock_parse`, `timelock_signature`, `timelock_decrypt`; ADR-0001);
 `FakeChain` provides a fake round clock for tests. Tests that call the real drand API carry the
 pytest marker `drand` and run with `just drand-test`, never in `just test`.
 

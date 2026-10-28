@@ -10,8 +10,8 @@ a vulnerability, see `SECURITY.md` at the repository root.
 |---|---|---|
 | Internet scanner / DDoS | Send arbitrary bytes to the miner's public IP (it is on chain) | Per-IP rate limit first, request-read deadline, header and body caps, concurrency limit, firewall guidance |
 | Registered non-validator hotkey | Send validly signed requests | Caller policy: registered + validator permit (+ optional minimum stake) |
-| Malicious miner | Forward a validator's request to another miner, replay requests, return forged or copied answers | Receiver binding, replay store, `twresp/1` response signatures, timelock option (Phase 4) |
-| On-path attacker | Read or change plain HTTP traffic | Signed requests and responses (integrity), TLS for confidentiality (Phase 4) |
+| Malicious miner | Forward a validator's request to another miner, replay requests, return forged or copied answers | Receiver binding, replay store, `twresp/1` response signatures, timelock option |
+| On-path attacker | Read or change plain HTTP traffic | Signed requests and responses (integrity), TLS for confidentiality |
 | Malicious validator | Leak a miner's answer to another miner before scoring | Sealed (timelocked) responses: nobody can read them before the drand round, the validator included (spec 8.10, [timelock.md](timelock.md)) |
 | Supply-chain attacker | Poison a release or a dependency | Locked dependencies, `just audit`, signed releases (spec 18) |
 | Local attacker on the miner host | Read the hotkey file | Out of scope for code: host hardening below |
@@ -22,16 +22,16 @@ a vulnerability, see `SECURITY.md` at the repository root.
 |---|---|---|---|
 | 1 | Replay across processes or hosts | Redis replay store required when `TW_WORKERS > 1` or `TW_INSTANCE_COUNT > 1`; the miner refuses to start with a per-process store; a Redis outage fails closed (503 `tw.replay_store_unavailable`) | `tests/integration/test_miner_process.py`, `test_redis_nonce_store.py`, `tests/unit/test_nonce_store.py`; replay storm across 2 workers never served twice: `tests/abuse/test_abuse.py::test_replay_storm` |
 | 2 | Hashing a re-serialised body | Signatures are verified on the raw bytes before parsing; handlers only see verified bytes | integration test 1 (`test_miner_requests.py`), `tests/property/test_auth_properties.py` |
-| 3 | Decoded path used as the signed target | The raw request target (`raw_path` + query) is what is verified | `tests/unit/test_miner_app.py`, property tests; conformance P4 (Phase 5) |
+| 3 | Decoded path used as the signed target | The raw request target (`raw_path` + query) is what is verified | `tests/unit/test_miner_app.py`, property tests; conformance vector P4 |
 | 4 | Clock drift and clock steps | NTP check at startup and on a schedule; `/readyz` reports `clock_skew`; `taowire doctor` checks it. Replay stores keep at least `2 × (max_age + allowed_skew)`; the memory store forgets a pair only when both clocks agree; a backwards wall-clock step larger than the margin fails closed for `retention` seconds (503 `tw.replay_store_unavailable`, `/readyz` `clock_step`), D21 | `tests/unit/test_clock_guard.py`, `tests/integration/test_miner_lifecycle.py`; D21: `tests/unit/test_clock_step.py` (memory and Redis, injected clocks), `tests/integration/test_redis_nonce_store.py` (real Redis), `tests/integration/test_miner_pipeline.py::test_backwards_clock_step_fails_closed`, `tests/unit/test_config.py::test_nonce_retention_covers_twice_the_window` |
 | 5 | Unbound receiver | Miners always require `X-Bittensor-Receiver` to be their own hotkey; the signer refuses an empty receiver | `tests/unit/test_signer.py`, `tests/unit/test_verifier.py` |
 | 6 | Transport retries resend a signed request | The validator client uses `retries=0`; its own retries sign afresh with a new nonce | `tests/unit/test_validator_client.py::test_the_default_transport_never_retries`, `::test_each_attempt_is_signed_afresh_and_bound_to_the_miner` |
 | 7 | Authenticated is not authorised | Strict caller policy (registered + permit) by default; staged metagraph staleness (below) | `tests/unit/test_policy.py`, `tests/unit/test_chain_metagraph_cache.py`, `tests/integration/test_miner_requests.py` |
-| 8 | Flooding, oversized bodies | Per-IP limit (outermost) → body cap → verification (thread pool, bounded) → per-hotkey limit; streams: the same pipeline before the first byte, then whole-stream, byte and idle limits on both sides and at most `TW_STREAM_MAX_PER_CALLER` (default 16) open streams per caller hotkey per miner process (spec 9.2, D29, D36); request-read deadline, 16 KiB / 100-field header cap; the sender address must be exactly 48 characters before any base58 decoding (D19) | `tests/abuse/test_abuse.py` (all five attacks, `just abuse`), `tests/abuse/test_stream_abuse.py` (slow drip, endless stream, unread streams), `tests/integration/test_miner_protocol.py`, `tests/unit/test_ratelimit.py`, `tests/unit/test_body_limit.py`; sender bound: `tests/unit/test_crypto.py::test_huge_sender_costs_no_decode_work`, `::test_length_is_checked_before_base58_decoding`, `tests/unit/test_verifier.py::test_huge_sender_is_refused_before_decoding` |
+| 8 | Flooding, oversized bodies | Per-IP limit (outermost) → body cap → verification (thread pool, bounded) → per-hotkey limit; streams: the same pipeline before the first byte, then whole-stream, byte and idle limits on both sides and at most `TW_STREAM_MAX_PER_CALLER` (default 16) open streams per caller hotkey per miner process (spec 9.2); request-read deadline, 16 KiB / 100-field header cap; the sender address must be exactly 48 characters before any base58 decoding | `tests/abuse/test_abuse.py` (all five attacks, `just abuse`), `tests/abuse/test_stream_abuse.py` (slow drip, endless stream, unread streams), `tests/integration/test_miner_protocol.py`, `tests/unit/test_ratelimit.py`, `tests/unit/test_body_limit.py`; sender bound: `tests/unit/test_crypto.py::test_huge_sender_costs_no_decode_work`, `::test_length_is_checked_before_base58_decoding`, `tests/unit/test_verifier.py::test_huge_sender_is_refused_before_decoding` |
 | 9 | Unsigned responses | `twresp/1` on by default; the validator scores a bad or missing signature as a failure. Streams end with a signed `tw-end` trailer over the digest of every chunk; chunks are handed out as unverified until it verifies, and a missing, invalid or duplicate trailer, data after it or a count mismatch fails the whole stream (spec 9.2) | `tests/unit/test_response_sig.py`, `tests/property/test_response_sig_properties.py`, integration tests 10 and 11 (`tests/integration/test_stream_routes.py`), `tests/property/test_streaming_properties.py` |
-| 10 | Public miner IPs | Documented: firewall, optional proxy, only the miner port exposed; metrics bind to 127.0.0.1 by default. Optional TLS (spec 16.3, D31): uvicorn or a reverse proxy, the key published with `ServeAxonTls`; validators with `https-if-tls-published` pin it against the chain and never fall back to HTTP for a miner that published one ([TLS](#tls-spec-163-d31-adr-0011)) | this page ("What you still have to do"), `docs/miner-guide.md`, `tests/integration/test_tls_modes.py`, `tests/integration/test_miner_tls.py`, `tests/property/test_tls_properties.py`, `tests/localnet/test_tls_localnet.py` |
-| 11 | Answer copying / leaking | Timelock extension (opt-in, spec 8.10, D30): sealed challenges and sealed responses, bound to their miner (a copied sealed answer fails its binding check); `bt.timelock` only through the chain gateway; process-wide drand limiter, bounded retries and deadlines, drand trouble is `tw.timelock_unavailable` (never a hang); stale challenges refused ([timelock.md](timelock.md)) | `tests/unit/test_timelock.py`, `tests/property/test_timelock_properties.py`, `tests/integration/test_timelock_round.py`, `tests/localnet/test_timelock_localnet.py` (sealed challenge + sealed response on localnet) |
-| 12 | Weak legacy bridge, both directions | Opt-in; mandatory end dates on both sides (at most 180 days); kit freshness, replay store and caller policy on inbound v10; no downgrade after a miner answered over btauth/1, except when its own signed `ServeAxon` moves its protocol tag away from the kit's (D16); `migrate scan` flags unhashed Synapse fields; traffic counters | `tests/integration/test_legacy_v10_bridge.py` (12, 13), `test_miner_legacy_hook.py`, `test_validator_protocol_tag.py`, `tests/migration/test_migrate_scan.py` (TWM100/TWM101) |
+| 10 | Public miner IPs | Documented: firewall, optional proxy, only the miner port exposed; metrics bind to 127.0.0.1 by default. Optional TLS (spec 16.3): uvicorn or a reverse proxy, the key published with `ServeAxonTls`; validators with `https-if-tls-published` pin it against the chain and never fall back to HTTP for a miner that published one ([TLS](#tls-spec-163-d31-adr-0011)) | this page ("What you still have to do"), `docs/miner-guide.md`, `tests/integration/test_tls_modes.py`, `tests/integration/test_miner_tls.py`, `tests/property/test_tls_properties.py`, `tests/localnet/test_tls_localnet.py` |
+| 11 | Answer copying / leaking | Timelock extension (opt-in, spec 8.10): sealed challenges and sealed responses, bound to their miner (a copied sealed answer fails its binding check); `bt.timelock` only through the chain gateway; process-wide drand limiter, bounded retries and deadlines, drand trouble is `tw.timelock_unavailable` (never a hang); stale challenges refused ([timelock.md](timelock.md)) | `tests/unit/test_timelock.py`, `tests/property/test_timelock_properties.py`, `tests/integration/test_timelock_round.py`, `tests/localnet/test_timelock_localnet.py` (sealed challenge + sealed response on localnet) |
+| 12 | Weak legacy bridge, both directions | Opt-in; mandatory end dates on both sides (at most 180 days); kit freshness, replay store and caller policy on inbound v10; no downgrade after a miner answered over btauth/1, except when its own signed `ServeAxon` moves its protocol tag away from the kit's; `migrate scan` flags unhashed Synapse fields; traffic counters | `tests/integration/test_legacy_v10_bridge.py` (12, 13), `test_miner_legacy_hook.py`, `test_validator_protocol_tag.py`, `tests/migration/test_migrate_scan.py` (TWM100/TWM101) |
 | 19 | Compat hooks weakening security | `blacklist_fn` runs after the caller policy and can only narrow; a custom `verify_fn` is refused at startup | `tests/integration/test_compat_layer.py::test_15_blacklist_cannot_widen_access`, `tests/unit/test_compat.py` |
 | 13 | Coldkey on the server | The kit never opens `wallet.coldkey`; a readable unencrypted coldkey stops startup (`TW_REFUSE_IF_COLDKEY_PRESENT=1`) | `tests/integration/test_miner_lifecycle.py`, `tests/integration/test_validator_runner.py`, `tests/unit/test_auth_keys.py` |
 | 14 | Supply chain | `uv.lock`, `just audit` (pip-audit), signed releases (spec 18) | `just audit` |
@@ -65,15 +65,15 @@ The miner's public port uses httptools with three extra limits:
   different `Content-Length` values, control bytes in header names) is
   refused with 400 (request smuggling).
 
-- **Sender length before decoding** (spec 4.3 step 1, D19): the
+- **Sender length before decoding** (spec 4.3 step 1): the
   `X-Bittensor-Hotkey` value must be exactly 48 characters (every prefix-42
   address of a 32-byte key has 48) before it is base58-decoded. Base58
   decoding is quadratic in the input length and runs before the signature
   check, so without the bound one unauthenticated request with a 64 KiB
   sender cost about 0.8-1.35 s of CPU (about 50-85 ms at the 16 KiB header
   cap). With the bound it is refused as `tw.auth_malformed` in about 10 µs
-  (measured in Phase 3 on the benchmark machine of `docs/benchmarks.md`).
-- **Streams** (spec 9.2, D29; [streaming.md](streaming.md)): the whole
+  (measured on the benchmark machine of `docs/benchmarks.md`).
+- **Streams** (spec 9.2; [streaming.md](streaming.md)): the whole
   request path runs before the first byte; both ends enforce
   `TW_STREAM_MAX_S`, `_MAX_BYTES` and `_IDLE_S`. The miner cuts a stream
   whose reader stopped reading at `max_s` and stops the handler at once when
@@ -102,15 +102,15 @@ The kit's request verifier refuses, in every language, some requests that
 `bittensor.http_auth.verify` accepts:
 
 - step 1, `tw.auth_malformed`: a sender that is not SS58 prefix 42 or not
-  exactly 48 characters (checked before base58 decoding, D19); duplicate
+  exactly 48 characters (checked before base58 decoding); duplicate
   `X-Bittensor-*` headers; a nonce that is not `[0-9]{1,20}`; an
   `X-Bittensor-Crypto` other than exactly `sr25519`/`ed25519`; a signature
   that is not hex digits only (the SDK's `bytes.fromhex` skips whitespace);
 - step 4, `tw.auth_bad_signature`, before the replay store is touched: a
   **weak public key** (the sr25519 identity, ed25519 points of small order),
-  whose "universal" signature fits any payload (D20, ADR-0010), and a
+  whose "universal" signature fits any payload (ADR-0010), and a
   signature over the **`<Bytes>`-wrapped** payload (Polkadot-JS `signRaw`;
-  A10, D22).
+  A10).
 
 twresp/1 and the v10 wire verify with `crypto.verify(strict=True)`, which
 refuses weak keys and `<Bytes>`-wrapped signatures as well. Tests:
@@ -120,7 +120,7 @@ refuses weak keys and `<Bytes>`-wrapped signatures as well. Tests:
 `tests/unit/test_crypto.py`, `tests/unit/test_response_sig.py::test_weak_responder_key_is_refused`,
 `tests/property/test_auth_properties.py::test_any_non_hex_character_in_the_signature_is_malformed`.
 
-## Replay stores and clock steps (spec 8.4.3-8.4.4, D21)
+## Replay stores and clock steps (spec 8.4.3-8.4.4)
 
 Freshness (4.3 step 3) is judged on the miner's wall clock, but replay
 stores forget a pair after `retention` on their own clock (the monotonic
@@ -189,14 +189,14 @@ not:
   integrity guarantee; `twresp/1` gives that once a miner has migrated.
 - A validator never falls back to v10 for a miner that has answered over
   btauth/1, unless that miner's own signed `ServeAxon` changes its published
-  protocol tag away from the kit's (a rollback, D16). A v10-shaped answer on
+  protocol tag away from the kit's (a rollback). A v10-shaped answer on
   its own never causes a downgrade.
 
 Watch `tw_legacy_v10_requests_total` and `tw_legacy_v10_days_remaining`
 (alert under 14 days). End the bridge as soon as the rollout allows
 (`docs/migration-rollout.md`).
 
-## TLS (spec 16.3, D31, ADR-0011)
+## TLS (spec 16.3, ADR-0011)
 
 Plain HTTP keeps integrity, because requests and responses are both signed,
 but not confidentiality. Subnets with private payloads use HTTPS.
@@ -280,12 +280,12 @@ uncommitted changes, so `git diff` shows exactly what it changed.
 
 The TypeScript, Go and Rust packages apply the same verification rules as the Python kit (every vector in
 `conformance/vectors/` in each language; the stricter rules of spec 4.3 everywhere; weak keys refused, ADR-0010),
-the same streaming rules (spec 9.2: D35 chunks, D36 slots, D43 depth and trailer form, the signed trailer) and,
+the same streaming rules (spec 9.2: chunk format, per-caller stream slots, nesting depth and trailer form, the signed trailer) and,
 through the sidecar client,
 the same caller policy and staleness stages. Their miners have no chain access and no wallet beyond their own
 hotkey file; the sidecar holds the miner's hotkey for `ServeAxon`. Differences to know about
 ([multi-language.md](multi-language.md)): `axum::serve` has no header read timeout of its own, so the Rust example miner serves through hyper's
-builder with one (G7-2), and your own axum server needs the same or a reverse proxy in front; Go and Rust read
+builder with one, and your own axum server needs the same or a reverse proxy in front; Go and Rust read
 hotkey files with `secretSeed` only.
 
 ## What you still have to do (spec 16.4)

@@ -21,8 +21,8 @@ Rules for every stage:
 
 This runbook was walked end to end on a localnet mixed fleet (v10 nodes on
 `bittensor==10.5.0`, TaoWire nodes from the ported template), including
-every rollback: 72 of 72 checks passed (`scripts/rollout_walkthrough.py`, Phase 3;
-stages 1-3 again at the Phase 5 gate: 58 of 58).
+every rollback: 72 of 72 checks passed (`scripts/rollout_walkthrough.py`, 2026-10-23;
+stages 1-3 again on 2026-10-24: 58 of 58).
 The numbers quoted below are from that walk.
 
 ## The numbers: `taowire migrate status`
@@ -68,8 +68,8 @@ rollback use them.
 - Run the mixed fleet on localnet (spec 13.8): `just mixed-fleet`. All four
   cells (v10 or TaoWire validator × v10 or TaoWire miner) must be
   green. Use the `testnet` image tag of the localnet chain.
-- **Do not change a Synapse's `required_hash_fields` in this release**
-  (D28). `scan` reports Synapses with empty or partial hash fields (TWM100,
+- **Do not change a Synapse's `required_hash_fields` in this release.**
+  `scan` reports Synapses with empty or partial hash fields (TWM100,
   TWM101) as risks, and fixing them is right, but the field list feeds the v10
   body hash that old and new nodes must compute the same way: a ported miner
   with a different list fails every request from a v10 validator (and a ported
@@ -131,7 +131,7 @@ until the end date.
 - **Rollback:** the miner goes back to its v10 release. Its `ServeAxon`
   publishes the v10 protocol tag again. Validators notice at their next
   metagraph refresh (they log `legacy_v10_protocol_tag_changed`) and reach it
-  over v10 again. **No validator restart is needed** (D16, spec 8.11.3
+  over v10 again. **No validator restart is needed** (spec 8.11.3
   step 5). Without that signed tag change, a validator never downgrades a
   miner that has answered over btauth/1.
 
@@ -157,8 +157,8 @@ is part of every tempo too.
 - **Tell straggling validators.** A v10 validator's weight commit is still
   **accepted** ("Success", and its `LastUpdate` moves), but its reveal is
   dropped without an error. They will not notice on their own.
-- **TaoWire validators with a stale key are stopped at commit time
-  (D38).** Before every commit the kit reads `WeightsVersionKey`; when
+- **TaoWire validators with a stale key are stopped at commit time.**
+  Before every commit the kit reads `WeightsVersionKey`; when
   `TW_WEIGHTS_VERSION_KEY` is lower it commits nothing, logs
   `weights_version_key_stale` at ERROR with both keys, counts
   `tw_validator_weight_submissions_total{ok="false",code="version_key_stale"}`

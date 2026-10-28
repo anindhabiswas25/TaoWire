@@ -139,7 +139,7 @@ passed since its last submission, with `version_key=TW_WEIGHTS_VERSION_KEY`
 and `mechid=TW_MECHID`. v11 `SetWeights` normalises, clips and quantises; the
 gateway runs the SDK preflight first.
 
-- **Version key preflight (D38).** Right before each commit, the scheduler
+- **Version key preflight.** Right before each commit, the scheduler
   reads the subnet's `WeightsVersionKey` (one chain read per commit attempt,
   never cached, so a key the owner raises takes effect at the very next
   commit). If `TW_WEIGHTS_VERSION_KEY` is
@@ -168,7 +168,7 @@ gateway runs the SDK preflight first.
   the window ends. Every attempt is a real submission, counted
   (`ok="false",code="expired"`) and stored. Pool errors with the same codes
   (`Stale` / `Future`, already re-signed by the gateway) and
-  `MultiBlockMigrationsOngoing` are not re-planned (spec 8.9, D32).
+  `MultiBlockMigrationsOngoing` are not re-planned (spec 8.9).
   `WeightDecision.replans` counts the re-plans used in the current window.
 - `not_registered` / `not_authorized`: logged at ERROR, submissions stop
   (querying continues) until the metagraph shows the hotkey registered with
@@ -232,7 +232,7 @@ can end (`docs/migration-from-v10.md`).
 | `TW_MAX_RESPONSE_BYTES` | 4194304 | |
 | `TW_SCORE_ALPHA` | 0.1 | EMA |
 | `TW_MIN_WEIGHT_INTERVAL_BLOCKS` | 100 | |
-| `TW_WEIGHTS_VERSION_KEY` | 0 | must be ≥ the subnet's stored key; below it nothing is committed (`weights_version_key_stale`, D38) |
+| `TW_WEIGHTS_VERSION_KEY` | 0 | must be ≥ the subnet's stored key; below it nothing is committed (`weights_version_key_stale`) |
 | `TW_MECHID` | 0 | |
 | `TW_SCHEME_POLICY` | http | `http`, `https` or `https-if-tls-published` (TLS key pinning, ADR-0011) |
 | `TW_LEGACY_V10_CLIENT` | off | `auto` reaches v10 miners |

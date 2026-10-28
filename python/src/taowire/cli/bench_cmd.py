@@ -721,7 +721,7 @@ def bench(
         typer.Option(
             envvar="TAOWIRE_BENCH_REDIS_URL",
             help="Redis for the replay store and limiters (needed for workers > 1). "
-            "Default: found automatically, reached directly (13.7, D17).",
+            "Default: found automatically, reached directly (spec 13.7).",
         ),
     ] = None,
     miner_cpus: Annotated[
