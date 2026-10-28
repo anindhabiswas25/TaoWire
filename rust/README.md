@@ -1,6 +1,6 @@
 # taowire-btauth (Rust)
 
-> **Alpha (0.1.0a1).** TaoWire has **not been security-reviewed** yet, and its APIs may change between
+> **Alpha (0.1.0-alpha.1).** TaoWire has **not been security-reviewed** yet, and its APIs may change between
 > alphas. Use it on localnet and testnet; **do not use it to protect mainnet value**. Feedback and bugs:
 > [GitHub issues](https://github.com/anindhabiswas25/TaoWire/issues). Security problems: report them privately through
 > [GitHub private vulnerability reporting](https://github.com/anindhabiswas25/TaoWire/security/advisories/new) (see
@@ -56,8 +56,8 @@ Validator side (feature `client`): `Client::new(Signer::new(validator_key), reqw
 | Item | What it does |
 |---|---|
 | `build_payload`, `body_sha256`, `Scheme` | The 8-line btauth/1 payload (spec 4.2) |
-| `Verifier::new(Config)`, `Verifier::verify(headers, body, method, target).await` | Spec 4.3 in order; `Caller` or `Error { code, status, .. }` (Appendix A). Refuses a store with retention below `2 × (max_age + allowed_skew)` (D21) |
-| `Verifier::failing_closed`, `Verifier::last_clock_step` | Clock-step guard (D21): after a backwards wall-clock step larger than the store's margin, requests get `tw.replay_store_unavailable` for the retention; report it as not-ready (`clock_step`). Tests set `Config::now_ns` and `Config::monotonic_ns` |
+| `Verifier::new(Config)`, `Verifier::verify(headers, body, method, target).await` | Spec 4.3 in order; `Caller` or `Error { code, status, .. }` (Appendix A). Refuses a store with retention below `2 × (max_age + allowed_skew)` |
+| `Verifier::failing_closed`, `Verifier::last_clock_step` | Clock-step guard: after a backwards wall-clock step larger than the store's margin, requests get `tw.replay_store_unavailable` for the retention; report it as not-ready (`clock_step`). Tests set `Config::now_ns` and `Config::monotonic_ns` |
 | `axum::protect`, `axum::MinerAuth` | Middleware: `OriginalUri` path and query as target (percent-encoding kept, absolute form refused), `to_bytes` with the body limit (413), `Caller` and raw `Bytes` in extensions, twresp/1 on answers with a response key |
 | `Keypair::{sr25519_from_seed, ed25519_from_seed}`, `Keypair::sign` | schnorrkel (context `b"substrate"`) and ed25519-dalek 2 |
 | `Signer::sign` | Request headers with a fresh nonce every call |
@@ -65,14 +65,14 @@ Validator side (feature `client`): `Client::new(Signer::new(validator_key), reqw
 | `MemoryStore`, `NonceStore`; `redis_store::RedisStore` | Replay stores; Redis keys match the Python kit (`tw:n:<hotkey>:<nonce>`) |
 | `sign_response`, `verify_response`, `verify_response_digest` | twresp/1 (spec 9.1; digest form for 9.2 streams) |
 | `client::Client::send` | Signed request + verified answer; client codes `tw.timeout`, `tw.connect_error`, `tw.response_too_large`, `tw.bad_response_signature` |
-| `axum::stream_response`, `axum::StreamConfig`, `axum::StreamContext` | SSE stream with a signed `tw-end` from a protected handler (spec 9.2): per-caller slots (D36), first chunk before any byte, limits, abort hook |
+| `axum::stream_response`, `axum::StreamConfig`, `axum::StreamContext` | SSE stream with a signed `tw-end` from a protected handler (spec 9.2): per-caller slots, first chunk before any byte, limits, abort hook |
 | `client::Client::stream`, `client::Stream`, `client::UnverifiedChunk` | Streaming query: `next().await` gives unverified chunks, `Ok(None)` only after the trailer verified |
 | `TokenBuckets`, `RateLimit`, `DEFAULT_IP_LIMIT`, `DEFAULT_HOTKEY_LIMIT` | Per-IP / per-hotkey token buckets (spec 8.6.2) |
 | `Keypair::from_hotkey_file(path, scheme)` | A Bittensor hotkey file (owner-only, `secretSeed`, `ss58Address` checked) |
 | `axum::MinerAuth::with_body_timeout`, `MinerAuth::verifier` | Body read deadline (default 10 s); the verifier for readiness probes. `axum::serve` has no header read timeout: serve with hyper's `http1::Builder::header_read_timeout`, as `examples/textops_miner.rs` does |
 | `axum::MinerAuth::with_policy`, `PolicyFn` | Caller policy after verification (spec 8.5); refusals signed except `axum::UNSIGNED_CODES` |
 | `sidecar::{SidecarClient, Config, CallerPolicy, read_token_file, parse_snapshot, parse_decision, parse_health}` | Feature `sidecar`: the sidecar client (spec 11.6, `docs/multi-language.md` "Sidecar API") — cached metagraph with the 8.5.1 stages, the Python caller policy, `serve_axon` |
-| `sse::{Parser, decode_chunk, encode_chunk, parse_trailer, encode_trailer, encode_event, StreamDigest, StreamLimits, StreamSlots}` | The shared stream pieces (WHATWG SSE parser, D35 chunk rule, strict trailer) |
+| `sse::{Parser, decode_chunk, encode_chunk, parse_trailer, encode_trailer, encode_event, StreamDigest, StreamLimits, StreamSlots}` | The shared stream pieces (WHATWG SSE parser, chunk rule, strict trailer) |
 | `decode_ss58`, `encode_ss58`, `is_weak_public_key` | Appendix D (prefix 42 only), weak-key rule |
 | `Error`, `codes`, `status_of`, `error_body` | Appendix A codes, statuses and the JSON error body |
 

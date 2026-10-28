@@ -160,28 +160,44 @@ and a live cross-language matrix on a local chain. See [docs/multi-language.md](
 
 ## How it was tested
 
-Every release candidate runs the full local gate (`just check`) plus localnet checks on a fresh chain.
-On `0.1.0a1` (`0.1.0a2` adds the MCP server: 2,461 Python tests, the gate green again):
+Every release candidate runs the full local gate (`just check`: lint, strict type checks, tests and
+conformance in all four languages) plus end-to-end checks on a fresh local chain. Latest full run:
+`0.1.0a2`, 2026-10-28.
 
-- 2,395 Python tests, 277 TypeScript tests, plus the Go and Rust suites; 143/143 conformance vectors in every language; 97% Python coverage.
-- Abuse tests: invalid-signature flood, slowloris, 100 MB body, header floods, replay storm, unread streams.
-- Fuzzing on every parser of untrusted input (Go native fuzzing, `cargo fuzz`, Hypothesis).
-- Localnet: miner and validator end to end, timelocked weights reveal, TLS, streaming, a mixed v10/v11 fleet, a staged
-  rollout walk-through, and the four-language interop matrix (200/200 requests per cell, weights revealed).
-- Benchmark (`taowire bench`, 4 workers + Redis): about 2,100 verified requests/s, auth + policy p99 under 1 ms, fan-out to
-  256 miners in under 0.5 s. See [docs/benchmarks.md](docs/benchmarks.md).
+| Check | Result |
+|---|---|
+| Python tests (unit, property, integration, real Redis) | 2,467 passed |
+| v10 migration tests (live interop with bittensor 10.5.0) | 340 passed |
+| TypeScript tests (incl. real Redis) | 277 passed |
+| Go and Rust suites | all passed (`go test -race`, `cargo test --all-features`) |
+| Conformance vectors | 143/143 in Python, TypeScript, Go and Rust |
+| Python coverage | 97% (≥ 90% on every security-critical module) |
+| Dependency audit (`pip-audit`, `npm audit`, `govulncheck`, `cargo audit`) | no reachable vulnerabilities |
+| Abuse tests (2 workers + Redis): invalid-signature flood, slowloris, 100 MB body, header floods, replay storm, unread streams | 7 passed |
+| Localnet end to end: miner, validator, timelocked weights reveal, TLS, streaming, gateway, MCP | 18 passed |
+| Mixed v10/v11 fleet on localnet | passed |
+| Four-language interop matrix: each miner language 200/200, each client signer 200/200, weights committed and revealed | 8/8 cells |
 
-What is **not** done yet: an end-to-end run on the public testnet and an external security review. Both come before 1.0.
+Every parser of untrusted input is fuzzed (Hypothesis, Go native fuzzing, `cargo fuzz`). Benchmark
+(`taowire bench`, 4 workers + Redis): about 2,100 verified requests/s, auth + policy p99 under 1 ms, fan-out to
+256 miners in under 0.5 s; see [docs/benchmarks.md](docs/benchmarks.md).
+
+**Not done yet:** an end-to-end run on the public testnet and an external security review. Both come before 1.0.
 
 ## Documentation
 
-- Building: [quickstart](docs/quickstart.md), [AI agents (MCP)](docs/mcp.md), [miner guide](docs/miner-guide.md), [validator guide](docs/validator-guide.md),
-  [streaming](docs/streaming.md), [timelock](docs/timelock.md), [TLS](docs/tls.md), [metrics](docs/metrics.md),
-  [security](docs/security.md).
-- Protocols: [btauth/1 and twresp/1](docs/protocol/), the [legacy v10 bridge](docs/protocol/legacy-v10.md).
-- Design decisions: [docs/adr](docs/adr), and the full build specification in
+- **Building a subnet:** [quickstart](docs/quickstart.md), [miner guide](docs/miner-guide.md),
+  [validator guide](docs/validator-guide.md), [streaming](docs/streaming.md), [timelock](docs/timelock.md),
+  [TLS](docs/tls.md), [metrics](docs/metrics.md), [AI agents (MCP)](docs/mcp.md).
+- **Security:** [threat model and controls](docs/security.md), [security policy](SECURITY.md).
+- **Migrating from v10:** [migration guide](docs/migration-from-v10.md), [rollout runbook](docs/migration-rollout.md),
+  case studies in [docs/migrations](docs/migrations).
+- **Other languages:** [multi-language guide](docs/multi-language.md), [sidecar](docs/sidecar.md).
+- **Protocols:** [twresp/1](docs/protocol/twresp-1.md), the [legacy v10 bridge](docs/protocol/legacy-v10.md).
+- **Performance:** [benchmarks and abuse tests](docs/benchmarks.md).
+- **Design:** [architecture decision records](docs/adr) and the full build specification,
   [TAOWIRE_BUILD_SPEC.md](TAOWIRE_BUILD_SPEC.md).
-- Contributing to the kit: [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Changes and contributing:** [CHANGELOG.md](CHANGELOG.md), [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Compatibility
 

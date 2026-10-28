@@ -6,7 +6,7 @@ design partner (S7); nobody from the team was involved. The port lives outside
 this repository (a git-ignored checkout): none of the subnet's code is committed
 here, only these counts.
 
-**Result: S6 = 8 changed lines** (target ≤ 50, spec 1.5 with D18: the subnet's
+**Result: S6 = 8 changed lines** (target ≤ 50, spec 1.5: the subnet's
 own customised `detection/base/*` and `detection/utils/config.py` are counted),
 and the mixed fleet ran on localnet: the unported subnet on bittensor 10.5.0
 next to its port, every validator querying every miner, weights revealed (see
@@ -14,11 +14,11 @@ next to its port, every validator querying every miner, weights revealed (see
 
 ## History of the number
 
-The first port (Phase 3, `apply` at that time) reported S6 = 21 and left out the
-subnet's own bases and config as "framework". Spec 1.5 counts them (D18). Counted
+The first port (2026-10-23, `apply` at that time) reported S6 = 21 and left out the
+subnet's own bases and config as "framework". Spec 1.5 counts them. Counted
 that way, the first port was **691** lines: the hand rewrite of the three
 customised bases (670) plus 21. The answer was to make `migrate apply` do that
-work (D18: "the answer is a migrate rule or compat helper, not a narrower
+work (the project's rule: "the answer is a migrate rule or compat helper, not a narrower
 count"):
 
 - **TWM026 (auto now): the customised-base swap.** `apply` puts
@@ -37,15 +37,15 @@ count"):
 - **TWM031 (auto): v10 config calls** (`bt.wallet.add_args(parser)`,
   `bt.config(parser)`, `bt.logging.check_config(...)`, `bt.Config` annotations).
 
-**Phase 4 recount (WP7):** with `apply` after `compat.Subtensor` (TWM008 now
+**Recount (2026-10-24):** with `apply` after `compat.Subtensor` (TWM008 now
 `auto`) the count is unchanged, **8**. `apply` rewrites no `subtensor`
 here (the TWM026 base swap already removes it). The port's one kept TWM100
-marker takes `apply`'s current text, which now carries the D28 warning (a
-comment-only change on top of the Phase 3 port).
+marker takes `apply`'s current text, which now carries the mixed-fleet warning about
+`required_hash_fields` (a comment-only change on top of the first port).
 
 ## What `migrate scan` and `migrate apply` did
 
-With `apply` as of Phase 3:
+With `apply` as of the first port (2026-10-23):
 
 - 89 files read, 28 changed, 154 rewrites, 14 `# TW-MIGRATE:` comments.
 - TWM007 ×125, TWM001 ×5, TWM013 ×4, TWM023 ×4, TWM026 ×3 (the three bases),
@@ -142,7 +142,7 @@ driver now reads `Weights` at the head), run 5 (fast blocks, above).
 
 | Miss | Now |
 |---|---|
-| Customised bases were hand-ported (670 lines under D18) | **TWM026 auto** + the compat template surface |
+| Customised bases were hand-ported (670 lines, counted as spec 1.5 requires) | **TWM026 auto** + the compat template surface |
 | `bt.wallet.add_args(parser)` etc., `bt.config(parser)`, `bt.Config` annotations by hand | **TWM031** |
 | Their `resync_metagraph` compares `copy.deepcopy(self.metagraph)` before and after `sync()`; a live view made it a no-op | compat `Metagraph` pinned mode (moves on `sync()`), used by both adapters |
 | Their miner reads `config.neuron.disable_set_weights`, which only validators define; v10's `bt.config` returned `None` | compat `Config` reads a missing option as `None` |

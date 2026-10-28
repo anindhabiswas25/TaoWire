@@ -66,7 +66,7 @@ The miners read the `TW_*` variables of the Python miner that apply to them (spe
 | `TW_RATE_IP_PER_S` / `_BURST`, `TW_RATE_HOTKEY_PER_S` / `_BURST` | 50/100, 20/40 | 8.6.2 |
 | `TW_AUTH_MAX_AGE_S`, `TW_AUTH_ALLOWED_SKEW_S`, `TW_NONCE_RETENTION_S` | 10, 2, 60 | retention must be ≥ 2 × (max age + skew) |
 | `TW_REDIS_URL` | empty | the shared replay store |
-| `TW_STREAM_MAX_S`, `TW_STREAM_MAX_BYTES`, `TW_STREAM_IDLE_S`, `TW_STREAM_MAX_PER_CALLER` | 60, 4 MiB, 10, 16 | 9.2, D36 |
+| `TW_STREAM_MAX_S`, `TW_STREAM_MAX_BYTES`, `TW_STREAM_IDLE_S`, `TW_STREAM_MAX_PER_CALLER` | 60, 4 MiB, 10, 16 | 9.2 |
 
 Unlike the Python kit, these examples do not refuse unknown `TW_*` variables, and have no TLS, no trusted-proxy
 handling (the per-IP limit sees the socket peer) and no Prometheus endpoint. Without a chain,

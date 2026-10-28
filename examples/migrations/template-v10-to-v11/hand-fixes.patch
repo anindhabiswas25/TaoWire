@@ -1,5 +1,5 @@
 diff --git a/docs/stream_tutorial/config.py b/docs/stream_tutorial/config.py
-index e049c37..b8578b4 100644
+index 9a2b7fe..b8578b4 100644
 --- a/docs/stream_tutorial/config.py
 +++ b/docs/stream_tutorial/config.py
 @@ -1,10 +1,14 @@
@@ -61,7 +61,7 @@ index e049c37..b8578b4 100644
      # Logging captures events for diagnosis or understanding miner's behavior.
      config.full_path = os.path.expanduser(
 diff --git a/docs/stream_tutorial/miner.py b/docs/stream_tutorial/miner.py
-index d97e10a..cdc68b8 100644
+index a065228..0bf7b83 100644
 --- a/docs/stream_tutorial/miner.py
 +++ b/docs/stream_tutorial/miner.py
 @@ -11,7 +11,7 @@ from starlette.types import Send
@@ -158,7 +158,7 @@ index 9c32979..2721e2d 100644
 -            time.sleep(5)
 +    Miner().run()
 diff --git a/neurons/validator.py b/neurons/validator.py
-index d3c9b0d..1cee12f 100644
+index d07808c..69f41f7 100644
 --- a/neurons/validator.py
 +++ b/neurons/validator.py
 @@ -39,8 +39,8 @@ class Validator(BaseValidatorNeuron):
@@ -173,7 +173,7 @@ index d3c9b0d..1cee12f 100644
          logging.info("load_state()")
          self.load_state()
 diff --git a/requirements.txt b/requirements.txt
-index 196e138..dac9619 100644
+index 196e138..cf5a83d 100644
 --- a/requirements.txt
 +++ b/requirements.txt
 @@ -1,3 +1,4 @@
@@ -196,7 +196,7 @@ deleted file mode 100644
 index e69de29..0000000
 diff --git a/template/api/dummy.py b/template/api/dummy.py
 deleted file mode 100644
-index a3dac36..0000000
+index 8dab87b..0000000
 --- a/template/api/dummy.py
 +++ /dev/null
 @@ -1,47 +0,0 @@
@@ -249,7 +249,7 @@ index a3dac36..0000000
 -        return outputs
 diff --git a/template/api/get_query_axons.py b/template/api/get_query_axons.py
 deleted file mode 100644
-index aa3643a..0000000
+index be2a7b2..0000000
 --- a/template/api/get_query_axons.py
 +++ /dev/null
 @@ -1,133 +0,0 @@
@@ -387,7 +387,7 @@ index aa3643a..0000000
 -        )
 -    return axons_from(metagraph, query_uids)
 diff --git a/template/base/miner.py b/template/base/miner.py
-index 564d794..473cf75 100644
+index 9ccf4dd..d56b183 100644
 --- a/template/base/miner.py
 +++ b/template/base/miner.py
 @@ -15,21 +15,16 @@
@@ -573,7 +573,7 @@ index 564d794..473cf75 100644
 -        # TW-MIGRATE: TWM009 the kit's MetagraphCache (refreshes itself); compat.Metagraph for hotkeys / S / validator_permit
 -        self.metagraph.sync(subtensor=self.subtensor)
 diff --git a/template/base/neuron.py b/template/base/neuron.py
-index 571401e..a264771 100644
+index dd33084..149ff67 100644
 --- a/template/base/neuron.py
 +++ b/template/base/neuron.py
 @@ -16,32 +16,30 @@
@@ -743,7 +743,7 @@ deleted file mode 100644
 index e69de29..0000000
 diff --git a/template/base/utils/weight_utils.py b/template/base/utils/weight_utils.py
 deleted file mode 100644
-index 13ec209..0000000
+index 91a9b75..0000000
 --- a/template/base/utils/weight_utils.py
 +++ /dev/null
 @@ -1,227 +0,0 @@
@@ -976,7 +976,7 @@ index 13ec209..0000000
 -    return non_zero_weight_uids, normalized_weights
 diff --git a/template/base/validator.py b/template/base/validator.py
 deleted file mode 100644
-index 2798dc8..0000000
+index 5d3ddcc..0000000
 --- a/template/base/validator.py
 +++ /dev/null
 @@ -1,379 +0,0 @@
@@ -1361,7 +1361,7 @@ index 2798dc8..0000000
 -        self.hotkeys = state["hotkeys"]
 diff --git a/template/mock.py b/template/mock.py
 deleted file mode 100644
-index 1b670ac..0000000
+index 4ffa1c3..0000000
 --- a/template/mock.py
 +++ /dev/null
 @@ -1,128 +0,0 @@
@@ -1494,14 +1494,14 @@ index 1b670ac..0000000
 -        """
 -        return "MockDendrite({})".format(self.keypair.ss58_address)
 diff --git a/template/protocol.py b/template/protocol.py
-index bff15e3..2881a7b 100644
+index 3b55bb0..f7a7ebd 100644
 --- a/template/protocol.py
 +++ b/template/protocol.py
 @@ -40,7 +40,6 @@ from taowire.compat import Synapse
  #   assert dummy_output == 2
  
  
--# TW-MIGRATE: TWM100 list every request field that matters in required_hash_fields: on the v10 wire other fields can be changed without breaking the signature. This changes the v10 body hash: ship it to every peer at once, or after rollout stage 4 (D28)
+-# TW-MIGRATE: TWM100 list every request field that matters in required_hash_fields: on the v10 wire other fields can be changed without breaking the signature. This changes the v10 body hash: ship it to every peer at once, or after rollout stage 4
  class Dummy(Synapse):
      """
      A simple dummy protocol representation which uses bt.Synapse as its base.
@@ -1516,7 +1516,7 @@ index bff15e3..2881a7b 100644
          """
          Deserialize the dummy output. This method retrieves the response from
 diff --git a/template/utils/config.py b/template/utils/config.py
-index e44d28e..1ba8c0d 100644
+index ca12c42..9bbe43c 100644
 --- a/template/utils/config.py
 +++ b/template/utils/config.py
 @@ -19,8 +19,7 @@
@@ -1604,7 +1604,7 @@ index e44d28e..1ba8c0d 100644
 +    return config
 diff --git a/tests/helpers.py b/tests/helpers.py
 deleted file mode 100644
-index c400bae..0000000
+index 0150f65..0000000
 --- a/tests/helpers.py
 +++ /dev/null
 @@ -1,186 +0,0 @@
@@ -1796,7 +1796,7 @@ index c400bae..0000000
 -        return output_no_syntax
 diff --git a/tests/test_mock.py b/tests/test_mock.py
 deleted file mode 100644
-index d58645e..0000000
+index c88176a..0000000
 --- a/tests/test_mock.py
 +++ /dev/null
 @@ -1,109 +0,0 @@
@@ -1911,7 +1911,7 @@ index d58645e..0000000
 -        # dont check for responses which take between timeout and max_time because they are not guaranteed to have a status code of 200 or 408
 diff --git a/tests/test_template_on_taowire.py b/tests/test_template_on_taowire.py
 new file mode 100644
-index 0000000..c00f2b4
+index 0000000..855ccbf
 --- /dev/null
 +++ b/tests/test_template_on_taowire.py
 @@ -0,0 +1,70 @@
@@ -1987,7 +1987,7 @@ index 0000000..c00f2b4
 +            await validator.stop()
 diff --git a/tests/test_template_validator.py b/tests/test_template_validator.py
 deleted file mode 100644
-index b48adce..0000000
+index 706de1a..0000000
 --- a/tests/test_template_validator.py
 +++ /dev/null
 @@ -1,112 +0,0 @@

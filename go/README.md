@@ -1,6 +1,6 @@
 # btauth (Go)
 
-> **Alpha (0.1.0a1).** TaoWire has **not been security-reviewed** yet, and its APIs may change between
+> **Alpha (0.1.0-alpha.1).** TaoWire has **not been security-reviewed** yet, and its APIs may change between
 > alphas. Use it on localnet and testnet; **do not use it to protect mainnet value**. Feedback and bugs:
 > [GitHub issues](https://github.com/anindhabiswas25/TaoWire/issues). Security problems: report them privately through
 > [GitHub private vulnerability reporting](https://github.com/anindhabiswas25/TaoWire/security/advisories/new) (see
@@ -11,7 +11,7 @@ btauth/1 signed requests and twresp/1 signed responses for Bittensor v11 subnets
 Go ≥ 1.22; build releases with a supported Go toolchain.
 
 ```bash
-go get github.com/anindhabiswas25/TaoWire/go@go/v0.1.0-alpha.1
+go get github.com/anindhabiswas25/TaoWire/go@v0.1.0-alpha.1   # Git tag: go/v0.1.0-alpha.1
 ```
 
 ## Quickstart (miner)
@@ -54,8 +54,8 @@ answer's twresp/1 signature verified.
 | Name | What it does |
 |---|---|
 | `BuildPayload(scheme, method, target, body, nonce, sender, receiver)` | The 8-line btauth/1 payload (spec 4.2); `receiver == ""` writes `-` |
-| `NewVerifier(Config)`, `(*Verifier).Verify(ctx, http.Header, body, method, target)` | Spec 4.3 in order; returns `*Caller` or `*Error` with the Appendix A code and status. Refuses a store with retention below `2 × (MaxAge + AllowedSkew)` (D21) |
-| `(*Verifier).FailingClosed()`, `LastClockStep()` | Clock-step guard (D21): after a backwards wall-clock step larger than the store's margin, requests get `tw.replay_store_unavailable` for the retention; report it as not-ready (`clock_step`). Tests inject `Config.NowNs` and `Config.MonotonicNs` |
+| `NewVerifier(Config)`, `(*Verifier).Verify(ctx, http.Header, body, method, target)` | Spec 4.3 in order; returns `*Caller` or `*Error` with the Appendix A code and status. Refuses a store with retention below `2 × (MaxAge + AllowedSkew)` |
+| `(*Verifier).FailingClosed()`, `LastClockStep()` | Clock-step guard: after a backwards wall-clock step larger than the store's margin, requests get `tw.replay_store_unavailable` for the retention; report it as not-ready (`clock_step`). Tests inject `Config.NowNs` and `Config.MonotonicNs` |
 | `Middleware(MiddlewareConfig)` | `net/http` middleware: `MaxBytesReader` (413), target = `r.RequestURI` (absolute form refused), verify, handler; signs answers with twresp/1 when `ResponseKey` is set |
 | `CallerFrom(ctx)`, `BodyFrom(ctx)` | The verified caller and the raw body inside a protected handler |
 | `NewSr25519FromSeed`, `NewEd25519FromSeed`, `(*Keypair).Sign` | Hotkeys from 32-byte seeds; sr25519 via go-schnorrkel v1.1.0 (wrapped in `sr25519.go`), ed25519 via the standard library |
@@ -64,13 +64,13 @@ answer's twresp/1 signature verified.
 | `NewMemoryStore`, `NonceStore`; `redisstore.New` | Replay stores; the Redis one shares keys (`tw:n:<hotkey>:<nonce>`) with the Python kit |
 | `SignResponse`, `VerifyResponse`, `VerifyResponseDigest` | twresp/1 (spec 9.1; digest form for 9.2 streams) |
 | `Client.Do` | Signed request + verified answer; client codes `tw.timeout`, `tw.connect_error`, `tw.response_too_large`, `tw.bad_response_signature` |
-| `ServeStream`, `StreamConfig`, `ChunkFunc`, `StreamSlots` | SSE stream with a signed `tw-end` inside a `Middleware` handler (spec 9.2): per-caller slots (D36), first chunk before any byte, limits, abort hook |
+| `ServeStream`, `StreamConfig`, `ChunkFunc`, `StreamSlots` | SSE stream with a signed `tw-end` inside a `Middleware` handler (spec 9.2): per-caller slots, first chunk before any byte, limits, abort hook |
 | `(*Client).Stream`, `Stream`, `StreamOptions`, `UnverifiedChunk` | Streaming query: unverified chunks, `Err() == nil` only after the trailer verified; `tw.invalid_response` for a chunk that is not a JSON object or array |
 | `NewTokenBuckets`, `RateLimit`, `DefaultIPLimit`, `DefaultHotkeyLimit` | Per-IP / per-hotkey token buckets (spec 8.6.2) |
 | `LoadHotkeyFile(path, scheme)` | A Bittensor hotkey file (owner-only, `secretSeed`, `ss58Address` checked) |
 | `MiddlewareConfig.Policy` | Caller policy after verification (spec 8.5); refusals signed except `UnsignedCodes` |
 | `sidecar.New`, `(*sidecar.Client).Start`, `Check`, `Policy`, `Health`, `Metagraph`, `Caller`, `ServeAxon`, `sidecar.ReadTokenFile`, `sidecar.NewPolicy` | Package `go/sidecar`: the sidecar client (spec 11.6, `docs/multi-language.md` "Sidecar API") — cached metagraph with the 8.5.1 stages, the Python caller policy, serve-axon |
-| `SSEParser`, `DecodeChunk`, `EncodeChunk`, `ParseTrailer`, `EncodeTrailer`, `EncodeEvent`, `StreamDigest`, `StreamLimits` | The shared stream pieces (WHATWG SSE parser, D35 chunk rule, strict trailer) |
+| `SSEParser`, `DecodeChunk`, `EncodeChunk`, `ParseTrailer`, `EncodeTrailer`, `EncodeEvent`, `StreamDigest`, `StreamLimits` | The shared stream pieces (WHATWG SSE parser, chunk rule, strict trailer) |
 | `DecodeSS58`, `EncodeSS58`, `IsWeakPublicKey` | Appendix D (prefix 42 only), weak-key rule (ADR-0010) |
 | `NewError`, `StatusOf`, `ErrorBody`, `WriteError` | Appendix A codes, statuses and the JSON error body |
 

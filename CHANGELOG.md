@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- `taowire migrate` messages for TWM034, TWM100 and TWM101 (and the `# TW-MIGRATE:` comments `apply`
+  writes from them) no longer cite internal decision numbers; `taowire bench --help` likewise.
+- Documentation: internal team references (decision and phase numbers) replaced by plain explanations
+  or dates; README test results refreshed from the 2026-10-28 full run; CONTRIBUTING covers the
+  four-language gate, the localnet checks and the MCP docs sync.
+
+### Fixed
+- Go README: the install command used the Git tag (`@go/v0.1.0-alpha.1`), which `go get` rejects; it
+  is `@v0.1.0-alpha.1`. The TypeScript, Go and Rust READMEs showed the Python version (`0.1.0a1`)
+  instead of their own `0.1.0-alpha.1`.
+
 ## [0.1.0a2] - 2026-10-25
 
 Second alpha: the Python package adds an MCP server so AI coding agents can use the kit.
@@ -22,6 +34,14 @@ Only `taowire` (PyPI) changes; the TypeScript, Go and Rust packages stay at 0.1.
   (read-only), `taowire_info`; prompts `new_subnet` and `port_v10_subnet`. No tool reads private
   keys or writes to a chain.
 - `scripts/sync_mcp_data.py` keeps the bundled docs and `.env.example` equal to the repository's.
+
+### Security
+Fixes from an internal review of the new MCP server, made before the release (spec 8.15):
+- `taowire init` and the `scaffold_project` tool validate the project name before it is written into any
+  file (`pyproject.toml`, README), also when an explicit package name is given.
+- The `read_metagraph` tool accepts only a named network (`local`, `test`, `finney`) or a `ws://` /
+  `wss://` endpoint with a host, and a failed chain read reports only the kind of failure, never the
+  remote endpoint's own error text.
 
 ## [0.1.0a1] - 2026-10-24
 

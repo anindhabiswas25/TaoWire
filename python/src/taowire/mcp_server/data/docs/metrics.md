@@ -18,7 +18,7 @@ miner port. Label values never contain hotkeys or IP addresses.
 | `tw_metagraph_refresh_failures_total` | counter | | Failed refreshes |
 | `tw_metagraph_degraded` | gauge | | 0 fresh, 1 degraded, 2 known callers only |
 | `tw_clock_offset_seconds` | gauge | | NTP offset (NaN when unknown) |
-| `tw_clock_step_seconds` | gauge | | Size of the last backwards wall-clock step that opened the fail-closed window (D21); 0 when none since start |
+| `tw_clock_step_seconds` | gauge | | Size of the last backwards wall-clock step that opened the fail-closed window; 0 when none since start |
 | `tw_nonce_store_errors_total` | counter | `backend` | Replay-store outages (503 `tw.replay_store_unavailable`) |
 | `tw_unsafe_settings_active` | gauge | `name` | 1 per active setting that weakens a default |
 | `tw_legacy_v10_requests_total` | counter | `direction`, `result` | Legacy v10 bridge traffic |
@@ -26,7 +26,7 @@ miner port. Label values never contain hotkeys or IP addresses.
 | `tw_validator_miners_by_protocol` | gauge | `protocol` | Miners reached per protocol |
 | `tw_validator_round_duration_seconds` | histogram | | Validator round duration |
 | `tw_validator_miner_results_total` | counter | `ok`, `code` | Miner query results |
-| `tw_validator_weight_submissions_total` | counter | `ok`, `code` | Weight submissions, one per signed extrinsic. A timelocked commit the chain rejected for its reveal round counts as `ok="false"` with `code="expired"` / `"too_early"`, and each re-plan (D32, at most 3 per weight window) is its own submission; a steady rate of these means the reveal round keeps being missed (logs: `weights_commit_replanned`, `weights_commit_replan_exhausted`; [validator-guide.md](validator-guide.md)). `code="version_key_stale"` (D38): nothing was committed because `TW_WEIGHTS_VERSION_KEY` is below the subnet's `WeightsVersionKey` (log `weights_version_key_stale`); alert on any |
+| `tw_validator_weight_submissions_total` | counter | `ok`, `code` | Weight submissions, one per signed extrinsic. A timelocked commit the chain rejected for its reveal round counts as `ok="false"` with `code="expired"` / `"too_early"`, and each re-plan (at most 3 per weight window) is its own submission; a steady rate of these means the reveal round keeps being missed (logs: `weights_commit_replanned`, `weights_commit_replan_exhausted`; [validator-guide.md](validator-guide.md)). `code="version_key_stale"`: nothing was committed because `TW_WEIGHTS_VERSION_KEY` is below the subnet's `WeightsVersionKey` (log `weights_version_key_stale`); alert on any |
 | `tw_validator_last_weights_block` | gauge | | Block of the last successful weights |
 | `tw_timelock_open_total` | counter | `result` (`ok`/`not_ready`/`unavailable`) | Timelock opens (spec 8.10): `unavailable` = drand unreachable, rate-limited or failing after `TW_TIMELOCK_RETRIES`, or not revealed within the deadline. See [timelock.md](timelock.md) |
 | `tw_stream_aborted_total` | counter | `side` (`miner`/`validator`), `reason` | Streams that ended without a valid `tw-end` (spec 9.2). Miner reasons: `handler_error`, `idle_timeout`, `max_duration`, `max_bytes`, `bad_chunk`, `cancelled` (disconnect or drain). Validator reasons: `timeout`, `too_large`, `bad_trailer`, `bad_chunk`, `transport`. See [streaming.md](streaming.md) |

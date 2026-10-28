@@ -197,7 +197,7 @@ What changes in behaviour:
   reads are **not verified yet**; the final item is your filled Synapse only
   when the trailer verified, otherwise a fresh copy of the request with
   `dendrite.status_code` set (408 timeout, 500 bad signature, ...). Score from
-  the final item. Streaming works TaoWire to TaoWire only (D33): a v10
+  the final item. Streaming works TaoWire to TaoWire only: a v10
   Dendrite gets the v10-shaped `tw.invalid_request` from a streaming route
   (TWM034).
 
@@ -205,7 +205,7 @@ What changes in behaviour:
 ### `compat.Subtensor`
 
 Subnets that call `bt.subtensor` directly (data-universe, for one) keep those
-calls on `taowire.compat.Subtensor` (spec 10b.2.6, D34). It is
+calls on `taowire.compat.Subtensor` (spec 10b.2.6). It is
 synchronous, like v10's, and every call goes through the kit's chain gateway:
 
 ```python
@@ -470,12 +470,12 @@ past the scan fails loudly instead of doing nothing.
 <a id="twm100"></a>
 ### TWM100: Synapse without required_hash_fields (`risk`)
 
-List every request field that matters in required_hash_fields: on the v10 wire other fields can be changed without breaking the signature. This changes the v10 body hash: ship it to every peer at once, or after rollout stage 4 (D28).
+List every request field that matters in required_hash_fields: on the v10 wire other fields can be changed without breaking the signature. This changes the v10 body hash: ship it to every peer at once, or after rollout stage 4.
 
 <a id="twm101"></a>
 ### TWM101: Synapse with partial required_hash_fields (`risk`)
 
-Add the missing request fields to required_hash_fields (every peer at once, or after rollout stage 4: it changes the v10 body hash, D28).
+Add the missing request fields to required_hash_fields (every peer at once, or after rollout stage 4: it changes the v10 body hash).
 
 Why TWM100 and TWM101 matter: a v10 request signature covers
 `computed_body_hash`, and that hash covers only the fields listed in
@@ -486,7 +486,7 @@ while v10 validators still call your miners, but it matters then. List every
 request field your miner's answer depends on. The template's `Dummy` listed
 none.
 
-**Changing `required_hash_fields` breaks a mixed fleet** (D28): the v10 body
+**Changing `required_hash_fields` breaks a mixed fleet**: the v10 body
 hash is part of the wire format both sides compute, so a v10 validator that
 still hashes the old field list fails every request to a miner with the new
 one, and the other way round. Ship the change to every peer at once, or after
@@ -500,7 +500,7 @@ Remove it: unregistered callers are refused by the kit's caller policy.
 <a id="twm034"></a>
 ### TWM034: StreamingSynapse route in a mixed fleet (`risk`)
 
-Streaming works TaoWire to TaoWire only: a v10 Dendrite gets tw.invalid_request from it and a v10 miner cannot stream to a TaoWire validator (D33). Move streaming routes after rollout stage 2, or give v10 peers a non-streaming route until then (`docs/migration-rollout.md`). `scan` flags every `StreamingSynapse` subclass, including subclasses of one defined earlier in the same file; a subclass of a streaming class from another file is not followed, so check those by hand.
+Streaming works TaoWire to TaoWire only: a v10 Dendrite gets tw.invalid_request from it and a v10 miner cannot stream to a TaoWire validator. Move streaming routes after rollout stage 2, or give v10 peers a non-streaming route until then (`docs/migration-rollout.md`). `scan` flags every `StreamingSynapse` subclass, including subclasses of one defined earlier in the same file; a subclass of a streaming class from another file is not followed, so check those by hand.
 
 <a id="twm103"></a>
 ### TWM103: force_validator_permit=False (`risk`)

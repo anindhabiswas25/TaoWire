@@ -1,7 +1,7 @@
 # Benchmarks
 
 Spec 13.7 targets, measured with `taowire bench` (`just bench`), and the
-13.6 abuse tests (`just abuse`). Numbers are from one machine on one day;
+13.6 abuse tests (`just abuse`). Numbers are from one machine;
 re-run them on your own hardware before you rely on them.
 
 ## Machine and versions (2026-10-23 and 2026-10-24)
@@ -23,14 +23,14 @@ miner has 4 logical CPUs. Memory is not limited; the miner used about
 
 ## Results against spec 13.7
 
-**What counts (D17, 13.7):** Redis reached directly (host network, Unix
+**What counts (13.7):** Redis reached directly (host network, Unix
 socket or the container's own IP), as in production. `just bench` /
 `taowire bench` find Redis that way by default and print the path
 (`redis path: direct: container tw-redis at its own IP`); a run through
 Docker's port mapping (`docker-proxy`) is printed as "extra information
 only" and is never the result.
 
-| Metric | Target | Result, Redis direct (Phase 5 gate, 2026-10-24, quiet host) | |
+| Metric | Target | Result, Redis direct (2026-10-24, quiet host) | |
 |---|---|---|---|
 | Verified requests/s (trivial handler, 1 KB body, 4 workers + Redis) | ≥ 500 | **2,163.5 req/s** (60 s) | met |
 | Added latency of auth + policy, p50 | ≤ 2 ms | **0.46 ms** | met |
@@ -40,19 +40,19 @@ only" and is never the result.
 The host was 98.9% idle before that run. The p99 depends heavily on a quiet
 host: on a busy desktop (the shell using about 6.5 cores, load average
 8-18 on 16 logical CPUs) the same code measured auth + policy p99 4.83 ms
-(Phase 5) and up to 6.1 ms (Phase 3), with the other three targets still met.
+(2026-10-24) and up to 6.1 ms (2026-10-23), with the other three targets still met.
 Measure on a host that does nothing else.
 
-**What a request costs.** Since D22 the verifier also checks that an sr25519
+**What a request costs.** The verifier also checks that an sr25519
 signature is not a `<Bytes>`-wrapped one; the SDK's primitive tries the
 wrapped forms, so a plain signature costs two extra failed verifications,
 about 145 µs of CPU per request on this machine (`verify_sync` 220 µs p50
 instead of about 75 µs). No fallback-free sr25519 verify exists among the SDK
-modules the kit may import (ADR-0001), so this is the price of D22 with the
+modules the kit may import (ADR-0001), so this is the price of that check with the
 SDK as it is.
 
-**Extra information, not the result (D17):** through `docker-proxy`
-(`127.0.0.1:6379`), Phase 3: 1,592.2 req/s, auth p50 3.268 ms, p99
+**Extra information, not the result:** through `docker-proxy`
+(`127.0.0.1:6379`), 2026-10-23: 1,592.2 req/s, auth p50 3.268 ms, p99
 10.422 ms, fan-out 0.761 s; see below for why.
 
 ### Why the Redis path matters for p99
@@ -73,9 +73,9 @@ The tail comes from Redis access, not from the kit's own work. On this
 machine Redis is reached through Docker's userland proxy (`docker-proxy`):
 a plain `PING` has p99 **1.24 ms** through `127.0.0.1:6379` and **0.30 ms**
 to the container's own address (`172.17.0.3`). With the same container
-reached directly, auth + policy p99 was 4.24-4.34 ms in three Phase 3 runs
-and 3.755 ms at the Phase 3 gate. The target has not been loosened. Since
-D17, `just bench` uses the direct path by default; set
+reached directly, auth + policy p99 was 4.24-4.34 ms in three runs
+and 3.755 ms in a fourth (2026-10-23). The target has not been loosened.
+`just bench` uses the direct path by default; set
 `TAOWIRE_BENCH_REDIS_URL` (or `--redis-url`) to choose a Redis yourself.
 The bench prints whether that URL is direct or a `docker-proxy` mapping.
 
@@ -96,9 +96,9 @@ To reproduce: `just bench` (direct path found automatically), or
 `just abuse`: a real miner process (2 workers on Redis) under attack on
 loopback, while a permitted validator queries it at 10 req/s from another
 source address. Every test asserts that the validator gets 200 on every
-request, with p99 < 200 ms. The numbers below are from Phase 3 (two runs);
-since then the suite passed 7/7 three times in a row at the Phase 5 gate
-(quiet host, D45).
+request, with p99 < 200 ms. The numbers below are from two runs on 2026-10-23;
+since then the suite passed 7/7 three times in a row on 2026-10-24 and
+again on 2026-10-28 (quiet host).
 
 | Attack | Result (two runs) |
 |---|---|
@@ -114,7 +114,7 @@ validator's p99 rises to 384 ms. The flood test therefore runs only on the
 2-worker fleet. A miner that must absorb floods of that size needs more
 than one worker (and so Redis).
 
-Changes made during Phase 3 to reach these numbers, without changing any
+Changes made on the way to these numbers, without changing any
 test: the miner's HTTP protocol moved from h11 to httptools, keeping the
 request-read deadline and adding real header limits (h11's limit missed
 heads that arrive complete). The per-IP limiter became the outermost layer

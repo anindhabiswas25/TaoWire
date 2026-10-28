@@ -46,14 +46,14 @@ The 57 comments mark what a person has to do: `bt.subtensor` /
 `bt.wallet` / `bt.metagraph` / `bt.config` and `bt.axon.add_args` in the template's framework and
 in `docs/stream_tutorial/`, the v10 mocks, `bt.logging.set_config`, the
 mixed-fleet limit of the `StreamingSynapse` tutorial (TWM034: streaming is
-TaoWire to TaoWire only; since Phase 4 `apply` ports the class itself,
+TaoWire to TaoWire only; `apply` now ports the class itself,
 TWM002), and the two security findings
 (`Dummy` has no `required_hash_fields`, TWM100; `force_validator_permit`
 defaults to `False`, TWM103).
 
 ## The hand fixes, counted (S6)
 
-Counted as in spec 1.5 (D15): `git diff` between the `apply` output and the
+Counted as in spec 1.5: `git diff` between the `apply` output and the
 final port, subnet code only. Import lines and the removal of `apply`'s own
 `# TW-MIGRATE:` markers do not count. Added and removed lines both count.
 
@@ -84,14 +84,14 @@ Reported separately, not hidden:
   `tests/test_template_on_taowire.py` (70 lines) runs the miner and the
   validator in process on `FakeChain`.
 
-Phase 2's hand port without `apply` was 41-68 lines of subnet code, 32 of
+The first hand port, before `apply` existed, was 41-68 lines of subnet code, 32 of
 them logging.
 
 ## What the kit gained from this port
 
-- Phase 2: `compat.Metagraph` (+ `of_miner`), per-call `timeout_s`, rules
+- First hand port: `compat.Metagraph` (+ `of_miner`), per-call `timeout_s`, rules
   TWM021-023.
-- Phase 3: `compat.TemplateValidatorAdapter` (the template's validator base
+- With `migrate apply`: `compat.TemplateValidatorAdapter` (the template's validator base
   on the kit's runner: schedule, score store, weights with
   `TW_WEIGHTS_VERSION_KEY`, v10 fallback, `/metrics`), `migrate apply`, rule
   TWM024 (the swap) and TWM025 (`bt.logging` configuration, by hand), and
@@ -124,7 +124,7 @@ unqueried miners decay, replaced hotkeys zeroed). What changed:
 ## Time
 
 `migrate apply` runs in under a second on this repository. The hand fixes
-were made by Engineer A (an AI engineer) in Phase 2 and adjusted in Phase 3;
+were made by an AI engineer on 2026-10-23 and adjusted the same day;
 the wall-clock time is not a measure of what a human team needs. The
 design-partner case studies (S7) record what scan/apply missed on code
 nobody here wrote.

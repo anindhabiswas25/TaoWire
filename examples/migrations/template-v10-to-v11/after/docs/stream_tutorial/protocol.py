@@ -7,7 +7,7 @@ from typing import List, Union, Callable, Awaitable
 from starlette.responses import StreamingResponse
 
 
-# TW-MIGRATE: TWM034 streaming works TaoWire to TaoWire only: a v10 Dendrite gets tw.invalid_request from it and a v10 miner cannot stream to a TaoWire validator (D33); move streaming routes after rollout stage 2 or give v10 peers a non-streaming route
+# TW-MIGRATE: TWM034 streaming works TaoWire to TaoWire only: a v10 Dendrite gets tw.invalid_request from it and a v10 miner cannot stream to a TaoWire validator; move streaming routes after rollout stage 2 or give v10 peers a non-streaming route
 class StreamPrompting(StreamingSynapse):
     """
     StreamPrompting is a specialized implementation of the `StreamingSynapse` tailored for prompting functionalities within

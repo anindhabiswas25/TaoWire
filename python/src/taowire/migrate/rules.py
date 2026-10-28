@@ -288,14 +288,14 @@ RULES: Mapping[str, Rule] = _table(
         "list every request field that matters in required_hash_fields: on the "
         "v10 wire other fields can be changed without breaking the signature. "
         "This changes the v10 body hash: ship it to every peer at once, or after "
-        "rollout stage 4 (D28)",
+        "rollout stage 4",
     ),
     Rule(
         "TWM101",
         "Synapse with partial required_hash_fields",
         "risk",
         "add the missing request fields to required_hash_fields (every peer at "
-        "once, or after rollout stage 4: it changes the v10 body hash, D28)",
+        "once, or after rollout stage 4: it changes the v10 body hash)",
     ),
     Rule(
         "TWM102",
@@ -309,7 +309,7 @@ RULES: Mapping[str, Rule] = _table(
         "risk",
         "streaming works TaoWire to TaoWire only: a v10 Dendrite gets "
         "tw.invalid_request from it and a v10 miner cannot stream to a "
-        "TaoWire validator (D33); move streaming routes after rollout "
+        "TaoWire validator; move streaming routes after rollout "
         "stage 2 or give v10 peers a non-streaming route",
     ),
     Rule(

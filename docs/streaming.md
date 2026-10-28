@@ -39,7 +39,7 @@ async def generate(req: Prompt, ctx: RouteContext) -> AsyncIterator[Token]:
   chunk boundaries under a valid signature. Objects and arrays are
   self-delimiting, so only one split is possible.
 - **A chunk nests at most 128 levels** (arrays and objects counted
-  together, D43); a deeper one is refused like a scalar. The trailer is
+  together); a deeper one is refused like a scalar. The trailer is
   strict too: `count` is a plain non-negative integer that fits a u64 (no
   `-0`, fraction or exponent) and no string in it holds a lone UTF-16
   surrogate escape. Every language applies the same rules.
@@ -88,7 +88,7 @@ async def generate(req: Prompt, ctx: RouteContext) -> AsyncIterator[Token]:
   request, so without this cap one permitted validator could fill the
   server's connection limit and lock the others out. The per-hotkey rate
   limit (`TW_RATE_HOTKEY_*`) applies to opening streams as to any request.
-- v10 Dendrites cannot stream to a TaoWire miner (D33): a v10 request to
+- v10 Dendrites cannot stream to a TaoWire miner: a v10 request to
   a streaming route gets the v10-shaped `tw.invalid_request` answer.
 
 ## Validator: reading a stream
@@ -154,7 +154,7 @@ an async context manager (or call `aclose()`) when you stop early.
 | `TW_STREAM_MAX_S` | `60` | 1–600 | whole stream |
 | `TW_STREAM_MAX_BYTES` | `4194304` | 1024–67108864 | bytes on the wire |
 | `TW_STREAM_IDLE_S` | `10` | 1–120 | longest gap between two events |
-| `TW_STREAM_MAX_PER_CALLER` | `16` | 1–256 | open streams one caller hotkey may hold per miner process (D36); beyond it the miner answers the signed 429 `tw.rate_limited` with `Retry-After: 1` before any byte |
+| `TW_STREAM_MAX_PER_CALLER` | `16` | 1–256 | open streams one caller hotkey may hold per miner process; beyond it the miner answers the signed 429 `tw.rate_limited` with `Retry-After: 1` before any byte |
 
 Both miners and validators read the first three; a route or a call may override them
 within the same ranges. `TW_STREAM_MAX_PER_CALLER` is the miner's, for all its routes together; with
